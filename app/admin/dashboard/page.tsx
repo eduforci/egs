@@ -1,0 +1,40 @@
+import { createClient } from "@/lib/supabase/server";
+
+export default async function AdminDashboard() {
+  const supabase = createClient();
+
+  const { data: etablissements } = await supabase
+    .from("etablissements")
+    .select("id, nom, ville, statut")
+    .order("created_at", { ascending: false });
+
+  return (
+    <main className="p-8">
+      <h1 className="font-display text-3xl font-semibold mb-1">Établissements</h1>
+      <p className="text-neutral-500 mb-6">
+        {etablissements?.length ?? 0} établissement(s) enregistré(s)
+      </p>
+
+      <div className="bg-white border rounded-xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-neutral-50 text-left text-xs uppercase text-neutral-500">
+            <tr>
+              <th className="p-3">Nom</th>
+              <th className="p-3">Ville</th>
+              <th className="p-3">Statut</th>
+            </tr>
+          </thead>
+          <tbody>
+            {etablissements?.map((e) => (
+              <tr key={e.id} className="border-t">
+                <td className="p-3">{e.nom}</td>
+                <td className="p-3">{e.ville}</td>
+                <td className="p-3">{e.statut}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </main>
+  );
+}

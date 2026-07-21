@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function AdminDashboard() {
@@ -10,7 +11,15 @@ export default async function AdminDashboard() {
 
   return (
     <main className="p-8">
-      <h1 className="font-display text-3xl font-semibold mb-1">Établissements</h1>
+      <div className="flex items-center justify-between mb-1">
+        <h1 className="font-display text-3xl font-semibold">Établissements</h1>
+        <Link
+          href="/admin/etablissements/nouveau"
+          className="bg-black text-white rounded-lg px-4 py-2 text-sm font-medium"
+        >
+          + Nouvel établissement
+        </Link>
+      </div>
       <p className="text-neutral-500 mb-6">
         {etablissements?.length ?? 0} établissement(s) enregistré(s)
       </p>
@@ -37,4 +46,4 @@ export default async function AdminDashboard() {
       </div>
     </main>
   );
-}
+      }

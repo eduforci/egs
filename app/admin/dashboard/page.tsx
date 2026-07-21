@@ -25,7 +25,7 @@ export default async function AdminDashboard() {
             </tr>
           </thead>
           <tbody>
-            {etablissements?.map((e) => (
+            {etablissements?.map((e: any) => (
               <tr key={e.id} className="border-t">
                 <td className="p-3">{e.nom}</td>
                 <td className="p-3">{e.ville}</td>

@@ -37,7 +37,7 @@ export default function NouvelEtablissement() {
       adresse: adresse.trim() || null,
       telephone: telephone.trim() || null,
       statut,
-      date_debut: dateDebut || null,
+      date_debut_abonnement: dateDebut || null,
     });
 
     setChargement(false);

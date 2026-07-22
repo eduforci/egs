@@ -46,7 +46,7 @@ export default async function TableauNotes({
       matiereNom={matiere?.nom ?? ""}
       anneeScolaire={classe?.annee_scolaire ?? ""}
       enseignantId={user?.id ?? ""}
-      eleves={eleves ?? []}
+      eleves={(eleves ?? []) as any}
       notesExistantes={notes ?? []}
     />
   );

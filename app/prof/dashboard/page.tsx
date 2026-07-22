@@ -31,7 +31,7 @@ export default async function ProfDashboard() {
           <tbody>
             {affectations?.map((a: any) => (
               <tr key={a.id} className="border-t hover:bg-neutral-50">
-                <td className="p-0">
+                <td className="p-0" colSpan={5}>
                   <Link
                     href={`/prof/classe/${a.classes?.id}/matiere/${a.matieres?.id}`}
                     className="grid grid-cols-5 p-3 gap-0"

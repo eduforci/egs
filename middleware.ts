@@ -5,6 +5,9 @@ import { NextResponse, type NextRequest } from "next/server";
 const ROLE_ROUTES: Record<string, string> = {
   "/admin": "super_admin",
   "/chef": "chef",
+  "/directeur": "directeur_etudes",
+  "/comptable": "comptable",
+  "/secretariat": "secretaire",
   "/prof": "enseignant",
   "/parent": "parent",
   "/eleve": "eleve",
@@ -57,7 +60,7 @@ export async function middleware(request: NextRequest) {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, must_change_password")
       .eq("id", user.id)
       .single();
 
@@ -65,11 +68,27 @@ export async function middleware(request: NextRequest) {
       // Connecté, mais mauvais espace : renvoyé vers son propre tableau de bord
       return NextResponse.redirect(new URL("/login", request.url));
     }
+
+    if (profile?.must_change_password) {
+      return NextResponse.redirect(
+        new URL("/changer-mot-de-passe", request.url)
+      );
+    }
   }
 
   return response;
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/chef/:path*", "/prof/:path*", "/parent/:path*", "/eleve/:path*"],
+  matcher: [
+    "/admin/:path*",
+    "/chef/:path*",
+    "/directeur/:path*",
+    "/comptable/:path*",
+    "/secretariat/:path*",
+    "/prof/:path*",
+    "/parent/:path*",
+    "/eleve/:path*",
+  ],
 };
+

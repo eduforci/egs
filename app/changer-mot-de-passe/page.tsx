@@ -43,10 +43,7 @@ export default function ChangerMotDePassePage() {
       } = await supabase.auth.getUser();
 
       if (user) {
-        await supabase
-          .from("profiles")
-          .update({ must_change_password: false })
-          .eq("id", user.id);
+        await supabase.rpc("mark_password_changed");
       }
 
       window.location.href = "/";
@@ -106,4 +103,4 @@ export default function ChangerMotDePassePage() {
       </div>
     </div>
   );
-}
+            }

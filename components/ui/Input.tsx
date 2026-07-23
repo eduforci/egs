@@ -40,9 +40,9 @@ const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           aria-invalid={!!error}
           aria-describedby={error ? errorId : undefined}
           className={[
-            "w-full rounded-xl border bg-white/80 py-2.5 text-sm text-chalk",
+            "w-full rounded-xl border bg-white/90 py-2.5 text-sm text-chalk",
             "placeholder:text-chalk/30 transition-colors duration-150",
-            "focus:outline-none focus:ring-2 focus:ring-chalk/30 focus:border-chalk",
+            "focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500",
             icon ? "pl-10" : "pl-3",
             rightElement ? "pr-10" : "pr-3",
             error ? "border-red-400" : "border-chalk/15",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
@@ -66,6 +66,101 @@ function EyeIcon({ open }: { open: boolean }) {
         strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+const ROLES: { label: string; icon: ReactNode }[] = [
+  {
+    label: "Super Administrateur",
+    icon: (
+      <path d="M12 3l7 3v5c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3z" />
+    ),
+  },
+  {
+    label: "Chef d'établissement",
+    icon: (
+      <path d="M4 21V9l8-5 8 5v12M9 21v-6h6v6M4 21h16" />
+    ),
+  },
+  {
+    label: "Directeur des études",
+    icon: (
+      <path d="M4 5.5A2.5 2.5 0 016.5 3H12v18H6.5A2.5 2.5 0 014 18.5v-13zM20 5.5A2.5 2.5 0 0017.5 3H12v18h5.5a2.5 2.5 0 002.5-2.5v-13z" />
+    ),
+  },
+  {
+    label: "Comptable",
+    icon: (
+      <path d="M5 3.5h14v17H5v-17zM8 7.5h8M8 11h3M13 11h3M8 14.5h3M13 14.5h3" />
+    ),
+  },
+  {
+    label: "Secrétaire",
+    icon: (
+      <path d="M8 3h8l1 3H7l1-3zM6 6h12v15H6V6zM9 10h6M9 13.5h6M9 17h4" />
+    ),
+  },
+  {
+    label: "Enseignant",
+    icon: (
+      <path d="M2 9l10-5 10 5-10 5-10-5zM6 11.5v5c0 1.4 2.7 3 6 3s6-1.6 6-3v-5M22 9v6" />
+    ),
+  },
+  {
+    label: "Parent",
+    icon: (
+      <path d="M8 8a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM16 8a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM2.5 20c0-3.5 2.5-6 5.5-6s5.5 2.5 5.5 6M10.5 20c0-3.5 2.5-6 5.5-6s5.5 2.5 5.5 6" />
+    ),
+  },
+  {
+    label: "Élève",
+    icon: (
+      <path d="M12 3l9 4.5-9 4.5-9-4.5L12 3zM5.5 9.5V15c0 2 3 3.5 6.5 3.5s6.5-1.5 6.5-3.5V9.5" />
+    ),
+  },
+];
+
+function RoleIcon({ path }: { path: ReactNode }) {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {path}
+    </svg>
+  );
+}
+
+function Logo() {
+  return (
+    <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden="true">
+      <defs>
+        <linearGradient id="egsLogoGradient" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#3B82F6" />
+          <stop offset="100%" stopColor="#1D4ED8" />
+        </linearGradient>
+      </defs>
+      <circle cx="28" cy="28" r="27" fill="url(#egsLogoGradient)" />
+      <path
+        d="M28 15l16 7-16 7-16-7 16-7z"
+        fill="white"
+        opacity="0.95"
+      />
+      <path
+        d="M16 24.5v7c0 2.8 5.4 5 12 5s12-2.2 12-5v-7"
+        stroke="white"
+        strokeWidth="2"
+        fill="none"
+        strokeLinecap="round"
       />
     </svg>
   );
@@ -146,12 +241,16 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-paper via-paper to-chalk/10 px-4 py-10">
-      <div className="w-full max-w-sm animate-fade-in-up">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-blue-100 px-4 py-10 relative overflow-hidden">
+      {/* Decorative soft blobs */}
+      <div className="pointer-events-none absolute -top-24 -left-24 w-72 h-72 bg-blue-300/30 rounded-full blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-24 -right-24 w-72 h-72 bg-blue-400/20 rounded-full blur-3xl" />
+
+      <div className="w-full max-w-md animate-fade-in-up relative">
         {/* Logo */}
         <div className="flex flex-col items-center mb-6 text-center">
-          <div className="w-14 h-14 rounded-full border-2 border-gold flex items-center justify-center font-display font-bold text-lg text-gold bg-white shadow-sm mb-3">
-            EG
+          <div className="mb-3 drop-shadow-lg">
+            <Logo />
           </div>
           <div className="font-display text-2xl font-semibold text-chalk">
             EGS
@@ -307,6 +406,31 @@ export default function LoginPage() {
           )}
         </Card>
 
+        {/* Rôles — purement décoratif, aucune interaction sur la connexion */}
+        <div
+          className="mt-8"
+          aria-hidden="true"
+        >
+          <p className="text-center text-xs font-semibold text-chalk/40 uppercase tracking-wide mb-3">
+            Un espace pour chaque acteur de l&apos;établissement
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            {ROLES.map((role) => (
+              <div
+                key={role.label}
+                className="flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-white/60 backdrop-blur-sm border border-white/60 py-3 px-1.5 text-center shadow-sm shadow-blue-900/5 transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <span className="text-blue-600">
+                  <RoleIcon path={role.icon} />
+                </span>
+                <span className="text-[10px] leading-tight text-chalk/60 font-medium">
+                  {role.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <p className="text-center text-xs text-chalk/40 mt-6">
           Version 1.0 · © EGS
         </p>
@@ -314,4 +438,3 @@ export default function LoginPage() {
     </div>
   );
     }
-      

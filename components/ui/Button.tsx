@@ -11,7 +11,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const VARIANT_CLASSES: Record<string, string> = {
   primary:
-    "bg-chalk text-paper hover:bg-chalk-soft focus-visible:ring-chalk",
+    "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-600/25 hover:shadow-xl hover:shadow-blue-600/30 hover:-translate-y-0.5 hover:from-blue-500 hover:to-blue-400 focus-visible:ring-blue-500",
   secondary:
     "bg-gold text-chalk hover:brightness-95 focus-visible:ring-gold",
   ghost:
@@ -68,4 +68,3 @@ export default function Button({
     </button>
   );
 }
-

@@ -8,7 +8,8 @@ export default function Card({ children, className = "", ...rest }: CardProps) {
   return (
     <div
       className={[
-        "bg-white rounded-2xl shadow-xl shadow-chalk/10 border border-chalk/5",
+        "bg-white/70 backdrop-blur-xl rounded-3xl shadow-2xl shadow-blue-900/10",
+        "border border-white/60",
         "p-6 sm:p-8 w-full",
         className,
       ].join(" ")}

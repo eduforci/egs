@@ -1,4 +1,12 @@
-export type UserRole = "super_admin" | "chef" | "enseignant" | "parent" | "eleve";
+export type UserRole =
+  | "super_admin"
+  | "chef"
+  | "directeur_etudes"
+  | "comptable"
+  | "secretaire"
+  | "enseignant"
+  | "parent"
+  | "eleve";
 
 export interface Profile {
   id: string;
@@ -8,6 +16,8 @@ export interface Profile {
   prenom: string;
   telephone: string | null;
   avatar_url: string | null;
+  identifiant: string | null;
+  must_change_password: boolean;
 }
 
 export interface Etablissement {

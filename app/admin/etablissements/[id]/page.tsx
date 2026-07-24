@@ -8,6 +8,14 @@ const STATUTS = ["actif", "en_attente", "suspendu", "expire"] as const;
 
 type Classe = { id: string; nom: string; niveau: string; annee_scolaire: string };
 type Matiere = { id: string; nom: string; coefficient_defaut: number };
+type Parametres = {
+  nb_trimestres: number;
+  bareme_max: number;
+  seuils_mentions: Record<string, number>;
+  moyenne_admission: number;
+  regle_decision: string | null;
+};
+type Bareme = { id: string; type_evaluation: string; bareme_max: number; poids: number };
 
 export default function ModifierEtablissement() {
   const router = useRouter();
@@ -28,6 +36,8 @@ export default function ModifierEtablissement() {
 
   const [classes, setClasses] = useState<Classe[]>([]);
   const [matieres, setMatieres] = useState<Matiere[]>([]);
+  const [parametres, setParametres] = useState<Parametres | null>(null);
+  const [baremes, setBaremes] = useState<Bareme[]>([]);
 
   const [chargement, setChargement] = useState(false);
   const [suppression, setSuppression] = useState(false);
@@ -69,8 +79,22 @@ export default function ModifierEtablissement() {
         .eq("etablissement_id", id)
         .order("nom", { ascending: true });
 
+      const { data: parametresData } = await supabase
+        .from("parametres_pedagogiques")
+        .select("*")
+        .eq("etablissement_id", id)
+        .maybeSingle();
+
+      const { data: baremesData } = await supabase
+        .from("baremes_evaluations")
+        .select("id, type_evaluation, bareme_max, poids")
+        .eq("etablissement_id", id)
+        .order("ordre", { ascending: true });
+
       setClasses(classesData ?? []);
       setMatieres(matieresData ?? []);
+      setParametres(parametresData ?? null);
+      setBaremes(baremesData ?? []);
       setChargementInitial(false);
     }
 
@@ -207,6 +231,39 @@ export default function ModifierEtablissement() {
             )}
           </div>
         </div>
+
+        {parametres && (
+          <div className="mt-4 pt-4 border-t">
+            <h3 className="text-xs uppercase text-neutral-500 mb-2">
+              Paramètres pédagogiques
+            </h3>
+            <p className="text-sm">
+              {parametres.nb_trimestres} trimestres · barème /{parametres.bareme_max} ·
+              admission dès {parametres.moyenne_admission}/20
+            </p>
+            {parametres.regle_decision && (
+              <p className="text-sm text-neutral-500">{parametres.regle_decision}</p>
+            )}
+          </div>
+        )}
+
+        {baremes.length > 0 && (
+          <div className="mt-4 pt-4 border-t">
+            <h3 className="text-xs uppercase text-neutral-500 mb-2">
+              Barèmes d'évaluation
+            </h3>
+            <ul className="text-sm space-y-1">
+              {baremes.map((b) => (
+                <li key={b.id} className="flex justify-between border-b pb-1">
+                  <span className="capitalize">{b.type_evaluation}</span>
+                  <span className="text-neutral-400">
+                    /{b.bareme_max} · poids {b.poids}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       <form
@@ -310,4 +367,5 @@ export default function ModifierEtablissement() {
       </form>
     </main>
   );
-}
+                }
+                

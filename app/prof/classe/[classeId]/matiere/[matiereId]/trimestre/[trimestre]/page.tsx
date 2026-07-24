@@ -27,10 +27,33 @@ export default async function TableauNotes({
     .eq("id", matiereId)
     .single();
 
-  const { data: eleves, error: elevesError } = await supabase
+  // On évite volontairement la jointure automatique "profiles ( nom, prenom )"
+  // depuis eleves : la base a plusieurs relations possibles entre les deux
+  // tables, ce qui la rend ambiguë pour Supabase. Deux requêtes séparées
+  // + fusion manuelle, plus robuste.
+  const { data: elevesRaw, error: elevesError } = await supabase
     .from("eleves")
-    .select("id, matricule, profiles ( nom, prenom )")
+    .select("id, matricule")
     .eq("classe_id", classeId);
+
+  let eleves: any[] = [];
+  let profilesError: string | null = null;
+
+  if (elevesRaw && elevesRaw.length > 0) {
+    const ids = elevesRaw.map((e) => e.id);
+    const { data: profilesData, error: pErr } = await supabase
+      .from("profiles")
+      .select("id, nom, prenom")
+      .in("id", ids);
+
+    if (pErr) profilesError = pErr.message;
+
+    eleves = elevesRaw.map((e) => ({
+      id: e.id,
+      matricule: e.matricule,
+      profiles: profilesData?.find((p) => p.id === e.id) ?? null,
+    }));
+  }
 
   const { data: notes, error: notesError } = await supabase
     .from("notes")
@@ -55,7 +78,8 @@ export default async function TableauNotes({
     .eq("annee_scolaire", classe?.annee_scolaire ?? "")
     .maybeSingle();
 
-  const erreurDiagnostic = elevesError?.message || notesError?.message || null;
+  const erreurDiagnostic =
+    elevesError?.message || profilesError || notesError?.message || null;
 
   return (
     <>
@@ -72,11 +96,11 @@ export default async function TableauNotes({
         matiereNom={matiere?.nom ?? ""}
         anneeScolaire={classe?.annee_scolaire ?? ""}
         enseignantId={user?.id ?? ""}
-        eleves={(eleves ?? []) as any}
+        eleves={eleves as any}
         notesExistantes={notes ?? []}
         observationsExistantes={observations ?? []}
         validation={validation ?? null}
       />
     </>
   );
-        }
+}

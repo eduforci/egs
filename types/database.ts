@@ -28,6 +28,10 @@ export interface Etablissement {
   logo_url: string | null;
   annee_scolaire_active: string | null;
   devise: string | null;
+  type_etablissement: "maternelle" | "primaire" | "college" | "lycee" | "college_lycee" | null;
+  systeme_enseignement: string | null;
+  initialise: boolean;
+  initialise_at: string | null;
 }
 
 export interface EmploiDuTemps {
@@ -112,4 +116,5 @@ export interface Observation {
   texte: string;
   trimestre: 1 | 2 | 3;
   annee_scolaire: string;
-}
+  }
+  

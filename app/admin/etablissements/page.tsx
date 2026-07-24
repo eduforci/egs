@@ -1,0 +1,64 @@
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
+
+export default async function EtablissementsListe() {
+  const supabase = await createClient();
+
+  const { data: etablissements } = await supabase
+    .from("etablissements")
+    .select("id, nom, ville, statut")
+    .order("created_at", { ascending: false });
+
+  return (
+    <main className="p-6 sm:p-8">
+      <div className="flex items-center justify-between mb-1">
+        <h1 className="font-display text-3xl font-semibold">Établissements</h1>
+        <Link
+          href="/admin/etablissements/nouveau"
+          className="bg-black text-white rounded-lg px-4 py-2 text-sm font-medium"
+        >
+          + Nouvel établissement
+        </Link>
+      </div>
+      <p className="text-neutral-500 mb-6">
+        {etablissements?.length ?? 0} établissement(s) enregistré(s)
+      </p>
+
+      <div className="bg-white border rounded-xl overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-neutral-50 text-left text-xs uppercase text-neutral-500">
+            <tr>
+              <th className="p-3">Nom</th>
+              <th className="p-3">Ville</th>
+              <th className="p-3">Statut</th>
+              <th className="p-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {etablissements?.map((e: any) => (
+              <tr key={e.id} className="border-t">
+                <td className="p-3 whitespace-nowrap">{e.nom}</td>
+                <td className="p-3 whitespace-nowrap">{e.ville}</td>
+                <td className="p-3 whitespace-nowrap">{e.statut}</td>
+                <td className="p-3 whitespace-nowrap">
+                  <Link
+                    href={`/admin/etablissements/${e.id}`}
+                    className="text-role-admin hover:underline"
+                  >
+                    Voir / Modifier
+                  </Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {(!etablissements || etablissements.length === 0) && (
+          <p className="p-4 text-neutral-500 text-sm">Aucun établissement pour le moment.</p>
+        )}
+      </div>
+    </main>
+  );
+}
+

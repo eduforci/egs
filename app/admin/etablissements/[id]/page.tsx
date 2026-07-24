@@ -6,6 +6,9 @@ import { createClient } from "@/lib/supabase/client";
 
 const STATUTS = ["actif", "en_attente", "suspendu", "expire"] as const;
 
+type Classe = { id: string; nom: string; niveau: string; annee_scolaire: string };
+type Matiere = { id: string; nom: string; coefficient_defaut: number };
+
 export default function ModifierEtablissement() {
   const router = useRouter();
   const params = useParams();
@@ -19,6 +22,12 @@ export default function ModifierEtablissement() {
   const [telephone, setTelephone] = useState("");
   const [statut, setStatut] = useState<(typeof STATUTS)[number]>("en_attente");
   const [dateDebut, setDateDebut] = useState("");
+  const [initialise, setInitialise] = useState(false);
+  const [typeEtablissement, setTypeEtablissement] = useState<string | null>(null);
+  const [systeme, setSysteme] = useState<string | null>(null);
+
+  const [classes, setClasses] = useState<Classe[]>([]);
+  const [matieres, setMatieres] = useState<Matiere[]>([]);
 
   const [chargement, setChargement] = useState(false);
   const [suppression, setSuppression] = useState(false);
@@ -44,6 +53,24 @@ export default function ModifierEtablissement() {
       setTelephone(data.telephone ?? "");
       setStatut(data.statut ?? "en_attente");
       setDateDebut(data.date_debut_abonnement ?? "");
+      setInitialise(data.initialise ?? false);
+      setTypeEtablissement(data.type_etablissement ?? null);
+      setSysteme(data.systeme_enseignement ?? null);
+
+      const { data: classesData } = await supabase
+        .from("classes")
+        .select("id, nom, niveau, annee_scolaire")
+        .eq("etablissement_id", id)
+        .order("niveau", { ascending: true });
+
+      const { data: matieresData } = await supabase
+        .from("matieres")
+        .select("id, nom, coefficient_defaut")
+        .eq("etablissement_id", id)
+        .order("nom", { ascending: true });
+
+      setClasses(classesData ?? []);
+      setMatieres(matieresData ?? []);
       setChargementInitial(false);
     }
 
@@ -80,7 +107,7 @@ export default function ModifierEtablissement() {
       return;
     }
 
-    router.push("/admin/dashboard");
+    router.push("/admin/etablissements");
     router.refresh();
   }
 
@@ -105,7 +132,7 @@ export default function ModifierEtablissement() {
       return;
     }
 
-    router.push("/admin/dashboard");
+    router.push("/admin/etablissements");
     router.refresh();
   }
 
@@ -114,13 +141,73 @@ export default function ModifierEtablissement() {
   }
 
   return (
-    <main className="p-8 max-w-xl">
+    <main className="p-6 sm:p-8 max-w-xl">
       <h1 className="font-display text-3xl font-semibold mb-1">
         Modifier l'établissement
       </h1>
       <p className="text-neutral-500 mb-6">
         Mettez à jour les informations ou supprimez l'établissement.
       </p>
+
+      {/* Structure créée par le moteur d'initialisation */}
+      <div className="bg-white border rounded-xl p-5 mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-display text-lg font-semibold">Structure de l'établissement</h2>
+          {initialise ? (
+            <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">
+              Initialisé
+            </span>
+          ) : (
+            <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full font-medium">
+              Non initialisé
+            </span>
+          )}
+        </div>
+
+        {typeEtablissement && (
+          <p className="text-sm text-neutral-500 mb-3">
+            {typeEtablissement} · système {systeme}
+          </p>
+        )}
+
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <h3 className="text-xs uppercase text-neutral-500 mb-2">
+              Classes ({classes.length})
+            </h3>
+            {classes.length > 0 ? (
+              <ul className="text-sm space-y-1">
+                {classes.map((c) => (
+                  <li key={c.id} className="flex justify-between border-b pb-1">
+                    <span>{c.nom}</span>
+                    <span className="text-neutral-400">{c.annee_scolaire}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-neutral-400">Aucune classe.</p>
+            )}
+          </div>
+
+          <div>
+            <h3 className="text-xs uppercase text-neutral-500 mb-2">
+              Matières ({matieres.length})
+            </h3>
+            {matieres.length > 0 ? (
+              <ul className="text-sm space-y-1">
+                {matieres.map((m) => (
+                  <li key={m.id} className="flex justify-between border-b pb-1">
+                    <span>{m.nom}</span>
+                    <span className="text-neutral-400">coef. {m.coefficient_defaut}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-neutral-400">Aucune matière.</p>
+            )}
+          </div>
+        </div>
+      </div>
 
       <form
         onSubmit={handleSubmit}
@@ -223,5 +310,4 @@ export default function ModifierEtablissement() {
       </form>
     </main>
   );
-      }
-        
+}

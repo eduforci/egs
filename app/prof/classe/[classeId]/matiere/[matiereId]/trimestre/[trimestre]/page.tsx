@@ -27,12 +27,12 @@ export default async function TableauNotes({
     .eq("id", matiereId)
     .single();
 
-  const { data: eleves } = await supabase
+  const { data: eleves, error: elevesError } = await supabase
     .from("eleves")
     .select("id, matricule, profiles ( nom, prenom )")
     .eq("classe_id", classeId);
 
-  const { data: notes } = await supabase
+  const { data: notes, error: notesError } = await supabase
     .from("notes")
     .select("*")
     .eq("classe_id", classeId)
@@ -55,19 +55,28 @@ export default async function TableauNotes({
     .eq("annee_scolaire", classe?.annee_scolaire ?? "")
     .maybeSingle();
 
+  const erreurDiagnostic = elevesError?.message || notesError?.message || null;
+
   return (
-    <NotesTable
-      classeId={classeId}
-      matiereId={matiereId}
-      trimestre={trimestre}
-      classeNom={classe?.nom ?? ""}
-      matiereNom={matiere?.nom ?? ""}
-      anneeScolaire={classe?.annee_scolaire ?? ""}
-      enseignantId={user?.id ?? ""}
-      eleves={(eleves ?? []) as any}
-      notesExistantes={notes ?? []}
-      observationsExistantes={observations ?? []}
-      validation={validation ?? null}
-    />
+    <>
+      {erreurDiagnostic && (
+        <div className="max-w-5xl mx-auto mt-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm border border-red-200">
+          Erreur technique lors du chargement : {erreurDiagnostic}
+        </div>
+      )}
+      <NotesTable
+        classeId={classeId}
+        matiereId={matiereId}
+        trimestre={trimestre}
+        classeNom={classe?.nom ?? ""}
+        matiereNom={matiere?.nom ?? ""}
+        anneeScolaire={classe?.annee_scolaire ?? ""}
+        enseignantId={user?.id ?? ""}
+        eleves={(eleves ?? []) as any}
+        notesExistantes={notes ?? []}
+        observationsExistantes={observations ?? []}
+        validation={validation ?? null}
+      />
+    </>
   );
-      }
+        }

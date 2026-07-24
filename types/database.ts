@@ -74,5 +74,42 @@ export interface Note {
   annee_scolaire: string;
 }
 
-// À compléter au fur et à mesure : Matiere, Absence, Observation,
-// EmploiDuTemps, FraisScolarite, Bulletin, CodeInvitation...
+// À compléter au fur et à mesure : Matiere, Absence, EmploiDuTemps,
+// FraisScolarite, Bulletin, CodeInvitation...
+
+export interface ValidationNotes {
+  id: string;
+  classe_id: string;
+  matiere_id: string;
+  trimestre: 1 | 2 | 3;
+  annee_scolaire: string;
+  valide: boolean;
+  valide_par: string | null;
+  valide_at: string | null;
+  deverrouille_par: string | null;
+  deverrouille_at: string | null;
+}
+
+export interface NotesHistorique {
+  id: string;
+  eleve_id: string;
+  matiere_id: string;
+  classe_id: string;
+  trimestre: 1 | 2 | 3;
+  annee_scolaire: string;
+  type: "devoir" | "composition" | "interrogation";
+  ancienne_valeur: number | null;
+  nouvelle_valeur: number | null;
+  modifie_par: string | null;
+  modifie_at: string;
+}
+
+export interface Observation {
+  id: string;
+  eleve_id: string;
+  enseignant_id: string;
+  matiere_id: string | null;
+  texte: string;
+  trimestre: 1 | 2 | 3;
+  annee_scolaire: string;
+}

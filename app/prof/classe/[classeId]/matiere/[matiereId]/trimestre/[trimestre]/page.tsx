@@ -11,7 +11,9 @@ export default async function TableauNotes({
   const { classeId, matiereId, trimestre } = await params;
   const supabase = await createClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const { data: classe } = await supabase
     .from("classes")
@@ -37,6 +39,22 @@ export default async function TableauNotes({
     .eq("matiere_id", matiereId)
     .eq("trimestre", trimestre);
 
+  const { data: observations } = await supabase
+    .from("observations")
+    .select("eleve_id, texte")
+    .eq("matiere_id", matiereId)
+    .eq("trimestre", trimestre)
+    .eq("enseignant_id", user?.id);
+
+  const { data: validation } = await supabase
+    .from("validations_notes")
+    .select("*")
+    .eq("classe_id", classeId)
+    .eq("matiere_id", matiereId)
+    .eq("trimestre", trimestre)
+    .eq("annee_scolaire", classe?.annee_scolaire ?? "")
+    .maybeSingle();
+
   return (
     <NotesTable
       classeId={classeId}
@@ -48,6 +66,8 @@ export default async function TableauNotes({
       enseignantId={user?.id ?? ""}
       eleves={(eleves ?? []) as any}
       notesExistantes={notes ?? []}
+      observationsExistantes={observations ?? []}
+      validation={validation ?? null}
     />
   );
-}
+      }

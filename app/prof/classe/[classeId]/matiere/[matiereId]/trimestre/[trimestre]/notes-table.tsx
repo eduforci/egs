@@ -421,5 +421,5 @@ export default function NotesTable({
       </div>
     </main>
   );
-                                                       }
+}
   

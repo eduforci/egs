@@ -187,14 +187,18 @@ export default function LoginPage() {
       );
 
       if (resetError) {
-        setError("Impossible d'envoyer l'email. Vérifiez l'adresse saisie.");
+        setError(
+          `Impossible d'envoyer l'email — détail technique : ${resetError.message} (code: ${resetError.status ?? "?"})`
+        );
         return;
       }
 
       setResetEmailDisplay(resolvedEmail);
       setResetSent(true);
-    } catch {
-      setError("Une erreur est survenue. Réessayez dans quelques instants.");
+    } catch (err) {
+      setError(
+        `Erreur inattendue — détail technique : ${err instanceof Error ? err.message : String(err)}`
+      );
     } finally {
       setLoading(false);
     }

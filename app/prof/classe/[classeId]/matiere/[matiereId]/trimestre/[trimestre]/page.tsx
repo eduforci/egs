@@ -17,7 +17,7 @@ export default async function TableauNotes({
 
   const { data: classe } = await supabase
     .from("classes")
-    .select("nom, annee_scolaire")
+    .select("nom, annee_scolaire, etablissement_id")
     .eq("id", classeId)
     .single();
 
@@ -27,10 +27,6 @@ export default async function TableauNotes({
     .eq("id", matiereId)
     .single();
 
-  // On évite volontairement la jointure automatique "profiles ( nom, prenom )"
-  // depuis eleves : la base a plusieurs relations possibles entre les deux
-  // tables, ce qui la rend ambiguë pour Supabase. Deux requêtes séparées
-  // + fusion manuelle, plus robuste.
   const { data: elevesRaw, error: elevesError } = await supabase
     .from("eleves")
     .select("id, matricule")
@@ -78,8 +74,15 @@ export default async function TableauNotes({
     .eq("annee_scolaire", classe?.annee_scolaire ?? "")
     .maybeSingle();
 
+  // Barèmes configurés pour l'établissement (plus de valeurs fixées dans le code)
+  const { data: baremes, error: baremesError } = await supabase
+    .from("baremes_evaluations")
+    .select("type_evaluation, bareme_max, poids, ordre")
+    .eq("etablissement_id", classe?.etablissement_id ?? "")
+    .order("ordre", { ascending: true });
+
   const erreurDiagnostic =
-    elevesError?.message || profilesError || notesError?.message || null;
+    elevesError?.message || profilesError || notesError?.message || baremesError?.message || null;
 
   return (
     <>
@@ -100,7 +103,9 @@ export default async function TableauNotes({
         notesExistantes={notes ?? []}
         observationsExistantes={observations ?? []}
         validation={validation ?? null}
+        baremes={baremes ?? []}
       />
     </>
   );
-}
+          }
+        

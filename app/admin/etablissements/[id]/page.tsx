@@ -7,7 +7,12 @@ import { createClient } from "@/lib/supabase/client";
 const STATUTS = ["actif", "en_attente", "suspendu", "expire"] as const;
 
 type Classe = { id: string; nom: string; niveau: string; annee_scolaire: string };
-type Matiere = { id: string; nom: string; coefficient_defaut: number };
+type ClasseMatiere = {
+  classe_id: string;
+  matiere_id: string;
+  coefficient: number;
+  matieres: { nom: string } | null;
+};
 type Parametres = {
   nb_trimestres: number;
   bareme_max: number;
@@ -35,7 +40,7 @@ export default function ModifierEtablissement() {
   const [systeme, setSysteme] = useState<string | null>(null);
 
   const [classes, setClasses] = useState<Classe[]>([]);
-  const [matieres, setMatieres] = useState<Matiere[]>([]);
+  const [classesMatieres, setClassesMatieres] = useState<ClasseMatiere[]>([]);
   const [parametres, setParametres] = useState<Parametres | null>(null);
   const [baremes, setBaremes] = useState<Bareme[]>([]);
 
@@ -73,11 +78,10 @@ export default function ModifierEtablissement() {
         .eq("etablissement_id", id)
         .order("niveau", { ascending: true });
 
-      const { data: matieresData } = await supabase
-        .from("matieres")
-        .select("id, nom, coefficient_defaut")
-        .eq("etablissement_id", id)
-        .order("nom", { ascending: true });
+      const { data: classesMatieresData } = await supabase
+        .from("classes_matieres")
+        .select("classe_id, matiere_id, coefficient, matieres ( nom )")
+        .in("classe_id", (classesData ?? []).map((c) => c.id));
 
       const { data: parametresData } = await supabase
         .from("parametres_pedagogiques")
@@ -92,7 +96,7 @@ export default function ModifierEtablissement() {
         .order("ordre", { ascending: true });
 
       setClasses(classesData ?? []);
-      setMatieres(matieresData ?? []);
+      setClassesMatieres((classesMatieresData ?? []) as ClasseMatiere[]);
       setParametres(parametresData ?? null);
       setBaremes(baremesData ?? []);
       setChargementInitial(false);
@@ -194,7 +198,7 @@ export default function ModifierEtablissement() {
           </p>
         )}
 
-        <div className="grid sm:grid-cols-2 gap-4">
+        <div className="space-y-6">
           <div>
             <h3 className="text-xs uppercase text-neutral-500 mb-2">
               Classes ({classes.length})
@@ -215,19 +219,33 @@ export default function ModifierEtablissement() {
 
           <div>
             <h3 className="text-xs uppercase text-neutral-500 mb-2">
-              Matières ({matieres.length})
+              Matières et coefficients par classe
             </h3>
-            {matieres.length > 0 ? (
-              <ul className="text-sm space-y-1">
-                {matieres.map((m) => (
-                  <li key={m.id} className="flex justify-between border-b pb-1">
-                    <span>{m.nom}</span>
-                    <span className="text-neutral-400">coef. {m.coefficient_defaut}</span>
-                  </li>
-                ))}
-              </ul>
+            {classes.length > 0 ? (
+              <div className="space-y-3">
+                {classes.map((c) => {
+                  const lignes = classesMatieres.filter((cm) => cm.classe_id === c.id);
+                  return (
+                    <div key={c.id}>
+                      <p className="text-sm font-medium mb-1">{c.nom}</p>
+                      {lignes.length > 0 ? (
+                        <ul className="text-sm space-y-1 pl-2">
+                          {lignes.map((cm, i) => (
+                            <li key={i} className="flex justify-between border-b pb-1">
+                              <span>{cm.matieres?.nom}</span>
+                              <span className="text-neutral-400">coef. {cm.coefficient}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-xs text-neutral-400 pl-2">Aucune matière.</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
-              <p className="text-sm text-neutral-400">Aucune matière.</p>
+              <p className="text-sm text-neutral-400">Aucune classe.</p>
             )}
           </div>
         </div>
@@ -367,5 +385,4 @@ export default function ModifierEtablissement() {
       </form>
     </main>
   );
-                }
-                
+    }

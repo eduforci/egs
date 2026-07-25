@@ -11,7 +11,7 @@ type Eleve = {
 
 type Note = {
   eleve_id: string;
-  type: "interrogation" | "devoir" | "composition";
+  type: string;
   valeur: number;
 };
 
@@ -20,12 +20,26 @@ type Observation = {
   texte: string;
 };
 
+type Bareme = {
+  type_evaluation: string;
+  bareme_max: number;
+  poids: number;
+  ordre: number;
+};
+
 type Validation = {
   id: string;
   valide: boolean;
   valide_par: string | null;
   valide_at: string | null;
 } | null;
+
+const LABELS: Record<string, string> = {
+  interrogation: "Interrogation",
+  devoir: "Devoir",
+  composition: "Composition",
+  examen: "Examen",
+};
 
 export default function NotesTable({
   classeId,
@@ -39,6 +53,7 @@ export default function NotesTable({
   notesExistantes,
   observationsExistantes,
   validation,
+  baremes,
 }: {
   classeId: string;
   matiereId: string;
@@ -51,26 +66,23 @@ export default function NotesTable({
   notesExistantes: Note[];
   observationsExistantes: Observation[];
   validation: Validation;
+  baremes: Bareme[];
 }) {
   const supabase = createClient();
 
   const estVerrouille = validation?.valide === true;
+  const typesEvaluation = baremes.map((b) => b.type_evaluation);
 
-  const initial: Record<
-    string,
-    { interrogation: string; devoir: string; composition: string; appreciation: string }
-  > = {};
+  const initial: Record<string, Record<string, string>> = {};
   eleves.forEach((e) => {
-    const interro = notesExistantes.find((n) => n.eleve_id === e.id && n.type === "interrogation");
-    const devoir = notesExistantes.find((n) => n.eleve_id === e.id && n.type === "devoir");
-    const composition = notesExistantes.find((n) => n.eleve_id === e.id && n.type === "composition");
+    const ligne: Record<string, string> = { appreciation: "" };
+    typesEvaluation.forEach((type) => {
+      const note = notesExistantes.find((n) => n.eleve_id === e.id && n.type === type);
+      ligne[type] = note ? String(note.valeur) : "";
+    });
     const appreciation = observationsExistantes.find((o) => o.eleve_id === e.id);
-    initial[e.id] = {
-      interrogation: interro ? String(interro.valeur) : "",
-      devoir: devoir ? String(devoir.valeur) : "",
-      composition: composition ? String(composition.valeur) : "",
-      appreciation: appreciation ? appreciation.texte : "",
-    };
+    if (appreciation) ligne.appreciation = appreciation.texte;
+    initial[e.id] = ligne;
   });
 
   const [valeurs, setValeurs] = useState(initial);
@@ -82,14 +94,15 @@ export default function NotesTable({
 
   function moyenne(eleveId: string) {
     const v = valeurs[eleveId];
-    const interro = parseFloat(v.interrogation);
-    const devoir = parseFloat(v.devoir);
-    const composition = parseFloat(v.composition);
-
     const termes: { val: number; poids: number }[] = [];
-    if (!isNaN(interro)) termes.push({ val: interro * 2, poids: 1 }); // /10 -> /20
-    if (!isNaN(devoir)) termes.push({ val: devoir, poids: 2 });
-    if (!isNaN(composition)) termes.push({ val: composition, poids: 3 });
+
+    baremes.forEach((b) => {
+      const brut = parseFloat(v[b.type_evaluation]);
+      if (!isNaN(brut)) {
+        const surVingt = brut * (20 / b.bareme_max);
+        termes.push({ val: surVingt, poids: b.poids });
+      }
+    });
 
     if (termes.length === 0) return null;
     const poidsTotal = termes.reduce((a, t) => a + t.poids, 0);
@@ -117,7 +130,7 @@ export default function NotesTable({
 
   async function enregistrerHistorique(
     eleveId: string,
-    type: "interrogation" | "devoir" | "composition",
+    type: string,
     ancienneValeurStr: string,
     nouvelleValeurStr: string
   ) {
@@ -144,10 +157,9 @@ export default function NotesTable({
       const v = valeurs[eleve.id];
       const avant = initial[eleve.id];
 
-      // Historique : uniquement les valeurs réellement modifiées
-      await enregistrerHistorique(eleve.id, "interrogation", avant.interrogation, v.interrogation);
-      await enregistrerHistorique(eleve.id, "devoir", avant.devoir, v.devoir);
-      await enregistrerHistorique(eleve.id, "composition", avant.composition, v.composition);
+      for (const type of typesEvaluation) {
+        await enregistrerHistorique(eleve.id, type, avant[type], v[type]);
+      }
 
       await supabase
         .from("notes")
@@ -156,48 +168,21 @@ export default function NotesTable({
         .eq("matiere_id", matiereId)
         .eq("classe_id", classeId)
         .eq("trimestre", trimestre)
-        .in("type", ["interrogation", "devoir", "composition"]);
+        .in("type", typesEvaluation);
 
-      const rows = [];
-      if (v.interrogation !== "") {
-        rows.push({
+      const rows = baremes
+        .filter((b) => v[b.type_evaluation] !== "")
+        .map((b) => ({
           eleve_id: eleve.id,
           matiere_id: matiereId,
           classe_id: classeId,
           enseignant_id: enseignantId,
-          type: "interrogation",
-          valeur: parseFloat(v.interrogation),
-          coefficient: 1,
+          type: b.type_evaluation,
+          valeur: parseFloat(v[b.type_evaluation]),
+          coefficient: b.poids,
           trimestre,
           annee_scolaire: anneeScolaire,
-        });
-      }
-      if (v.devoir !== "") {
-        rows.push({
-          eleve_id: eleve.id,
-          matiere_id: matiereId,
-          classe_id: classeId,
-          enseignant_id: enseignantId,
-          type: "devoir",
-          valeur: parseFloat(v.devoir),
-          coefficient: 2,
-          trimestre,
-          annee_scolaire: anneeScolaire,
-        });
-      }
-      if (v.composition !== "") {
-        rows.push({
-          eleve_id: eleve.id,
-          matiere_id: matiereId,
-          classe_id: classeId,
-          enseignant_id: enseignantId,
-          type: "composition",
-          valeur: parseFloat(v.composition),
-          coefficient: 3,
-          trimestre,
-          annee_scolaire: anneeScolaire,
-        });
-      }
+        }));
 
       if (rows.length > 0) {
         const { error } = await supabase.from("notes").insert(rows);
@@ -208,7 +193,6 @@ export default function NotesTable({
         }
       }
 
-      // Appréciation : une seule par élève/matière/trimestre
       await supabase
         .from("observations")
         .delete()
@@ -272,6 +256,21 @@ export default function NotesTable({
     setMessage("Notes validées et verrouillées.");
   }
 
+  if (baremes.length === 0) {
+    return (
+      <main className="p-8">
+        <h1 className="font-display text-3xl font-semibold mb-1">
+          {classeNom} — {matiereNom} — Trimestre {trimestre}
+        </h1>
+        <div className="mt-4 p-4 rounded-lg bg-amber-50 text-amber-800 text-sm border border-amber-200">
+          Aucun barème d'évaluation n'est configuré pour cet établissement.
+          Contacte le Super Admin pour finaliser l'initialisation de
+          l'établissement (paramètres pédagogiques).
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="p-8">
       <h1 className="font-display text-3xl font-semibold mb-1">
@@ -292,14 +291,16 @@ export default function NotesTable({
         </div>
       )}
 
-      <div className="bg-white border rounded-xl overflow-hidden mb-4">
+      <div className="bg-white border rounded-xl overflow-x-auto mb-4">
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs uppercase text-neutral-500">
             <tr>
               <th className="p-3">Élève</th>
-              <th className="p-3">Interrogation (/10)</th>
-              <th className="p-3">Devoir (/20)</th>
-              <th className="p-3">Composition (/20)</th>
+              {baremes.map((b) => (
+                <th key={b.type_evaluation} className="p-3 whitespace-nowrap">
+                  {LABELS[b.type_evaluation] ?? b.type_evaluation} (/{b.bareme_max})
+                </th>
+              ))}
               <th className="p-3">Moyenne (/20)</th>
               <th className="p-3">Rang</th>
               <th className="p-3">Appréciation</th>
@@ -313,57 +314,25 @@ export default function NotesTable({
                   <td className="p-3 whitespace-nowrap">
                     {e.profiles?.nom} {e.profiles?.prenom}
                   </td>
-                  <td className="p-3">
-                    <input
-                      type="number"
-                      min={0}
-                      max={10}
-                      step={0.25}
-                      disabled={verrouille}
-                      value={valeurs[e.id].interrogation}
-                      onChange={(ev) =>
-                        setValeurs((prev) => ({
-                          ...prev,
-                          [e.id]: { ...prev[e.id], interrogation: ev.target.value },
-                        }))
-                      }
-                      className="w-20 border rounded p-1 disabled:bg-neutral-100 disabled:text-neutral-400"
-                    />
-                  </td>
-                  <td className="p-3">
-                    <input
-                      type="number"
-                      min={0}
-                      max={20}
-                      step={0.25}
-                      disabled={verrouille}
-                      value={valeurs[e.id].devoir}
-                      onChange={(ev) =>
-                        setValeurs((prev) => ({
-                          ...prev,
-                          [e.id]: { ...prev[e.id], devoir: ev.target.value },
-                        }))
-                      }
-                      className="w-20 border rounded p-1 disabled:bg-neutral-100 disabled:text-neutral-400"
-                    />
-                  </td>
-                  <td className="p-3">
-                    <input
-                      type="number"
-                      min={0}
-                      max={20}
-                      step={0.25}
-                      disabled={verrouille}
-                      value={valeurs[e.id].composition}
-                      onChange={(ev) =>
-                        setValeurs((prev) => ({
-                          ...prev,
-                          [e.id]: { ...prev[e.id], composition: ev.target.value },
-                        }))
-                      }
-                      className="w-20 border rounded p-1 disabled:bg-neutral-100 disabled:text-neutral-400"
-                    />
-                  </td>
+                  {baremes.map((b) => (
+                    <td key={b.type_evaluation} className="p-3">
+                      <input
+                        type="number"
+                        min={0}
+                        max={b.bareme_max}
+                        step={0.25}
+                        disabled={verrouille}
+                        value={valeurs[e.id][b.type_evaluation]}
+                        onChange={(ev) =>
+                          setValeurs((prev) => ({
+                            ...prev,
+                            [e.id]: { ...prev[e.id], [b.type_evaluation]: ev.target.value },
+                          }))
+                        }
+                        className="w-20 border rounded p-1 disabled:bg-neutral-100 disabled:text-neutral-400"
+                      />
+                    </td>
+                  ))}
                   <td className="p-3 font-medium">
                     {m !== null ? m.toFixed(2) : "-"}
                   </td>
@@ -421,5 +390,5 @@ export default function NotesTable({
       </div>
     </main>
   );
-}
-  
+                 }
+      

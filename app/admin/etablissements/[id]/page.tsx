@@ -11,7 +11,7 @@ type ClasseMatiere = {
   classe_id: string;
   matiere_id: string;
   coefficient: number;
-  matieres: { nom: string } | null;
+  matieres: { nom: string }[] | { nom: string } | null;
 };
 type Parametres = {
   nb_trimestres: number;
@@ -21,6 +21,13 @@ type Parametres = {
   regle_decision: string | null;
 };
 type Bareme = { id: string; type_evaluation: string; bareme_max: number; poids: number };
+
+// Récupère le nom de la matière, que Supabase renvoie un objet ou un tableau
+function nomMatiere(cm: ClasseMatiere): string {
+  if (!cm.matieres) return "";
+  if (Array.isArray(cm.matieres)) return cm.matieres[0]?.nom ?? "";
+  return cm.matieres.nom ?? "";
+}
 
 export default function ModifierEtablissement() {
   const router = useRouter();
@@ -96,7 +103,7 @@ export default function ModifierEtablissement() {
         .order("ordre", { ascending: true });
 
       setClasses(classesData ?? []);
-      setClassesMatieres((classesMatieresData ?? []) as ClasseMatiere[]);
+      setClassesMatieres((classesMatieresData ?? []) as unknown as ClasseMatiere[]);
       setParametres(parametresData ?? null);
       setBaremes(baremesData ?? []);
       setChargementInitial(false);
@@ -232,7 +239,7 @@ export default function ModifierEtablissement() {
                         <ul className="text-sm space-y-1 pl-2">
                           {lignes.map((cm, i) => (
                             <li key={i} className="flex justify-between border-b pb-1">
-                              <span>{cm.matieres?.nom}</span>
+                              <span>{nomMatiere(cm)}</span>
                               <span className="text-neutral-400">coef. {cm.coefficient}</span>
                             </li>
                           ))}
@@ -385,4 +392,5 @@ export default function ModifierEtablissement() {
       </form>
     </main>
   );
-    }
+        }
+    

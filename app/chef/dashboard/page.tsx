@@ -84,7 +84,9 @@ export default function ChefDashboard() {
           </p>
         </div>
       )}
-
+<a href="/chef/enseignants" className="text-sm text-blue-600 hover:underline mb-4 inline-block">
+  → Voir et gérer tous les enseignants
+</a>
       <form onSubmit={handleSubmit} className="bg-white border rounded-xl p-6 space-y-4">
         {erreur && <div className="bg-red-50 text-red-700 text-sm p-3 rounded-lg">{erreur}</div>}
 

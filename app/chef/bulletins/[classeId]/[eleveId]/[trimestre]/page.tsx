@@ -71,7 +71,7 @@ type BulletinData = {
     rang: number;
     mention: string;
     decision: string;
-  };
+  } | null;
   classe_stats: {
     moyenne_classe: number;
     moyenne_mini: number;
@@ -165,12 +165,15 @@ export default function BulletinPage() {
     return <p className="p-6 text-sm text-gray-500">Aucune donnée disponible.</p>;
   }
 
-  const matieresLettres = bulletin.matieres.filter((m) => m.groupe_bilan === 'Lettres');
-  const matieresSciences = bulletin.matieres.filter((m) => m.groupe_bilan === 'Sciences');
-  const matieresAutres = bulletin.matieres.filter((m) => !m.groupe_bilan);
+  const matieres = bulletin.matieres ?? [];
+  const bilans = bulletin.bilans ?? [];
 
-  const bilanLettres = bulletin.bilans.find((b) => b.groupe === 'Lettres');
-  const bilanSciences = bulletin.bilans.find((b) => b.groupe === 'Sciences');
+  const matieresLettres = matieres.filter((m) => m.groupe_bilan === 'Lettres');
+  const matieresSciences = matieres.filter((m) => m.groupe_bilan === 'Sciences');
+  const matieresAutres = matieres.filter((m) => !m.groupe_bilan);
+
+  const bilanLettres = bilans.find((b) => b.groupe === 'Lettres');
+  const bilanSciences = bilans.find((b) => b.groupe === 'Sciences');
 
   const renderLigneMatiere = (m: MatiereLigne, i: number) => (
     <tr key={i} className="border-t">
@@ -274,8 +277,8 @@ export default function BulletinPage() {
             <tfoot>
               <tr className="bg-gray-800 text-white font-bold">
                 <td className="px-2 py-1.5" colSpan={2}>TOTAUX</td>
-                <td className="px-2 py-1.5 text-center">{bulletin.totaux.coef_total}</td>
-                <td className="px-2 py-1.5 text-center">{bulletin.totaux.total_general}</td>
+                <td className="px-2 py-1.5 text-center">{bulletin.totaux?.coef_total ?? '-'}</td>
+                <td className="px-2 py-1.5 text-center">{bulletin.totaux?.total_general ?? '-'}</td>
                 <td className="px-2 py-1.5 text-center" colSpan={3}></td>
               </tr>
             </tfoot>
@@ -286,15 +289,21 @@ export default function BulletinPage() {
         <div className="grid grid-cols-2 gap-4 mt-4 text-xs">
           <div className="border rounded p-3">
             <p className="font-semibold mb-1">Moyenne trimestrielle</p>
-            <p className="text-lg font-bold">{bulletin.totaux.moyenne_generale}/20</p>
-            <p>Rang : {bulletin.totaux.rang}e sur {bulletin.eleve.effectif}</p>
-            <p>Mention : {bulletin.totaux.mention}</p>
-            <p className="font-semibold mt-1">
-              Décision :{' '}
-              <span className={bulletin.totaux.decision === 'Admis(e)' ? 'text-green-600' : 'text-red-600'}>
-                {bulletin.totaux.decision}
-              </span>
-            </p>
+            {bulletin.totaux ? (
+              <>
+                <p className="text-lg font-bold">{bulletin.totaux.moyenne_generale}/20</p>
+                <p>Rang : {bulletin.totaux.rang}e sur {bulletin.eleve.effectif}</p>
+                <p>Mention : {bulletin.totaux.mention}</p>
+                <p className="font-semibold mt-1">
+                  Décision :{' '}
+                  <span className={bulletin.totaux.decision === 'Admis(e)' ? 'text-green-600' : 'text-red-600'}>
+                    {bulletin.totaux.decision}
+                  </span>
+                </p>
+              </>
+            ) : (
+              <p className="text-gray-400">Aucune note saisie ce trimestre.</p>
+            )}
           </div>
           <div className="border rounded p-3">
             <p className="font-semibold mb-1">Résultats de classe</p>
@@ -349,4 +358,3 @@ export default function BulletinPage() {
     </div>
   );
 }
-  

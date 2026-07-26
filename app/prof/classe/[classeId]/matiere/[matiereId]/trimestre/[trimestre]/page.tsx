@@ -81,6 +81,13 @@ export default async function TableauNotes({
     .eq("etablissement_id", classe?.etablissement_id ?? "")
     .order("ordre", { ascending: true });
 
+  // Seuils de mentions, pour l'appréciation automatique suggérée
+  const { data: parametres } = await supabase
+    .from("parametres_pedagogiques")
+    .select("seuils_mentions")
+    .eq("etablissement_id", classe?.etablissement_id ?? "")
+    .maybeSingle();
+
   const erreurDiagnostic =
     elevesError?.message || profilesError || notesError?.message || baremesError?.message || null;
 
@@ -104,8 +111,9 @@ export default async function TableauNotes({
         observationsExistantes={observations ?? []}
         validation={validation ?? null}
         baremes={baremes ?? []}
+        seuilsMentions={(parametres?.seuils_mentions as Record<string, number>) ?? {}}
       />
     </>
   );
-          }
-        
+         }
+      

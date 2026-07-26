@@ -48,12 +48,21 @@ export async function POST(request: Request) {
     );
   }
 
-  const { count } = await supabase
+  // Numérotation robuste : plus grand numéro DIR-XXXX déjà utilisé
+  // sur toute la base (identifiant unique globalement). Un simple
+  // comptage peut provoquer des collisions après une suppression.
+  const { data: existants } = await admin
     .from("profiles")
-    .select("id", { count: "exact", head: true })
-    .eq("role", "chef");
+    .select("identifiant")
+    .like("identifiant", "DIR-%");
 
-  const numero = String((count ?? 0) + 1).padStart(4, "0");
+  const maxNumero = (existants ?? []).reduce((max, p) => {
+    const match = p.identifiant?.match(/^DIR-(\d+)$/);
+    const n = match ? parseInt(match[1], 10) : 0;
+    return n > max ? n : max;
+  }, 0);
+
+  const numero = String(maxNumero + 1).padStart(4, "0");
   const identifiant = `DIR-${numero}`;
   const emailTechnique = `${identifiant.toLowerCase()}@${etablissementId}.egs.local`;
   const motDePasseProvisoire = Math.random().toString(36).slice(-8) + "A1!";
@@ -83,4 +92,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ identifiant, motDePasseProvisoire });
 }
-  

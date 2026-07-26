@@ -71,19 +71,20 @@ export default function ClassementClassePage() {
         return;
       }
 
-      // Récupérer les noms/prénoms des élèves
+      // Récupérer les noms/prénoms des élèves depuis la table profiles
+      // (eleves.id correspond au même uuid que profiles.id)
       const eleveIds = lignes.map((l) => l.eleve_id);
-      const { data: elevesData, error: elevesError } = await supabase
-        .from('eleves')
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
         .select('id, nom, prenom')
         .in('id', eleveIds);
 
-      if (elevesError) {
-        throw new Error(`Erreur récupération élèves : ${elevesError.message}`);
+      if (profilesError) {
+        throw new Error(`Erreur récupération profils élèves : ${profilesError.message}`);
       }
 
       const elevesMap = new Map(
-        (elevesData ?? []).map((e) => [e.id, { nom: e.nom, prenom: e.prenom }])
+        (profilesData ?? []).map((p) => [p.id, { nom: p.nom, prenom: p.prenom }])
       );
 
       const classementComplet = lignes
@@ -216,5 +217,4 @@ export default function ClassementClassePage() {
       )}
     </div>
   );
-          }
-        
+      }

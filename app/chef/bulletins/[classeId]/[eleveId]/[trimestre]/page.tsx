@@ -62,8 +62,8 @@ type BulletinData = {
   trimestre: number;
   annee_scolaire: string;
   date_edition: string;
-  matieres: MatiereLigne[];
-  bilans: BilanGroupe[];
+  matieres: MatiereLigne[] | null;
+  bilans: BilanGroupe[] | null;
   totaux: {
     coef_total: number;
     total_general: number;
@@ -73,15 +73,15 @@ type BulletinData = {
     decision: string;
   } | null;
   classe_stats: {
-    moyenne_classe: number;
-    moyenne_mini: number;
-    moyenne_maxi: number;
+    moyenne_classe: number | null;
+    moyenne_mini: number | null;
+    moyenne_maxi: number | null;
   };
 };
 
 const MENTIONS_DISTINCTION = [
-  { value: 'tableau_honneur_felicitations', label: 'Tableau d\'Honneur + Félicitations' },
-  { value: 'tableau_honneur_encouragements', label: 'Tableau d\'Honneur + Encouragements' },
+  { value: 'tableau_honneur_felicitations', label: 'Tabl. Honneur + Félicitations' },
+  { value: 'tableau_honneur_encouragements', label: 'Tabl. Honneur + Encouragements' },
   { value: 'tableau_honneur', label: 'Tableau d\'Honneur' },
   { value: 'avertissement_travail', label: 'Avertissement travail' },
   { value: 'avertissement_conduite', label: 'Avertissement conduite' },
@@ -177,29 +177,42 @@ export default function BulletinPage() {
 
   const renderLigneMatiere = (m: MatiereLigne, i: number) => (
     <tr key={i} className="border-t">
-      <td className="px-2 py-1.5">{m.matiere}</td>
-      <td className="px-2 py-1.5 text-center">{fmt(m.coefficient)}</td>
-      <td className="px-2 py-1.5 text-center">{fmt(m.moyenne)}</td>
-      <td className="px-2 py-1.5 text-center">{fmt(m.total)}</td>
-      <td className="px-2 py-1.5 text-center">{m.rang ? `${m.rang}e` : '-'}</td>
-      <td className="px-2 py-1.5">{m.appreciation ?? '-'}</td>
-      <td className="px-2 py-1.5 text-xs">{m.professeur ?? '-'}</td>
+      <td className="px-1.5 py-1">{m.matiere}</td>
+      <td className="px-1.5 py-1 text-center">{fmt(m.coefficient)}</td>
+      <td className="px-1.5 py-1 text-center">{fmt(m.moyenne)}</td>
+      <td className="px-1.5 py-1 text-center">{fmt(m.total)}</td>
+      <td className="px-1.5 py-1 text-center">{m.rang ? `${m.rang}e` : '-'}</td>
+      <td className="px-1.5 py-1">{m.appreciation ?? '-'}</td>
+      <td className="px-1.5 py-1 text-[9px]">{m.professeur ?? '-'}</td>
     </tr>
   );
 
   const renderLigneBilan = (label: string, bilan: BilanGroupe | undefined) => (
     <tr className="bg-gray-100 font-semibold border-t border-b">
-      <td className="px-2 py-1.5" colSpan={2}>{label}</td>
-      <td className="px-2 py-1.5 text-center">{bilan ? `${bilan.moyenne}/20` : '-'}</td>
-      <td className="px-2 py-1.5 text-center">{bilan ? bilan.total : '-'}</td>
-      <td className="px-2 py-1.5 text-center" colSpan={3}>
+      <td className="px-1.5 py-1" colSpan={2}>{label}</td>
+      <td className="px-1.5 py-1 text-center">{bilan ? `${bilan.moyenne}/20` : '-'}</td>
+      <td className="px-1.5 py-1 text-center">{bilan ? bilan.total : '-'}</td>
+      <td className="px-1.5 py-1 text-center" colSpan={3}>
         RANG : {bilan ? `${bilan.rang}e` : '-'}
       </td>
     </tr>
   );
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto print:p-0">
+    <div className="p-4 md:p-8 max-w-4xl mx-auto print:p-0 print:max-w-none">
+      <style jsx global>{`
+        @media print {
+          @page {
+            size: A4;
+            margin: 8mm;
+          }
+          html, body {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+        }
+      `}</style>
+
       <div className="flex justify-end mb-4 print:hidden">
         <button
           onClick={() => window.print()}
@@ -209,37 +222,53 @@ export default function BulletinPage() {
         </button>
       </div>
 
-      <div className="border rounded-lg p-4 md:p-6 bg-white">
+      <div className="border rounded-lg p-4 md:p-6 print:p-0 print:border-none bg-white text-[11px] print:text-[9px] leading-tight">
         {/* En-tête ministériel */}
-        <div className="text-center mb-4 border-b pb-4">
-          {bulletin.etablissement.dren && (
-            <p className="text-xs text-gray-600">{bulletin.etablissement.dren}</p>
-          )}
-          <h1 className="text-lg font-bold mt-1">BULLETIN TRIMESTRIEL DE NOTES</h1>
-          <p className="text-sm">Trimestre {bulletin.trimestre}</p>
-          <p className="text-xs text-gray-500">Année scolaire {bulletin.annee_scolaire}</p>
+        <div className="flex justify-between items-start border-b pb-2 mb-2">
+          <div className="flex items-center gap-2">
+            {bulletin.etablissement.logo_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={bulletin.etablissement.logo_url}
+                alt="Logo établissement"
+                className="h-12 w-12 print:h-9 print:w-9 object-contain"
+              />
+            )}
+            <div>
+              <p className="text-[9px] font-semibold uppercase leading-tight">
+                Ministère de l&apos;Éducation Nationale
+                <br />
+                et de l&apos;Alphabétisation
+              </p>
+              {bulletin.etablissement.dren && (
+                <p className="text-[9px] text-gray-600">{bulletin.etablissement.dren}</p>
+              )}
+            </div>
+          </div>
+          <div className="text-right text-[9px]">
+            <p>Année scolaire</p>
+            <p className="font-semibold">{bulletin.annee_scolaire}</p>
+            {bulletin.etablissement.code && <p>Code : {bulletin.etablissement.code}</p>}
+          </div>
+        </div>
+
+        <div className="text-center mb-2">
+          <h1 className="text-sm font-bold">BULLETIN TRIMESTRIEL DE NOTES</h1>
+          <p className="text-[10px]">Trimestre {bulletin.trimestre}</p>
         </div>
 
         {/* Infos établissement */}
-        <div className="flex justify-between text-xs mb-4 flex-wrap gap-2">
-          <div>
-            <p><strong>Établissement :</strong> {bulletin.etablissement.nom}</p>
-            <p><strong>Adresse :</strong> {bulletin.etablissement.adresse}, {bulletin.etablissement.ville}</p>
-            <p><strong>Téléphone :</strong> {bulletin.etablissement.telephone}</p>
-          </div>
-          {bulletin.etablissement.code && (
-            <div>
-              <p><strong>Code :</strong> {bulletin.etablissement.code}</p>
-            </div>
-          )}
+        <div className="text-[9px] mb-2">
+          <p><strong>Établissement :</strong> {bulletin.etablissement.nom}</p>
+          <p><strong>Adresse :</strong> {bulletin.etablissement.adresse}, {bulletin.etablissement.ville} · {bulletin.etablissement.telephone}</p>
         </div>
 
         {/* Infos élève */}
-        <div className="border-t border-b py-3 mb-4 text-sm">
-          <p className="font-bold uppercase mb-1">
+        <div className="border-t border-b py-1.5 mb-2">
+          <p className="font-bold uppercase text-[11px]">
             {bulletin.eleve.nom} {bulletin.eleve.prenom}
           </p>
-          <div className="grid grid-cols-2 gap-x-4 text-xs">
+          <div className="grid grid-cols-2 gap-x-4 text-[9px]">
             <p>Matricule : {bulletin.eleve.matricule}</p>
             <p>Sexe : {bulletin.eleve.sexe ?? '-'}</p>
             <p>Classe : {bulletin.eleve.classe}</p>
@@ -252,49 +281,47 @@ export default function BulletinPage() {
         </div>
 
         {/* Tableau des matières */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs border">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-2 py-1.5 text-left">Matière</th>
-                <th className="px-2 py-1.5">Coef</th>
-                <th className="px-2 py-1.5">Moy.</th>
-                <th className="px-2 py-1.5">Total</th>
-                <th className="px-2 py-1.5">Rang</th>
-                <th className="px-2 py-1.5 text-left">Appréciation</th>
-                <th className="px-2 py-1.5 text-left">Professeur</th>
-              </tr>
-            </thead>
-            <tbody>
-              {matieresLettres.map(renderLigneMatiere)}
-              {matieresLettres.length > 0 && renderLigneBilan('BILAN LETTRES', bilanLettres)}
+        <table className="w-full border">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-1.5 py-1 text-left">Matière</th>
+              <th className="px-1.5 py-1">Coef</th>
+              <th className="px-1.5 py-1">Moy.</th>
+              <th className="px-1.5 py-1">Total</th>
+              <th className="px-1.5 py-1">Rang</th>
+              <th className="px-1.5 py-1 text-left">Appréciation</th>
+              <th className="px-1.5 py-1 text-left">Professeur</th>
+            </tr>
+          </thead>
+          <tbody>
+            {matieresLettres.map(renderLigneMatiere)}
+            {matieresLettres.length > 0 && renderLigneBilan('BILAN LETTRES', bilanLettres)}
 
-              {matieresSciences.map(renderLigneMatiere)}
-              {matieresSciences.length > 0 && renderLigneBilan('BILAN SCIENCES', bilanSciences)}
+            {matieresSciences.map(renderLigneMatiere)}
+            {matieresSciences.length > 0 && renderLigneBilan('BILAN SCIENCES', bilanSciences)}
 
-              {matieresAutres.map(renderLigneMatiere)}
-            </tbody>
-            <tfoot>
-              <tr className="bg-gray-800 text-white font-bold">
-                <td className="px-2 py-1.5" colSpan={2}>TOTAUX</td>
-                <td className="px-2 py-1.5 text-center">{bulletin.totaux?.coef_total ?? '-'}</td>
-                <td className="px-2 py-1.5 text-center">{bulletin.totaux?.total_general ?? '-'}</td>
-                <td className="px-2 py-1.5 text-center" colSpan={3}></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+            {matieresAutres.map(renderLigneMatiere)}
+          </tbody>
+          <tfoot>
+            <tr className="bg-gray-800 text-white font-bold">
+              <td className="px-1.5 py-1" colSpan={2}>TOTAUX</td>
+              <td className="px-1.5 py-1 text-center">{bulletin.totaux?.coef_total ?? '-'}</td>
+              <td className="px-1.5 py-1 text-center">{bulletin.totaux?.total_general ?? '-'}</td>
+              <td className="px-1.5 py-1 text-center" colSpan={3}></td>
+            </tr>
+          </tfoot>
+        </table>
 
         {/* Résultats */}
-        <div className="grid grid-cols-2 gap-4 mt-4 text-xs">
-          <div className="border rounded p-3">
-            <p className="font-semibold mb-1">Moyenne trimestrielle</p>
+        <div className="grid grid-cols-2 gap-2 mt-2">
+          <div className="border rounded p-1.5">
+            <p className="font-semibold">Moyenne trimestrielle</p>
             {bulletin.totaux ? (
               <>
-                <p className="text-lg font-bold">{bulletin.totaux.moyenne_generale}/20</p>
+                <p className="text-sm font-bold">{bulletin.totaux.moyenne_generale}/20</p>
                 <p>Rang : {bulletin.totaux.rang}e sur {bulletin.eleve.effectif}</p>
                 <p>Mention : {bulletin.totaux.mention}</p>
-                <p className="font-semibold mt-1">
+                <p className="font-semibold">
                   Décision :{' '}
                   <span className={bulletin.totaux.decision === 'Admis(e)' ? 'text-green-600' : 'text-red-600'}>
                     {bulletin.totaux.decision}
@@ -305,31 +332,34 @@ export default function BulletinPage() {
               <p className="text-gray-400">Aucune note saisie ce trimestre.</p>
             )}
           </div>
-          <div className="border rounded p-3">
-            <p className="font-semibold mb-1">Résultats de classe</p>
-            <p>Moyenne de la classe : {bulletin.classe_stats.moyenne_classe}/20</p>
-            <p>Moyenne mini : {bulletin.classe_stats.moyenne_mini}/20</p>
-            <p>Moyenne maxi : {bulletin.classe_stats.moyenne_maxi}/20</p>
+          <div className="border rounded p-1.5">
+            <p className="font-semibold">Résultats de classe</p>
+            <p>Moyenne classe : {fmt(bulletin.classe_stats.moyenne_classe)}/20</p>
+            <p>Moyenne mini : {fmt(bulletin.classe_stats.moyenne_mini)}/20</p>
+            <p>Moyenne maxi : {fmt(bulletin.classe_stats.moyenne_maxi)}/20</p>
           </div>
         </div>
 
         {/* Assiduité */}
-        <div className="border rounded p-3 mt-4 text-xs">
-          <p className="font-semibold mb-1">Assiduité</p>
-          <p>Absences justifiées : {bulletin.assiduite.heures_absence_justifiees}h</p>
-          <p>Absences non justifiées : {bulletin.assiduite.heures_absence_non_justifiees}h</p>
+        <div className="border rounded p-1.5 mt-2">
+          <p className="font-semibold">Assiduité</p>
+          <p>
+            Absences justifiées : {bulletin.assiduite.heures_absence_justifiees}h · Non justifiées :{' '}
+            {bulletin.assiduite.heures_absence_non_justifiees}h
+          </p>
         </div>
 
         {/* Mentions du conseil */}
-        <div className="border rounded p-3 mt-4 text-xs">
-          <p className="font-semibold mb-2">Mentions du conseil de classe</p>
-          <div className="grid grid-cols-2 gap-1">
+        <div className="border rounded p-1.5 mt-2">
+          <p className="font-semibold mb-1">Mentions du conseil de classe</p>
+          <div className="grid grid-cols-2 gap-0.5">
             {MENTIONS_DISTINCTION.map((m) => (
-              <label key={m.value} className="flex items-center gap-1.5">
+              <label key={m.value} className="flex items-center gap-1">
                 <input
                   type="checkbox"
                   checked={bulletin.conseil.mention_distinction === m.value}
                   readOnly
+                  className="h-2.5 w-2.5"
                 />
                 {m.label}
               </label>
@@ -338,23 +368,24 @@ export default function BulletinPage() {
         </div>
 
         {/* Appréciation du conseil */}
-        <div className="border rounded p-3 mt-4 text-xs">
-          <p className="font-semibold mb-1">Appréciation du conseil de classe</p>
+        <div className="border rounded p-1.5 mt-2">
+          <p className="font-semibold">Appréciation du conseil de classe</p>
           <p>{bulletin.conseil.appreciation ?? '-'}</p>
-          <p className="mt-2 text-gray-500">
+          <p className="text-gray-500">
             Professeur principal : {bulletin.conseil.professeur_principal ?? '-'}
           </p>
         </div>
 
         {/* Signatures */}
-        <div className="flex justify-between mt-6 text-xs">
+        <div className="flex justify-between mt-3">
           <p>Fait le {bulletin.date_edition}</p>
           <div className="text-center">
             <p className="font-semibold">{bulletin.etablissement.titre_responsable}</p>
-            <p className="mt-8">{bulletin.chef_etablissement ?? ''}</p>
+            <p className="mt-4">{bulletin.chef_etablissement ?? ''}</p>
           </div>
         </div>
       </div>
     </div>
   );
-}
+   }
+    

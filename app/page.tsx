@@ -10,6 +10,7 @@ const DASHBOARD_BY_ROLE: Record<string, string> = {
   enseignant: "/prof/dashboard",
   parent: "/parent/dashboard",
   eleve: "/eleve/dashboard",
+  educateur: "/educateur/dashboard",
 };
 
 export default async function Home() {
@@ -30,4 +31,3 @@ export default async function Home() {
 
   redirect(profile?.role ? DASHBOARD_BY_ROLE[profile.role] : "/login");
 }
-  

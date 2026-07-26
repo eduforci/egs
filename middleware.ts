@@ -11,6 +11,7 @@ const ROLE_ROUTES: Record<string, string> = {
   "/prof": "enseignant",
   "/parent": "parent",
   "/eleve": "eleve",
+  "/educateur": "educateur",
 };
 
 export async function middleware(request: NextRequest) {
@@ -89,6 +90,6 @@ export const config = {
     "/prof/:path*",
     "/parent/:path*",
     "/eleve/:path*",
+    "/educateur/:path*",
   ],
 };
-

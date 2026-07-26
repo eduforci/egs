@@ -39,6 +39,7 @@ const LABELS: Record<string, string> = {
   devoir: "Devoir",
   composition: "Composition",
   examen: "Examen",
+  essai: "Essai",
 };
 
 export default function NotesTable({
@@ -54,6 +55,7 @@ export default function NotesTable({
   observationsExistantes,
   validation,
   baremes,
+  seuilsMentions,
 }: {
   classeId: string;
   matiereId: string;
@@ -67,6 +69,7 @@ export default function NotesTable({
   observationsExistantes: Observation[];
   validation: Validation;
   baremes: Bareme[];
+  seuilsMentions: Record<string, number>;
 }) {
   const supabase = createClient();
 
@@ -108,6 +111,18 @@ export default function NotesTable({
     const poidsTotal = termes.reduce((a, t) => a + t.poids, 0);
     const somme = termes.reduce((a, t) => a + t.val * t.poids, 0);
     return somme / poidsTotal;
+  }
+
+  // Traduit une moyenne en appréciation suggérée, à partir des seuils
+  // de l'établissement (mêmes seuils que les mentions générales).
+  // Suggestion uniquement — n'écrase jamais le texte libre de l'enseignant.
+  function appreciationSuggeree(m: number | null) {
+    if (m === null) return null;
+    const paliers = Object.entries(seuilsMentions).sort((a, b) => b[1] - a[1]);
+    for (const [label, seuil] of paliers) {
+      if (m >= seuil) return label;
+    }
+    return null;
   }
 
   const moyennesValides = eleves
@@ -309,6 +324,7 @@ export default function NotesTable({
           <tbody>
             {eleves.map((e) => {
               const m = moyenne(e.id);
+              const suggestion = appreciationSuggeree(m);
               return (
                 <tr key={e.id} className="border-t align-top">
                   <td className="p-3 whitespace-nowrap">
@@ -351,6 +367,25 @@ export default function NotesTable({
                       placeholder="Appréciation..."
                       className="w-40 border rounded p-1 text-xs disabled:bg-neutral-100 disabled:text-neutral-400"
                     />
+                    {suggestion && (
+                      <div className="mt-1 flex items-center gap-1 text-xs text-neutral-400">
+                        <span>Suggestion : {suggestion}</span>
+                        {!verrouille && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setValeurs((prev) => ({
+                                ...prev,
+                                [e.id]: { ...prev[e.id], appreciation: suggestion },
+                              }))
+                            }
+                            className="underline hover:text-neutral-600"
+                          >
+                            Utiliser
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </td>
                 </tr>
               );
@@ -390,5 +425,5 @@ export default function NotesTable({
       </div>
     </main>
   );
-                 }
-      
+    }
+         

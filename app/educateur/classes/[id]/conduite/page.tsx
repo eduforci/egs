@@ -69,10 +69,21 @@ export default function SaisieConduitePage() {
 
       const { data: elevesData, error: elevesError } = await supabase
         .from('eleves')
-        .select('id, matricule, profiles!inner(nom, prenom)')
+        .select('id, matricule')
         .eq('classe_id', classeId);
 
       if (elevesError) throw new Error(`Erreur élèves : ${elevesError.message}`);
+
+      const eleveIds = (elevesData ?? []).map((e) => e.id);
+
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, nom, prenom')
+        .in('id', eleveIds);
+
+      if (profilesError) throw new Error(`Erreur profils : ${profilesError.message}`);
+
+      const profilesMap = new Map((profilesData ?? []).map((p) => [p.id, p]));
 
       const { data: notesExistantes, error: notesError } = await supabase
         .from('notes')
@@ -86,13 +97,12 @@ export default function SaisieConduitePage() {
 
       const notesMap = new Map((notesExistantes ?? []).map((n) => [n.eleve_id, n]));
 
-      type EleveRow = { id: string; matricule: string; profiles: { nom: string; prenom: string } | { nom: string; prenom: string }[] };
-      const lignes: EleveLigne[] = ((elevesData ?? []) as unknown as EleveRow[]).map((e) => {
-        const profil = Array.isArray(e.profiles) ? e.profiles[0] : e.profiles;
+      const lignes: EleveLigne[] = (elevesData ?? []).map((e) => {
+        const profil = profilesMap.get(e.id);
         const noteExistante = notesMap.get(e.id);
         return {
           eleve_id: e.id,
-          nom: profil?.nom ?? '',
+          nom: profil?.nom ?? 'Inconnu',
           prenom: profil?.prenom ?? '',
           matricule: e.matricule,
           valeur: noteExistante ? String(noteExistante.valeur) : '',
@@ -245,5 +255,5 @@ export default function SaisieConduitePage() {
       )}
     </main>
   );
-    }
-            
+            }
+        

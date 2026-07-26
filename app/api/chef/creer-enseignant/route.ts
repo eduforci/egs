@@ -31,13 +31,23 @@ export async function POST(request: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const { count } = await supabase
+  // Numérotation robuste : on prend le plus grand numéro ENS-XXXX déjà
+  // utilisé SUR TOUTE LA BASE (l'identifiant doit être unique globalement,
+  // pas seulement au sein d'un établissement). Un simple comptage peut
+  // provoquer des collisions si des comptes ont été supprimés entre-temps
+  // ou si un autre établissement a déjà un numéro plus élevé.
+  const { data: existants } = await admin
     .from("profiles")
-    .select("id", { count: "exact", head: true })
-    .eq("etablissement_id", chefProfile.etablissement_id)
-    .eq("role", "enseignant");
+    .select("identifiant")
+    .like("identifiant", "ENS-%");
 
-  const numero = String((count ?? 0) + 1).padStart(4, "0");
+  const maxNumero = (existants ?? []).reduce((max, p) => {
+    const match = p.identifiant?.match(/^ENS-(\d+)$/);
+    const n = match ? parseInt(match[1], 10) : 0;
+    return n > max ? n : max;
+  }, 0);
+
+  const numero = String(maxNumero + 1).padStart(4, "0");
   const identifiant = `ENS-${numero}`;
   const emailTechnique = `${identifiant.toLowerCase()}@${chefProfile.etablissement_id}.egs.local`;
   const motDePasseProvisoire = Math.random().toString(36).slice(-8) + "A1!";
@@ -74,4 +84,5 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ identifiant, motDePasseProvisoire });
-    }
+}
+  

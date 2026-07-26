@@ -80,8 +80,8 @@ export default async function TableauNotes({
     .select("type_evaluation, bareme_max, poids, ordre")
     .eq("etablissement_id", classe?.etablissement_id ?? "")
     .order("ordre", { ascending: true });
-
-  // Seuils de mentions, pour l'appréciation automatique suggérée
+  
+// Seuils de mentions, pour l'appréciation automatique suggérée
   const { data: parametres } = await supabase
     .from("parametres_pedagogiques")
     .select("seuils_mentions")
@@ -115,5 +115,4 @@ export default async function TableauNotes({
       />
     </>
   );
-         }
-      
+}

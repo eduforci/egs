@@ -179,8 +179,8 @@ export default function BulletinPage() {
   const renderLigneMatiere = (m: MatiereLigne, i: number) => (
     <tr key={i} className="border-t">
       <td className="px-1.5 py-1">{m.matiere}</td>
-      <td className="px-1.5 py-1 text-center">{fmt(m.coefficient)}</td>
       <td className="px-1.5 py-1 text-center">{fmt(m.moyenne)}</td>
+      <td className="px-1.5 py-1 text-center">{fmt(m.coefficient)}</td>
       <td className="px-1.5 py-1 text-center">{fmt(m.total)}</td>
       <td className="px-1.5 py-1 text-center">{m.rang ? `${m.rang}e` : '-'}</td>
       <td className="px-1.5 py-1">{m.appreciation ?? '-'}</td>
@@ -302,8 +302,8 @@ export default function BulletinPage() {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-1.5 py-1 text-left">Matière</th>
-              <th className="px-1.5 py-1">Coef</th>
               <th className="px-1.5 py-1">Moy.</th>
+              <th className="px-1.5 py-1">Coef</th>
               <th className="px-1.5 py-1">Total</th>
               <th className="px-1.5 py-1">Rang</th>
               <th className="px-1.5 py-1 text-left">Appréciation</th>
@@ -405,5 +405,5 @@ export default function BulletinPage() {
       </div>
     </div>
   );
-  }
-      
+    }
+    

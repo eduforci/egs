@@ -403,12 +403,6 @@ export default function BulletinPage() {
               {bulletin.etablissement.dren && (
                 <p className="text-[9px] text-gray-600">{bulletin.etablissement.dren}</p>
               )}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/armoiries-ci.svg"
-                alt="Armoiries de la Côte d'Ivoire"
-                className="h-8 w-8 print:h-7 print:w-7 mt-1"
-              />
             </div>
           </div>
           <div className="text-right text-[9px]">
@@ -536,7 +530,7 @@ export default function BulletinPage() {
         <div className="border rounded p-1.5 mt-2">
           <p className="font-semibold">Assiduité</p>
           <p>
-            Absences justifiées : {bulletin.assiduite.heures_absence_justifiees}h · Non justifiées :{' '}
+            Absences justifiées : {bulletin.assiduite.heures_absence_justifiees}h · Non justifiées :{" "}
             {bulletin.assiduite.heures_absence_non_justifiees}h
           </p>
         </div>
@@ -562,9 +556,9 @@ export default function BulletinPage() {
         {/* Appréciation du conseil */}
         <div className="border rounded p-1.5 mt-2">
           <p className="font-semibold">Appréciation du conseil de classe</p>
-          <p>{bulletin.conseil.appreciation ?? '-'}</p>
+          <p>{bulletin.conseil.appreciation ?? "-"}</p>
           <p className="text-gray-500">
-            Professeur principal : {bulletin.conseil.professeur_principal ?? '-'}
+            Professeur principal : {bulletin.conseil.professeur_principal ?? "-"}
           </p>
         </div>
 
@@ -572,8 +566,10 @@ export default function BulletinPage() {
         <div className="flex justify-between mt-3">
           <p>Fait le {bulletin.date_edition}</p>
           <div className="text-center">
-            <p className="font-semibold">{bulletin.etablissement.titre_responsable}</p>
-            <p className="mt-4">{bulletin.chef_etablissement ?? ''}</p>
+            <p className="font-semibold">
+              {bulletin.etablissement.titre_responsable}
+            </p>
+            <p className="mt-4">{bulletin.chef_etablissement ?? ""}</p>
           </div>
         </div>
       </div>

@@ -48,6 +48,7 @@ type BulletinData = {
     classe: string;
     effectif: number;
     redoublant: boolean;
+    photo_url: string | null;
   };
   assiduite: {
     heures_absence_justifiees: number;
@@ -184,6 +185,7 @@ export default function BulletinPage() {
       <td className="px-1.5 py-1 text-center">{m.rang ? `${m.rang}e` : '-'}</td>
       <td className="px-1.5 py-1">{m.appreciation ?? '-'}</td>
       <td className="px-1.5 py-1 text-[9px]">{m.professeur ?? '-'}</td>
+      <td className="px-1.5 py-1 border-l"></td>
     </tr>
   );
 
@@ -192,7 +194,7 @@ export default function BulletinPage() {
       <td className="px-1.5 py-1" colSpan={2}>{label}</td>
       <td className="px-1.5 py-1 text-center">{bilan ? `${bilan.moyenne}/20` : '-'}</td>
       <td className="px-1.5 py-1 text-center">{bilan ? bilan.total : '-'}</td>
-      <td className="px-1.5 py-1 text-center" colSpan={3}>
+      <td className="px-1.5 py-1 text-center" colSpan={4}>
         RANG : {bilan ? `${bilan.rang}e` : '-'}
       </td>
     </tr>
@@ -236,9 +238,9 @@ export default function BulletinPage() {
             )}
             <div>
               <p className="text-[9px] font-semibold uppercase leading-tight">
-                Ministère de l&apos;Éducation Nationale
+                Ministère de l&apos;Éducation Nationale, de l&apos;Enseignement
                 <br />
-                et de l&apos;Alphabétisation
+                Technique et de la Formation Professionnelle
               </p>
               {bulletin.etablissement.dren && (
                 <p className="text-[9px] text-gray-600">{bulletin.etablissement.dren}</p>
@@ -249,6 +251,7 @@ export default function BulletinPage() {
             <p>Année scolaire</p>
             <p className="font-semibold">{bulletin.annee_scolaire}</p>
             {bulletin.etablissement.code && <p>Code : {bulletin.etablissement.code}</p>}
+            {bulletin.etablissement.telephone && <p>Tél : {bulletin.etablissement.telephone}</p>}
           </div>
         </div>
 
@@ -264,20 +267,34 @@ export default function BulletinPage() {
         </div>
 
         {/* Infos élève */}
-        <div className="border-t border-b py-1.5 mb-2">
-          <p className="font-bold uppercase text-[11px]">
-            {bulletin.eleve.nom} {bulletin.eleve.prenom}
-          </p>
-          <div className="grid grid-cols-2 gap-x-4 text-[9px]">
-            <p>Matricule : {bulletin.eleve.matricule}</p>
-            <p>Sexe : {bulletin.eleve.sexe ?? '-'}</p>
-            <p>Classe : {bulletin.eleve.classe}</p>
-            <p>Effectif : {bulletin.eleve.effectif}</p>
-            <p>Né(e) le : {bulletin.eleve.date_naissance ?? '-'} à {bulletin.eleve.lieu_naissance ?? '-'}</p>
-            <p>Nationalité : {bulletin.eleve.nationalite ?? '-'}</p>
-            <p>Régime : {bulletin.eleve.regime ?? '-'}</p>
-            <p>Redoublant(e) : {bulletin.eleve.redoublant ? 'Oui' : 'Non'}</p>
+        <div className="border-t border-b py-1.5 mb-2 flex justify-between items-start gap-2">
+          <div>
+            <p className="font-bold uppercase text-[11px]">
+              {bulletin.eleve.nom} {bulletin.eleve.prenom}
+            </p>
+            <div className="grid grid-cols-2 gap-x-4 text-[9px]">
+              <p>Matricule : {bulletin.eleve.matricule}</p>
+              <p>Sexe : {bulletin.eleve.sexe ?? '-'}</p>
+              <p>Classe : {bulletin.eleve.classe}</p>
+              <p>Effectif : {bulletin.eleve.effectif}</p>
+              <p>Né(e) le : {bulletin.eleve.date_naissance ?? '-'} à {bulletin.eleve.lieu_naissance ?? '-'}</p>
+              <p>Nationalité : {bulletin.eleve.nationalite ?? '-'}</p>
+              <p>Régime : {bulletin.eleve.regime ?? '-'}</p>
+              <p>Redoublant(e) : {bulletin.eleve.redoublant ? 'Oui' : 'Non'}</p>
+            </div>
           </div>
+          {bulletin.eleve.photo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={bulletin.eleve.photo_url}
+              alt="Photo élève"
+              className="h-16 w-14 print:h-14 print:w-12 object-cover border flex-shrink-0"
+            />
+          ) : (
+            <div className="h-16 w-14 print:h-14 print:w-12 border flex items-center justify-center text-[8px] text-gray-400 flex-shrink-0">
+              Photo
+            </div>
+          )}
         </div>
 
         {/* Tableau des matières */}
@@ -291,6 +308,7 @@ export default function BulletinPage() {
               <th className="px-1.5 py-1">Rang</th>
               <th className="px-1.5 py-1 text-left">Appréciation</th>
               <th className="px-1.5 py-1 text-left">Professeur</th>
+              <th className="px-1.5 py-1 text-left print:w-16">Signature</th>
             </tr>
           </thead>
           <tbody>
@@ -307,7 +325,7 @@ export default function BulletinPage() {
               <td className="px-1.5 py-1" colSpan={2}>TOTAUX</td>
               <td className="px-1.5 py-1 text-center">{bulletin.totaux?.coef_total ?? '-'}</td>
               <td className="px-1.5 py-1 text-center">{bulletin.totaux?.total_general ?? '-'}</td>
-              <td className="px-1.5 py-1 text-center" colSpan={3}></td>
+              <td className="px-1.5 py-1 text-center" colSpan={4}></td>
             </tr>
           </tfoot>
         </table>
@@ -387,5 +405,5 @@ export default function BulletinPage() {
       </div>
     </div>
   );
-   }
-    
+  }
+      

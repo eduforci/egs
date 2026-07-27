@@ -32,9 +32,9 @@ export default function GestionEnseignants() {
 
     const { data: profs } = await supabase
       .from("profiles")
-      .select("id, nom, prenom, identifiant")
+      .select("id, nom, prenom, identifiant, role")
       .eq("etablissement_id", chefProfile.etablissement_id)
-      .eq("role", "enseignant")
+      .in("role", ["enseignant", "educateur"])
       .order("nom");
 
     const { data: c } = await supabase
@@ -113,9 +113,9 @@ export default function GestionEnseignants() {
 
   return (
     <main className="p-6 sm:p-8 max-w-4xl mx-auto">
-      <h1 className="font-display text-3xl font-semibold mb-1">Enseignants</h1>
+      <h1 className="font-display text-3xl font-semibold mb-1">Enseignants &amp; éducateurs</h1>
       <p className="text-neutral-500 mb-6">
-        {enseignants.length} enseignant(s) — gérez leurs classes et matières
+        {enseignants.length} compte(s) — gérez leurs classes et matières
       </p>
 
       {erreur && (
@@ -123,7 +123,7 @@ export default function GestionEnseignants() {
       )}
 
       {enseignants.length === 0 && (
-        <p className="text-neutral-500 text-sm">Aucun enseignant créé pour le moment.</p>
+        <p className="text-neutral-500 text-sm">Aucun enseignant ou éducateur créé pour le moment.</p>
       )}
 
       <div className="space-y-4">
@@ -133,7 +133,9 @@ export default function GestionEnseignants() {
               <h2 className="font-display text-lg font-semibold">
                 {ens.prenom} {ens.nom}
               </h2>
-              <span className="text-xs text-neutral-400">{ens.identifiant}</span>
+              <span className="text-xs text-neutral-400">
+                {ens.identifiant} · {ens.role === "educateur" ? "Éducateur" : "Enseignant"}
+              </span>
             </div>
 
             {ens.affectations.length > 0 ? (
@@ -183,4 +185,5 @@ export default function GestionEnseignants() {
       </div>
     </main>
   );
-    }
+                              }
+                

@@ -97,12 +97,27 @@ function fmt(n: number | null | undefined) {
 
 export default function BulletinPage() {
   const params = useParams();
+  const classeId = params?.classeId as string;
   const eleveId = params?.eleveId as string;
   const trimestre = Number(params?.trimestre);
 
   const [bulletin, setBulletin] = useState<BulletinData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [etablissementId, setEtablissementId] = useState<string | null>(null);
+  const [anneeScolaire, setAnneeScolaire] = useState<string>('');
+  const [modeEdition, setModeEdition] = useState(false);
+  const [enseignants, setEnseignants] = useState<{ id: string; nom: string; prenom: string }[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const [formAbsJust, setFormAbsJust] = useState('0');
+  const [formAbsNonJust, setFormAbsNonJust] = useState('0');
+  const [formAppreciation, setFormAppreciation] = useState('');
+  const [formMention, setFormMention] = useState('');
+  const [formProfPrincipalId, setFormProfPrincipalId] = useState('');
+  const [formRedoublant, setFormRedoublant] = useState(false);
 
   const supabase = createClient();
 
@@ -119,6 +134,7 @@ export default function BulletinPage() {
         .single();
 
       if (eleveError) throw new Error(`Erreur récupération élève : ${eleveError.message}`);
+      setEtablissementId(eleveRow.etablissement_id);
 
       const { data: etabRow, error: etabError } = await supabase
         .from('etablissements')
@@ -127,6 +143,14 @@ export default function BulletinPage() {
         .single();
 
       if (etabError) throw new Error(`Erreur récupération établissement : ${etabError.message}`);
+      setAnneeScolaire(etabRow.annee_scolaire_active);
+
+      const { data: profsData } = await supabase
+        .from('profiles')
+        .select('id, nom, prenom')
+        .eq('etablissement_id', eleveRow.etablissement_id)
+        .in('role', ['enseignant', 'educateur']);
+      setEnseignants(profsData ?? []);
 
       const { data, error: rpcError } = await supabase.rpc('generer_bulletin', {
         p_eleve_id: eleveId,
@@ -136,7 +160,14 @@ export default function BulletinPage() {
 
       if (rpcError) throw new Error(`Erreur génération bulletin : ${rpcError.message}`);
 
-      setBulletin(data as BulletinData);
+      const bulletinData = data as BulletinData;
+      setBulletin(bulletinData);
+
+      setFormAbsJust(String(bulletinData.assiduite.heures_absence_justifiees ?? 0));
+      setFormAbsNonJust(String(bulletinData.assiduite.heures_absence_non_justifiees ?? 0));
+      setFormAppreciation(bulletinData.conseil.appreciation ?? '');
+      setFormMention(bulletinData.conseil.mention_distinction ?? '');
+      setFormRedoublant(bulletinData.eleve.redoublant ?? false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur inconnue');
     } finally {
@@ -147,6 +178,39 @@ export default function BulletinPage() {
   useEffect(() => {
     chargerBulletin();
   }, [chargerBulletin]);
+
+  async function enregistrerInfosManuelles() {
+    if (!etablissementId || !classeId) return;
+    setSaving(true);
+    setSaveError(null);
+
+    const { error: upsertError } = await supabase.from('bulletins_infos').upsert(
+      {
+        eleve_id: eleveId,
+        classe_id: classeId,
+        trimestre,
+        annee_scolaire: anneeScolaire,
+        etablissement_id: etablissementId,
+        heures_absence_justifiees: parseFloat(formAbsJust) || 0,
+        heures_absence_non_justifiees: parseFloat(formAbsNonJust) || 0,
+        appreciation_conseil: formAppreciation.trim() || null,
+        mention_distinction: formMention || null,
+        professeur_principal_id: formProfPrincipalId || null,
+        redoublant: formRedoublant,
+      },
+      { onConflict: 'eleve_id,trimestre,annee_scolaire' }
+    );
+
+    setSaving(false);
+
+    if (upsertError) {
+      setSaveError(`Erreur enregistrement : ${upsertError.message}`);
+      return;
+    }
+
+    setModeEdition(false);
+    chargerBulletin();
+  }
 
   if (loading) {
     return <p className="p-6 text-sm text-gray-500">Génération du bulletin en cours...</p>;
@@ -215,7 +279,13 @@ export default function BulletinPage() {
         }
       `}</style>
 
-      <div className="flex justify-end mb-4 print:hidden">
+      <div className="flex justify-end gap-2 mb-4 print:hidden">
+        <button
+          onClick={() => setModeEdition((v) => !v)}
+          className="bg-gray-700 text-white text-sm px-4 py-2 rounded-md"
+        >
+          {modeEdition ? 'Fermer l\'édition' : 'Modifier'}
+        </button>
         <button
           onClick={() => window.print()}
           className="bg-blue-600 text-white text-sm px-4 py-2 rounded-md"
@@ -223,6 +293,94 @@ export default function BulletinPage() {
           Imprimer / PDF
         </button>
       </div>
+
+      {modeEdition && (
+        <div className="border rounded-lg p-4 mb-4 bg-yellow-50 print:hidden text-sm space-y-3">
+          <p className="font-semibold">Modifier les informations du bulletin</p>
+
+          {saveError && (
+            <div className="bg-red-50 border border-red-300 text-red-700 text-xs rounded-md p-2">
+              {saveError}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Absences justifiées (h)</label>
+              <input
+                type="number"
+                value={formAbsJust}
+                onChange={(e) => setFormAbsJust(e.target.value)}
+                className="w-full border rounded-md px-2 py-1.5"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Absences non justifiées (h)</label>
+              <input
+                type="number"
+                value={formAbsNonJust}
+                onChange={(e) => setFormAbsNonJust(e.target.value)}
+                className="w-full border rounded-md px-2 py-1.5"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Professeur principal</label>
+            <select
+              value={formProfPrincipalId}
+              onChange={(e) => setFormProfPrincipalId(e.target.value)}
+              className="w-full border rounded-md px-2 py-1.5"
+            >
+              <option value="">Non renseigné</option>
+              {enseignants.map((p) => (
+                <option key={p.id} value={p.id}>{p.nom} {p.prenom}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Mention du conseil de classe</label>
+            <select
+              value={formMention}
+              onChange={(e) => setFormMention(e.target.value)}
+              className="w-full border rounded-md px-2 py-1.5"
+            >
+              <option value="">Aucune</option>
+              {MENTIONS_DISTINCTION.map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Appréciation du conseil de classe</label>
+            <textarea
+              value={formAppreciation}
+              onChange={(e) => setFormAppreciation(e.target.value)}
+              rows={2}
+              className="w-full border rounded-md px-2 py-1.5"
+            />
+          </div>
+
+          <label className="flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={formRedoublant}
+              onChange={(e) => setFormRedoublant(e.target.checked)}
+            />
+            Élève redoublant(e)
+          </label>
+
+          <button
+            onClick={enregistrerInfosManuelles}
+            disabled={saving}
+            className="w-full bg-black text-white rounded-md py-2 disabled:opacity-50"
+          >
+            {saving ? 'Enregistrement...' : 'Enregistrer'}
+          </button>
+        </div>
+      )}
 
       <div className="border rounded-lg p-4 md:p-6 print:p-0 print:border-none bg-white text-[11px] print:text-[9px] leading-tight">
         {/* En-tête ministériel */}
@@ -375,7 +533,7 @@ export default function BulletinPage() {
               <label key={m.value} className="flex items-center gap-1">
                 <input
                   type="checkbox"
-                  checked={bulletin.conseil.mention_distinction === m.value}
+          checked={bulletin.conseil.mention_distinction === m.value}
                   readOnly
                   className="h-2.5 w-2.5"
                 />
@@ -405,5 +563,4 @@ export default function BulletinPage() {
       </div>
     </div>
   );
-    }
-    
+}

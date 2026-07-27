@@ -8,12 +8,21 @@ export default function GestionEnseignants() {
   const [enseignants, setEnseignants] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [matieres, setMatieres] = useState<any[]>([]);
+  const [classesMatieres, setClassesMatieres] = useState<{ classe_id: string; matiere_id: string }[]>([]);
   const [etablissementId, setEtablissementId] = useState<string | null>(null);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
 
   const [nouvelleClasse, setNouvelleClasse] = useState<Record<string, string>>({});
   const [nouvelleMatiere, setNouvelleMatiere] = useState<Record<string, string>>({});
+
+  function matieresPourClasse(classeId: string) {
+    if (!classeId) return [];
+    const idsAutorises = new Set(
+      classesMatieres.filter((cm) => cm.classe_id === classeId).map((cm) => cm.matiere_id)
+    );
+    return matieres.filter((m) => idsAutorises.has(m.id));
+  }
 
   const charger = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -48,6 +57,14 @@ export default function GestionEnseignants() {
       .select("id, nom")
       .eq("etablissement_id", chefProfile.etablissement_id)
       .order("nom");
+
+    const classeIds = (c ?? []).map((classe) => classe.id);
+    const { data: cm } = await supabase
+      .from("classes_matieres")
+      .select("classe_id, matiere_id")
+      .in("classe_id", classeIds.length > 0 ? classeIds : ["00000000-0000-0000-0000-000000000000"]);
+
+    setClassesMatieres(cm ?? []);
 
     const profIds = (profs ?? []).map((p) => p.id);
     const { data: affectations } = await supabase
@@ -159,7 +176,11 @@ export default function GestionEnseignants() {
             <div className="flex flex-wrap gap-2 items-center">
               <select
                 value={nouvelleClasse[ens.id] ?? ""}
-                onChange={(e) => setNouvelleClasse((p) => ({ ...p, [ens.id]: e.target.value }))}
+                onChange={(e) => {
+                  const classeId = e.target.value;
+                  setNouvelleClasse((p) => ({ ...p, [ens.id]: classeId }));
+                  setNouvelleMatiere((p) => ({ ...p, [ens.id]: "" }));
+                }}
                 className="border rounded-lg p-1.5 text-sm"
               >
                 <option value="">Classe...</option>
@@ -168,10 +189,15 @@ export default function GestionEnseignants() {
               <select
                 value={nouvelleMatiere[ens.id] ?? ""}
                 onChange={(e) => setNouvelleMatiere((p) => ({ ...p, [ens.id]: e.target.value }))}
-                className="border rounded-lg p-1.5 text-sm"
+                disabled={!nouvelleClasse[ens.id]}
+                className="border rounded-lg p-1.5 text-sm disabled:opacity-50"
               >
-                <option value="">Matière...</option>
-                {matieres.map((m) => <option key={m.id} value={m.id}>{m.nom}</option>)}
+                <option value="">
+                  {nouvelleClasse[ens.id] ? "Matière..." : "Choisir une classe d'abord"}
+                </option>
+                {matieresPourClasse(nouvelleClasse[ens.id] ?? "").map((m) => (
+                  <option key={m.id} value={m.id}>{m.nom}</option>
+                ))}
               </select>
               <button
                 onClick={() => ajouterAffectation(ens.id)}
@@ -186,4 +212,4 @@ export default function GestionEnseignants() {
     </main>
   );
                               }
-                
+              

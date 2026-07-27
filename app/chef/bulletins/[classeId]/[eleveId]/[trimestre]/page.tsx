@@ -403,6 +403,12 @@ export default function BulletinPage() {
               {bulletin.etablissement.dren && (
                 <p className="text-[9px] text-gray-600">{bulletin.etablissement.dren}</p>
               )}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/armoiries-ci.svg"
+                alt="Armoiries de la Côte d'Ivoire"
+                className="h-8 w-8 print:h-7 print:w-7 mt-1"
+              />
             </div>
           </div>
           <div className="text-right text-[9px]">
@@ -441,18 +447,28 @@ export default function BulletinPage() {
               <p>Redoublant(e) : {bulletin.eleve.redoublant ? 'Oui' : 'Non'}</p>
             </div>
           </div>
-          {bulletin.eleve.photo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
+          <div className="flex flex-col items-center gap-1 flex-shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={bulletin.eleve.photo_url}
-              alt="Photo élève"
-              className="h-16 w-14 print:h-14 print:w-12 object-cover border flex-shrink-0"
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(
+                `EGS|${bulletin.eleve.matricule}|T${bulletin.trimestre}|${bulletin.annee_scolaire}`
+              )}`}
+              alt="QR code de vérification"
+              className="h-10 w-10 print:h-9 print:w-9"
             />
-          ) : (
-            <div className="h-16 w-14 print:h-14 print:w-12 border flex items-center justify-center text-[8px] text-gray-400 flex-shrink-0">
-              Photo
-            </div>
-          )}
+            {bulletin.eleve.photo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={bulletin.eleve.photo_url}
+                alt="Photo élève"
+                className="h-16 w-14 print:h-14 print:w-12 object-cover border flex-shrink-0"
+              />
+            ) : (
+              <div className="h-16 w-14 print:h-14 print:w-12 border flex items-center justify-center text-[8px] text-gray-400 flex-shrink-0">
+                Photo
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Tableau des matières */}
@@ -533,7 +549,7 @@ export default function BulletinPage() {
               <label key={m.value} className="flex items-center gap-1">
                 <input
                   type="checkbox"
-          checked={bulletin.conseil.mention_distinction === m.value}
+                  checked={bulletin.conseil.mention_distinction === m.value}
                   readOnly
                   className="h-2.5 w-2.5"
                 />

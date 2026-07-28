@@ -10,7 +10,8 @@ type Resultat = {
   prenom: string;
   matricule: string;
   classe_nom: string;
-  moyenne: number;
+  points_obtenus: number;
+  points_total: number;
   rang: number;
   decision: string;
 };
@@ -20,6 +21,7 @@ export default function ResultatsExamenPage() {
   const examenId = params?.id as string;
 
   const [examenNom, setExamenNom] = useState('');
+  const [pointsRequis, setPointsRequis] = useState(0);
   const [resultats, setResultats] = useState<Resultat[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,12 +35,13 @@ export default function ResultatsExamenPage() {
     try {
       const { data: examen, error: examenError } = await supabase
         .from('examens')
-        .select('nom')
+        .select('nom, points_requis')
         .eq('id', examenId)
         .single();
 
       if (examenError) throw new Error(`Erreur examen : ${examenError.message}`);
       setExamenNom(examen.nom);
+      setPointsRequis(examen.points_requis);
 
       const { data, error: rpcError } = await supabase.rpc('calculer_resultats_examen', {
         p_examen_id: examenId,
@@ -58,6 +61,7 @@ export default function ResultatsExamenPage() {
   }, [charger]);
 
   const admis = resultats.filter((r) => r.decision === 'Admis(e)').length;
+  const pointsTotal = resultats[0]?.points_total ?? 0;
 
   if (loading) return <p className="p-6 text-sm text-gray-500">Chargement...</p>;
 
@@ -67,7 +71,7 @@ export default function ResultatsExamenPage() {
         <div>
           <h1 className="text-xl font-bold mb-1">Résultats — {examenNom}</h1>
           <p className="text-sm text-gray-500">
-            {resultats.length} candidat(s) · {admis} admis(e)
+            {resultats.length} candidat(s) · {admis} admis(e) · Seuil {pointsRequis}/{pointsTotal || '?'}
           </p>
         </div>
         <button
@@ -99,7 +103,7 @@ export default function ResultatsExamenPage() {
                 <th className="text-left px-3 py-2">Candidat</th>
                 <th className="text-left px-3 py-2">Matricule</th>
                 <th className="text-left px-3 py-2">Classe</th>
-                <th className="text-left px-3 py-2">Moyenne</th>
+                <th className="text-left px-3 py-2">Points</th>
                 <th className="text-left px-3 py-2">Décision</th>
               </tr>
             </thead>
@@ -110,7 +114,7 @@ export default function ResultatsExamenPage() {
                   <td className="px-3 py-2">{r.nom} {r.prenom}</td>
                   <td className="px-3 py-2 text-gray-500">{r.matricule}</td>
                   <td className="px-3 py-2 text-gray-500">{r.classe_nom}</td>
-                  <td className="px-3 py-2">{r.moyenne}/20</td>
+                  <td className="px-3 py-2">{r.points_obtenus}/{r.points_total}</td>
                   <td className="px-3 py-2">
                     <span
                       className={
@@ -130,5 +134,5 @@ export default function ResultatsExamenPage() {
       )}
     </main>
   );
-          }
-                    
+}
+  

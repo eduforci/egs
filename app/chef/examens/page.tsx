@@ -8,9 +8,7 @@ type Examen = {
   id: string;
   nom: string;
   type: string;
-  niveau: string;
-  annee_scolaire: string;
-  moyenne_admission: number;
+  points_requis: number;
   statut: string;
 };
 
@@ -22,14 +20,12 @@ const TYPES = [
 
 export default function ExamensPage() {
   const [examens, setExamens] = useState<Examen[]>([]);
-  const [niveaux, setNiveaux] = useState<string[]>([]);
   const [etablissementId, setEtablissementId] = useState<string | null>(null);
   const [anneeActive, setAnneeActive] = useState('');
 
   const [nom, setNom] = useState('');
   const [type, setType] = useState('final');
-  const [niveau, setNiveau] = useState('');
-  const [moyenneAdmission, setMoyenneAdmission] = useState('10');
+  const [pointsRequis, setPointsRequis] = useState('180');
 
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -63,18 +59,9 @@ export default function ExamensPage() {
       if (etabError) throw new Error(`Erreur établissement : ${etabError.message}`);
       setAnneeActive(etab.annee_scolaire_active);
 
-      const { data: classesData, error: classesError } = await supabase
-        .from('classes')
-        .select('niveau')
-        .eq('etablissement_id', profile.etablissement_id);
-
-      if (classesError) throw new Error(`Erreur niveaux : ${classesError.message}`);
-      const niveauxUniques = Array.from(new Set((classesData ?? []).map((c) => c.niveau)));
-      setNiveaux(niveauxUniques);
-
       const { data: examensData, error: examensError } = await supabase
         .from('examens')
-        .select('id, nom, type, niveau, annee_scolaire, moyenne_admission, statut')
+        .select('id, nom, type, points_requis, statut')
         .eq('etablissement_id', profile.etablissement_id)
         .order('created_at', { ascending: false });
 
@@ -92,8 +79,8 @@ export default function ExamensPage() {
   }, [charger]);
 
   async function creerExamen() {
-    if (!nom.trim() || !niveau || !etablissementId) {
-      setError('Nom et niveau obligatoires.');
+    if (!nom.trim() || !etablissementId) {
+      setError('Le nom est obligatoire.');
       return;
     }
     setCreating(true);
@@ -103,9 +90,8 @@ export default function ExamensPage() {
       etablissement_id: etablissementId,
       nom: nom.trim(),
       type,
-      niveau,
       annee_scolaire: anneeActive,
-      moyenne_admission: parseFloat(moyenneAdmission) || 10,
+      points_requis: parseFloat(pointsRequis) || 0,
     });
 
     setCreating(false);
@@ -116,8 +102,7 @@ export default function ExamensPage() {
     }
 
     setNom('');
-    setNiveau('');
-    setMoyenneAdmission('10');
+    setPointsRequis('180');
     charger();
   }
 
@@ -142,7 +127,6 @@ export default function ExamensPage() {
         </div>
       )}
 
-      {/* Liste des examens existants */}
       <div className="space-y-2 mb-6">
         {examens.length === 0 && (
           <p className="text-sm text-gray-400">Aucun examen créé pour le moment.</p>
@@ -157,7 +141,7 @@ export default function ExamensPage() {
               <div>
                 <p className="font-medium">{ex.nom}</p>
                 <p className="text-xs text-gray-500">
-                  {TYPES.find((t) => t.value === ex.type)?.label} · {ex.niveau} · Seuil {ex.moyenne_admission}/20
+                  {TYPES.find((t) => t.value === ex.type)?.label} · {ex.points_requis} points requis
                 </p>
               </div>
               <span className="text-xs bg-gray-100 rounded-full px-2 py-1">
@@ -168,7 +152,6 @@ export default function ExamensPage() {
         ))}
       </div>
 
-      {/* Créer un nouvel examen */}
       <div className="border rounded-lg p-4">
         <p className="font-semibold text-sm mb-3">Créer un examen</p>
         <div className="space-y-3">
@@ -190,38 +173,33 @@ export default function ExamensPage() {
             ))}
           </select>
 
-          <select
-            value={niveau}
-            onChange={(e) => setNiveau(e.target.value)}
-            className="w-full border rounded-md px-3 py-2 text-sm"
-          >
-            <option value="">Choisir un niveau</option>
-            {niveaux.map((n) => (
-              <option key={n} value={n}>{n}</option>
-            ))}
-          </select>
-
           <div>
-            <label className="block text-xs text-gray-600 mb-1">Seuil d'admission (/20)</label>
+            <label className="block text-xs text-gray-600 mb-1">
+              Points requis pour l'admission (ex: 180 pour BEPC/360, 200 pour BAC/400, 85 pour CEPE/170)
+            </label>
             <input
               type="number"
-              step="0.5"
-              value={moyenneAdmission}
-              onChange={(e) => setMoyenneAdmission(e.target.value)}
+              step="1"
+              value={pointsRequis}
+              onChange={(e) => setPointsRequis(e.target.value)}
               className="w-full border rounded-md px-3 py-2 text-sm"
             />
           </div>
 
           <button
             onClick={creerExamen}
-            disabled={creating || !nom.trim() || !niveau}
+            disabled={creating || !nom.trim()}
             className="w-full bg-black text-white rounded-md py-2 text-sm disabled:opacity-50"
           >
             {creating ? 'Création...' : 'Créer l\'examen'}
           </button>
         </div>
       </div>
+
+      <p className="text-xs text-gray-400 mt-4">
+        Après création, ouvre l'examen pour y ajouter les classes participantes et les matières
+        (avec leurs composantes Oral/Écrit et coefficients).
+      </p>
     </main>
   );
-  }
-        
+}

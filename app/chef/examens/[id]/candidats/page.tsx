@@ -12,6 +12,8 @@ type Candidat = {
   matricule: string;
   classe_nom: string;
   type: string;
+  lv1_matiere_id: string | null;
+  lv2_matiere_id: string | null;
 };
 
 type EleveRecherche = {
@@ -30,6 +32,7 @@ export default function ExamenCandidatsPage() {
   const [examenNom, setExamenNom] = useState('');
   const [etablissementId, setEtablissementId] = useState<string | null>(null);
   const [candidats, setCandidats] = useState<Candidat[]>([]);
+  const [matieres, setMatieres] = useState<{ id: string; nom: string }[]>([]);
 
   const [recherche, setRecherche] = useState('');
   const [resultatsRecherche, setResultatsRecherche] = useState<EleveRecherche[]>([]);
@@ -56,18 +59,26 @@ export default function ExamenCandidatsPage() {
 
       const { data: candData, error: candError } = await supabase
         .from('examens_candidats')
-        .select('id, eleve_id, type, eleves(matricule, classe_id, classes(nom))')
+        .select('id, eleve_id, type, lv1_matiere_id, lv2_matiere_id, eleves(matricule, classe_id, classes(nom))')
         .eq('examen_id', examenId);
 
       if (candError) throw new Error(`Erreur candidats : ${candError.message}`);
 
       type RowE = {
         id: string; eleve_id: string; type: string;
+        lv1_matiere_id: string | null; lv2_matiere_id: string | null;
         eleves: { matricule: string; classe_id: string; classes: { nom: string } | { nom: string }[] | null }
           | { matricule: string; classe_id: string; classes: { nom: string } | { nom: string }[] | null }[] | null;
       };
       const brut = (candData ?? []) as unknown as RowE[];
       const eleveIds = brut.map((r) => r.eleve_id);
+
+      const { data: matieresData } = await supabase
+        .from('matieres')
+        .select('id, nom')
+        .eq('etablissement_id', examen.etablissement_id)
+        .order('nom');
+      setMatieres(matieresData ?? []);
 
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
@@ -89,6 +100,8 @@ export default function ExamenCandidatsPage() {
           matricule: ele?.matricule ?? '-',
           classe_nom: cl?.nom ?? '-',
           type: r.type,
+          lv1_matiere_id: r.lv1_matiere_id,
+          lv2_matiere_id: r.lv2_matiere_id,
         };
       });
       liste.sort((a, b) => a.nom.localeCompare(b.nom));
@@ -148,6 +161,19 @@ export default function ExamenCandidatsPage() {
       return;
     }
     charger();
+  }
+
+  async function modifierLangue(id: string, champ: 'lv1_matiere_id' | 'lv2_matiere_id', matiereId: string) {
+    setCandidats((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, [champ]: matiereId || null } : c))
+    );
+    const { error: updateError } = await supabase
+      .from('examens_candidats')
+      .update({ [champ]: matiereId || null })
+      .eq('id', id);
+    if (updateError) {
+      setError(`Erreur mise à jour langue : ${updateError.message}`);
+    }
   }
 
   async function rechercherEleves(texte: string) {
@@ -284,34 +310,60 @@ export default function ExamenCandidatsPage() {
       </div>
 
       {/* Liste des candidats */}
-      <div className="border rounded-lg overflow-hidden">
+      <div className="border rounded-lg overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-100">
             <tr>
               <th className="text-left px-3 py-2">Candidat</th>
               <th className="text-left px-3 py-2">Classe</th>
               <th className="text-left px-3 py-2">Type</th>
+              <th className="text-left px-3 py-2 w-32">LV1</th>
+              <th className="text-left px-3 py-2 w-32">LV2</th>
               <th className="w-16"></th>
             </tr>
           </thead>
           <tbody>
             {candidats.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-3 py-4 text-center text-gray-400">
+                <td colSpan={6} className="px-3 py-4 text-center text-gray-400">
                   Aucun candidat. Utilise "Tout sélectionner" pour peupler depuis les classes liées.
                 </td>
               </tr>
             ) : (
               candidats.map((c) => (
                 <tr key={c.id} className="border-t">
-                  <td className="px-3 py-2">{c.nom} {c.prenom}</td>
-                  <td className="px-3 py-2 text-gray-500">{c.classe_nom}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{c.nom} {c.prenom}</td>
+                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{c.classe_nom}</td>
                   <td className="px-3 py-2">
                     {c.type === 'exceptionnel' ? (
                       <span className="text-amber-600 text-xs">Exceptionnel</span>
                     ) : (
                       <span className="text-gray-400 text-xs">Régulier</span>
                     )}
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <select
+                      value={c.lv1_matiere_id ?? ''}
+                      onChange={(e) => modifierLangue(c.id, 'lv1_matiere_id', e.target.value)}
+                      className="w-28 border rounded px-1 py-1 text-xs"
+                    >
+                      <option value="">-</option>
+                      {matieres.map((m) => (
+                        <option key={m.id} value={m.id}>{m.nom}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <select
+                      value={c.lv2_matiere_id ?? ''}
+                      onChange={(e) => modifierLangue(c.id, 'lv2_matiere_id', e.target.value)}
+                      className="w-28 border rounded px-1 py-1 text-xs"
+                    >
+                      <option value="">-</option>
+                      {matieres.map((m) => (
+                        <option key={m.id} value={m.id}>{m.nom}</option>
+                      ))}
+                    </select>
                   </td>
                   <td className="px-3 py-2">
                     <button onClick={() => retirerCandidat(c.id)} className="text-red-600 text-xs">
@@ -324,7 +376,11 @@ export default function ExamenCandidatsPage() {
           </tbody>
         </table>
       </div>
+      <p className="text-xs text-gray-400 mt-2">
+        LV1/LV2 ne sont utiles que pour un BAC série A1/A2 — laisse vide pour les autres examens.
+        Le choix de chaque candidat détermine automatiquement quelle épreuve de langue compte dans son calcul.
+      </p>
     </main>
   );
-  }
-           
+        }
+      

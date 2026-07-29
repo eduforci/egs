@@ -151,16 +151,20 @@ export default function ExamenDetailsPage() {
         </button>
       </div>
 
-      {/* Liens vers les futures étapes (Phase 2+) */}
+      {/* Épreuves et candidats (Phase 2) */}
       <div className="grid grid-cols-2 gap-2 mb-6">
-        <div className="border rounded-lg p-3 text-center text-sm text-gray-400">
-          Épreuves & candidats
-          <p className="text-[10px] mt-1">Bientôt disponible</p>
-        </div>
-        <div className="border rounded-lg p-3 text-center text-sm text-gray-400">
-          Notes & résultats
-          <p className="text-[10px] mt-1">Bientôt disponible</p>
-        </div>
+        <Link
+          href={`/chef/examens/${examenId}/epreuves`}
+          className="border rounded-lg p-3 text-center text-sm font-medium hover:bg-gray-50"
+        >
+          Épreuves
+        </Link>
+        <Link
+          href={`/chef/examens/${examenId}/candidats`}
+          className="border rounded-lg p-3 text-center text-sm font-medium hover:bg-gray-50"
+        >
+          Candidats
+        </Link>
       </div>
 
       {/* Informations générales */}
@@ -211,5 +215,5 @@ export default function ExamenDetailsPage() {
       )}
     </main>
   );
-        }
-      
+    }
+        

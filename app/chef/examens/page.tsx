@@ -2,34 +2,44 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
 type Examen = {
   id: string;
   nom: string;
-  type: string;
-  points_requis: number;
+  categorie: string;
+  type: string | null;
+  niveau: string | null;
+  serie: string | null;
+  annee_scolaire: string;
   statut: string;
+  date_debut: string | null;
 };
 
-const TYPES = [
-  { value: 'final', label: 'Examen final' },
-  { value: 'blanc_local', label: 'Examen blanc local' },
-  { value: 'blanc_regional', label: 'Examen blanc régional' },
-];
+const CATEGORIE_LABEL: Record<string, string> = {
+  interne: 'Interne',
+  regional: 'Régional',
+  national: 'National',
+};
 
-export default function ExamensPage() {
+const STATUT_LABEL: Record<string, string> = {
+  preparation: 'En préparation',
+  en_cours: 'En cours',
+  termine: 'Terminé',
+  archive: 'Archivé',
+};
+
+export default function ExamensDashboardPage() {
+  const router = useRouter();
   const [examens, setExamens] = useState<Examen[]>([]);
-  const [etablissementId, setEtablissementId] = useState<string | null>(null);
-  const [anneeActive, setAnneeActive] = useState('');
-
-  const [nom, setNom] = useState('');
-  const [type, setType] = useState('final');
-  const [pointsRequis, setPointsRequis] = useState('180');
-
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [succes, setSucces] = useState<string | null>(null);
+
+  const [recherche, setRecherche] = useState('');
+  const [filtreCategorie, setFiltreCategorie] = useState('');
+  const [filtreStatut, setFiltreStatut] = useState('');
 
   const supabase = createClient();
 
@@ -48,25 +58,15 @@ export default function ExamensPage() {
         .single();
 
       if (profileError) throw new Error(`Erreur profil : ${profileError.message}`);
-      setEtablissementId(profile.etablissement_id);
 
-      const { data: etab, error: etabError } = await supabase
-        .from('etablissements')
-        .select('annee_scolaire_active')
-        .eq('id', profile.etablissement_id)
-        .single();
-
-      if (etabError) throw new Error(`Erreur établissement : ${etabError.message}`);
-      setAnneeActive(etab.annee_scolaire_active);
-
-      const { data: examensData, error: examensError } = await supabase
+      const { data, error: examensError } = await supabase
         .from('examens')
-        .select('id, nom, type, points_requis, statut')
+        .select('id, nom, categorie, type, niveau, serie, annee_scolaire, statut, date_debut')
         .eq('etablissement_id', profile.etablissement_id)
         .order('created_at', { ascending: false });
 
       if (examensError) throw new Error(`Erreur examens : ${examensError.message}`);
-      setExamens(examensData ?? []);
+      setExamens(data ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur inconnue');
     } finally {
@@ -78,128 +78,162 @@ export default function ExamensPage() {
     charger();
   }, [charger]);
 
-  async function creerExamen() {
-    if (!nom.trim() || !etablissementId) {
-      setError('Le nom est obligatoire.');
+  async function archiverExamen(id: string) {
+    setSucces(null);
+    const { error: updateError } = await supabase
+      .from('examens')
+      .update({ statut: 'archive' })
+      .eq('id', id);
+
+    if (updateError) {
+      setError(`Erreur archivage : ${updateError.message}`);
       return;
     }
-    setCreating(true);
-    setError(null);
-
-    const { error: insertError } = await supabase.from('examens').insert({
-      etablissement_id: etablissementId,
-      nom: nom.trim(),
-      type,
-      annee_scolaire: anneeActive,
-      points_requis: parseFloat(pointsRequis) || 0,
-    });
-
-    setCreating(false);
-
-    if (insertError) {
-      setError(`Erreur création : ${insertError.message}`);
-      return;
-    }
-
-    setNom('');
-    setPointsRequis('180');
+    setSucces('Examen archivé.');
     charger();
   }
 
-  const statutLabel: Record<string, string> = {
-    preparation: 'En préparation',
-    en_cours: 'En cours',
-    termine: 'Terminé',
+  async function supprimerExamen(id: string, nom: string) {
+    const confirmation = window.confirm(
+      `Supprimer définitivement "${nom}" ? Toutes les notes et données liées seront perdues. Cette action est irréversible.`
+    );
+    if (!confirmation) return;
+
+    const { error: deleteError } = await supabase.from('examens').delete().eq('id', id);
+
+    if (deleteError) {
+      setError(`Erreur suppression : ${deleteError.message}`);
+      return;
+    }
+    setSucces('Examen supprimé.');
+    charger();
+  }
+
+  const examensFiltres = examens.filter((ex) => {
+    const matchRecherche = ex.nom.toLowerCase().includes(recherche.toLowerCase());
+    const matchCategorie = !filtreCategorie || ex.categorie === filtreCategorie;
+    const matchStatut = !filtreStatut || ex.statut === filtreStatut;
+    return matchRecherche && matchCategorie && matchStatut;
+  });
+
+  const compteurs = {
+    total: examens.length,
+    internes: examens.filter((e) => e.categorie === 'interne').length,
+    regionaux: examens.filter((e) => e.categorie === 'regional').length,
+    nationaux: examens.filter((e) => e.categorie === 'national').length,
+    preparation: examens.filter((e) => e.statut === 'preparation').length,
+    termines: examens.filter((e) => e.statut === 'termine').length,
   };
 
   if (loading) return <p className="p-6 text-sm text-gray-500">Chargement...</p>;
 
   return (
-    <main className="p-4 md:p-6 max-w-2xl mx-auto">
-      <h1 className="text-xl font-bold mb-1">Examens</h1>
-      <p className="text-sm text-gray-500 mb-4">
-        Examens finaux, blancs locaux et blancs régionaux — année {anneeActive}
-      </p>
+    <main className="p-4 md:p-6 max-w-4xl mx-auto">
+      <div className="flex justify-between items-start mb-4">
+        <div>
+          <h1 className="text-xl font-bold mb-1">Examens</h1>
+          <p className="text-sm text-gray-500">Tableau de bord des examens de l'établissement</p>
+        </div>
+        <Link
+          href="/chef/examens/nouveau"
+          className="bg-black text-white text-sm px-4 py-2 rounded-md whitespace-nowrap"
+        >
+          + Créer un examen
+        </Link>
+      </div>
 
       {error && (
         <div className="bg-red-50 border border-red-300 text-red-700 text-sm rounded-md p-3 mb-4">
-          <strong>Erreur :</strong> {error}
+          {error}
+        </div>
+      )}
+      {succes && (
+        <div className="bg-green-50 border border-green-300 text-green-700 text-sm rounded-md p-3 mb-4">
+          {succes}
         </div>
       )}
 
-      <div className="space-y-2 mb-6">
-        {examens.length === 0 && (
-          <p className="text-sm text-gray-400">Aucun examen créé pour le moment.</p>
-        )}
-        {examens.map((ex) => (
-          <Link
-            key={ex.id}
-            href={`/chef/examens/${ex.id}`}
-            className="block border rounded-lg p-3 hover:bg-gray-50"
-          >
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="font-medium">{ex.nom}</p>
-                <p className="text-xs text-gray-500">
-                  {TYPES.find((t) => t.value === ex.type)?.label} · {ex.points_requis} points requis
-                </p>
-              </div>
-              <span className="text-xs bg-gray-100 rounded-full px-2 py-1">
-                {statutLabel[ex.statut] ?? ex.statut}
-              </span>
-            </div>
-          </Link>
+      {/* Compteurs */}
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-6">
+        {[
+          { label: 'Total', valeur: compteurs.total },
+          { label: 'Internes', valeur: compteurs.internes },
+          { label: 'Régionaux', valeur: compteurs.regionaux },
+          { label: 'Nationaux', valeur: compteurs.nationaux },
+          { label: 'En préparation', valeur: compteurs.preparation },
+          { label: 'Terminés', valeur: compteurs.termines },
+        ].map((c) => (
+          <div key={c.label} className="border rounded-lg p-2 text-center">
+            <p className="text-lg font-bold">{c.valeur}</p>
+            <p className="text-[10px] text-gray-500 leading-tight">{c.label}</p>
+          </div>
         ))}
       </div>
 
-      <div className="border rounded-lg p-4">
-        <p className="font-semibold text-sm mb-3">Créer un examen</p>
-        <div className="space-y-3">
-          <input
-            type="text"
-            value={nom}
-            onChange={(e) => setNom(e.target.value)}
-            placeholder="Nom (ex: BEPC Blanc n°1)"
-            className="w-full border rounded-md px-3 py-2 text-sm"
-          />
-
-          <select
-            value={type}
-            onChange={(e) => setType(e.target.value)}
-            className="w-full border rounded-md px-3 py-2 text-sm"
-          >
-            {TYPES.map((t) => (
-              <option key={t.value} value={t.value}>{t.label}</option>
-            ))}
-          </select>
-
-          <div>
-            <label className="block text-xs text-gray-600 mb-1">
-              Points requis pour l'admission (ex: 180 pour BEPC/360, 200 pour BAC/400, 85 pour CEPE/170)
-            </label>
-            <input
-              type="number"
-              step="1"
-              value={pointsRequis}
-              onChange={(e) => setPointsRequis(e.target.value)}
-              className="w-full border rounded-md px-3 py-2 text-sm"
-            />
-          </div>
-
-          <button
-            onClick={creerExamen}
-            disabled={creating || !nom.trim()}
-            className="w-full bg-black text-white rounded-md py-2 text-sm disabled:opacity-50"
-          >
-            {creating ? 'Création...' : 'Créer l\'examen'}
-          </button>
-        </div>
+      {/* Recherche et filtres */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <input
+          type="text"
+          value={recherche}
+          onChange={(e) => setRecherche(e.target.value)}
+          placeholder="Rechercher un examen..."
+          className="flex-1 min-w-[140px] border rounded-md px-3 py-2 text-sm"
+        />
+        <select
+          value={filtreCategorie}
+          onChange={(e) => setFiltreCategorie(e.target.value)}
+          className="border rounded-md px-2 py-2 text-sm"
+        >
+          <option value="">Toutes catégories</option>
+          <option value="interne">Interne</option>
+          <option value="regional">Régional</option>
+          <option value="national">National</option>
+        </select>
+        <select
+          value={filtreStatut}
+          onChange={(e) => setFiltreStatut(e.target.value)}
+          className="border rounded-md px-2 py-2 text-sm"
+        >
+          <option value="">Tous statuts</option>
+          <option value="preparation">En préparation</option>
+          <option value="en_cours">En cours</option>
+          <option value="termine">Terminé</option>
+          <option value="archive">Archivé</option>
+        </select>
       </div>
 
-      <p className="text-xs text-gray-400 mt-4">
-        Après création, ouvre l'examen pour y ajouter les classes participantes et les matières
-        (avec leurs composantes Oral/Écrit et coefficients).
-      </p>
+      {/* Liste */}
+      <div className="space-y-2">
+        {examensFiltres.length === 0 && (
+          <p className="text-sm text-gray-400 py-4 text-center">Aucun examen trouvé.</p>
+        )}
+        {examensFiltres.map((ex) => (
+          <div key={ex.id} className="border rounded-lg p-3">
+            <div className="flex justify-between items-start gap-2">
+              <Link href={`/chef/examens/${ex.id}`} className="flex-1">
+                <p className="font-medium">{ex.nom}</p>
+                <p className="text-xs text-gray-500">
+                  {CATEGORIE_LABEL[ex.categorie] ?? ex.categorie}
+                  {ex.niveau ? ` · ${ex.niveau}` : ''}
+                  {ex.serie ? ` ${ex.serie}` : ''}
+                  {' · '}{ex.annee_scolaire}
+                </p>
+              </Link>
+              <span className="text-xs bg-gray-100 rounded-full px-2 py-1 whitespace-nowrap">
+                {STATUT_LABEL[ex.statut] ?? ex.statut}
+              </span>
+            </div>
+            <div className="flex gap-3 mt-2 text-xs">
+              <Link href={`/chef/examens/${ex.id}`} className="text-blue-600">Voir</Link>
+              <Link href={`/chef/examens/${ex.id}/modifier`} className="text-blue-600">Modifier</Link>
+              {ex.statut !== 'archive' && (
+                <button onClick={() => archiverExamen(ex.id)} className="text-amber-600">Archiver</button>
+              )}
+              <button onClick={() => supprimerExamen(ex.id, ex.nom)} className="text-red-600">Supprimer</button>
+            </div>
+          </div>
+        ))}
+      </div>
     </main>
   );
-}
+               }

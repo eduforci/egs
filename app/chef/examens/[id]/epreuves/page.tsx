@@ -13,6 +13,7 @@ type Epreuve = {
   bareme: number;
   duree: string | null;
   type_epreuve: string;
+  role_langue: string | null;
 };
 
 type MatiereDisponible = { id: string; nom: string };
@@ -22,6 +23,12 @@ const TYPES_EPREUVE = [
   { value: 'oral', label: 'Oral' },
   { value: 'pratique', label: 'Pratique' },
   { value: 'autre', label: 'Autre' },
+];
+
+const ROLES_LANGUE = [
+  { value: '', label: 'Aucun (épreuve normale)' },
+  { value: 'LV1', label: 'LV1 (langue vivante 1)' },
+  { value: 'LV2', label: 'LV2 (langue vivante 2)' },
 ];
 
 export default function ExamenEpreuvesPage() {
@@ -39,6 +46,7 @@ export default function ExamenEpreuvesPage() {
   const [bareme, setBareme] = useState('20');
   const [duree, setDuree] = useState('');
   const [typeEpreuve, setTypeEpreuve] = useState('ecrit');
+  const [roleLangue, setRoleLangue] = useState('');
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -63,14 +71,14 @@ export default function ExamenEpreuvesPage() {
 
       const { data: emData, error: emError } = await supabase
         .from('examens_matieres')
-        .select('id, matiere_id, nom, coefficient, bareme, duree, type_epreuve, matieres(nom)')
+        .select('id, matiere_id, nom, coefficient, bareme, duree, type_epreuve, role_langue, matieres(nom)')
         .eq('examen_id', examenId);
 
       if (emError) throw new Error(`Erreur épreuves : ${emError.message}`);
 
       type Row = {
         id: string; matiere_id: string; nom: string; coefficient: number;
-        bareme: number; duree: string | null; type_epreuve: string;
+        bareme: number; duree: string | null; type_epreuve: string; role_langue: string | null;
         matieres: { nom: string } | { nom: string }[] | null;
       };
       const liste: Epreuve[] = ((emData ?? []) as unknown as Row[]).map((r) => {
@@ -78,7 +86,7 @@ export default function ExamenEpreuvesPage() {
         return {
           id: r.id, matiere_id: r.matiere_id, matiere_nom: m?.nom ?? 'Inconnue',
           nom: r.nom, coefficient: r.coefficient, bareme: r.bareme,
-          duree: r.duree, type_epreuve: r.type_epreuve,
+          duree: r.duree, type_epreuve: r.type_epreuve, role_langue: r.role_langue,
         };
       });
       liste.sort((a, b) => a.matiere_nom.localeCompare(b.matiere_nom) || a.nom.localeCompare(b.nom));
@@ -118,6 +126,7 @@ export default function ExamenEpreuvesPage() {
       bareme: parseFloat(bareme) || 20,
       duree: duree.trim() || null,
       type_epreuve: typeEpreuve,
+      role_langue: roleLangue || null,
     });
 
     setSaving(false);
@@ -137,6 +146,7 @@ export default function ExamenEpreuvesPage() {
     setBareme('20');
     setDuree('');
     setTypeEpreuve('ecrit');
+    setRoleLangue('');
     charger();
   }
 
@@ -191,6 +201,11 @@ export default function ExamenEpreuvesPage() {
                       <span className="text-gray-400 text-xs ml-1">
                         ({TYPES_EPREUVE.find((t) => t.value === e.type_epreuve)?.label})
                       </span>
+                      {e.role_langue && (
+                        <span className="ml-1 text-[10px] bg-amber-100 text-amber-700 rounded-full px-1.5 py-0.5">
+                          {e.role_langue}
+                        </span>
+                      )}
                     </td>
                     <td className="px-2 py-2 text-gray-500 text-xs whitespace-nowrap">
                       Coef {e.coefficient} · /{e.bareme}{e.duree ? ` · ${e.duree}` : ''}
@@ -274,6 +289,21 @@ export default function ExamenEpreuvesPage() {
             </div>
           </div>
 
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">
+              Rôle linguistique (pour BAC A1/A2 — LV1 = choisie comme 1ère langue par le candidat, LV2 = 2ème)
+            </label>
+            <select
+              value={roleLangue}
+              onChange={(e) => setRoleLangue(e.target.value)}
+              className="w-full border rounded-md px-3 py-2 text-sm"
+            >
+              {ROLES_LANGUE.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+          </div>
+
           <button
             onClick={ajouterEpreuve}
             disabled={saving || !matiereChoisie || !nomEpreuve.trim()}
@@ -284,9 +314,12 @@ export default function ExamenEpreuvesPage() {
         </div>
         <p className="text-xs text-gray-400 mt-2">
           Ex: pour le Français au BEPC, ajoute deux épreuves séparées — "Orthographe" (coef 1) et "CF" (coef 2).
+          <br />
+          Ex: pour le BAC A2, ajoute "Anglais Oral" (coef 1, rôle LV1) et "Allemand Oral" (coef 1, rôle LV2) —
+          seule celle correspondant au choix de chaque candidat comptera dans son calcul.
         </p>
       </div>
     </main>
   );
-          }
-    
+             }
+          

@@ -406,7 +406,7 @@ export default function ExamenCreatePage() {
           )}
 
           {niveauFinal && (
-            <div className="text-xs text-gray-500">
+            <div className={`text-xs rounded-md p-3 ${classesCorrespondantes.length === 0 ? 'bg-red-50 border border-red-300 text-red-700' : 'text-gray-500'}`}>
               <p className="font-medium mb-1">
                 {classesCorrespondantes.length} classe(s) concernée(s) :
               </p>
@@ -415,7 +415,11 @@ export default function ExamenCreatePage() {
                   {classesCorrespondantes.map((c) => <li key={c.id}>{c.nom}</li>)}
                 </ul>
               ) : (
-                <p>Aucune classe trouvée pour ce niveau{estBac && serie ? ` / série ${serie}` : ''}.</p>
+                <p className="font-medium">
+                  ⚠️ Aucune classe "{niveauFinal}"{estBac && serie ? ` série ${serie}` : ''} n'existe dans cet
+                  établissement. Crée d'abord cette classe, ou choisis un autre niveau — sinon aucun candidat
+                  ne pourra être ajouté à cet examen.
+                </p>
               )}
             </div>
           )}
@@ -442,10 +446,14 @@ export default function ExamenCreatePage() {
 
         <button
           onClick={creerExamen}
-          disabled={creating || !nom.trim() || !niveauFinal}
+          disabled={creating || !nom.trim() || !niveauFinal || classesCorrespondantes.length === 0}
           className="w-full bg-black text-white rounded-md py-3 text-sm font-medium disabled:opacity-50"
         >
-          {creating ? 'Création...' : "Créer l'examen"}
+          {creating
+            ? 'Création...'
+            : classesCorrespondantes.length === 0 && niveauFinal
+              ? 'Aucune classe correspondante — impossible de créer'
+              : "Créer l'examen"}
         </button>
       </div>
     </main>

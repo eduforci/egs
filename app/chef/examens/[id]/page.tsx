@@ -151,8 +151,8 @@ export default function ExamenDetailsPage() {
         </button>
       </div>
 
-      {/* Épreuves et candidats (Phase 2) */}
-      <div className="grid grid-cols-2 gap-2 mb-6">
+      {/* Épreuves, candidats et notes */}
+      <div className="grid grid-cols-3 gap-2 mb-6">
         <Link
           href={`/chef/examens/${examenId}/epreuves`}
           className="border rounded-lg p-3 text-center text-sm font-medium hover:bg-gray-50"
@@ -164,6 +164,12 @@ export default function ExamenDetailsPage() {
           className="border rounded-lg p-3 text-center text-sm font-medium hover:bg-gray-50"
         >
           Candidats
+        </Link>
+        <Link
+          href={`/chef/examens/${examenId}/notes`}
+          className="border rounded-lg p-3 text-center text-sm font-medium hover:bg-gray-50"
+        >
+          Notes
         </Link>
       </div>
 
@@ -215,5 +221,6 @@ export default function ExamenDetailsPage() {
       )}
     </main>
   );
-    }
+               }
+                            
         

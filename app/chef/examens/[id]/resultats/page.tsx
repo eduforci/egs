@@ -37,6 +37,7 @@ type MoyenneMatiere = { matiere_nom: string; epreuve_nom: string; moyenne: numbe
 const DECISION_STYLE: Record<string, string> = {
   Admis: 'text-green-600',
   Ajourné: 'text-orange-600',
+  Refusé: 'text-red-600',
   Absent: 'text-gray-400',
   Exclu: 'text-red-600',
 };
@@ -110,7 +111,7 @@ export default function ResultatsExamenPage() {
     charger();
   }, [charger]);
 
-  const classes = resultats.filter((r) => r.decision === 'Admis' || r.decision === 'Ajourné');
+  const classes = resultats.filter((r) => r.decision === 'Admis' || r.decision === 'Ajourné' || r.decision === 'Refusé');
   const major = classes[0];
   const top10 = classes.slice(0, 10);
   const top20 = classes.slice(0, 20);
@@ -176,7 +177,7 @@ export default function ResultatsExamenPage() {
                     <td className="px-3 py-2">{r.nom} {r.prenom}</td>
                     <td className="px-3 py-2 text-gray-500">{r.classe_nom}</td>
                     <td className="px-3 py-2">{r.moyenne}/20 <span className="text-gray-400 text-xs">({r.points_obtenus}/{r.points_total})</span></td>
-                    <td className="px-3 py-2 text-gray-500">{r.decision === 'Admis' || r.decision === 'Ajourné' ? r.mention : '-'}</td>
+                    <td className="px-3 py-2 text-gray-500">{['Admis','Ajourné','Refusé'].includes(r.decision) ? r.mention : '-'}</td>
                     <td className={`px-3 py-2 font-medium ${DECISION_STYLE[r.decision] ?? ''}`}>{r.decision}</td>
                   </tr>
                 ))
@@ -337,5 +338,4 @@ export default function ResultatsExamenPage() {
       )}
     </main>
   );
-    }
-        
+}

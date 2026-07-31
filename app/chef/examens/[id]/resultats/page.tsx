@@ -57,6 +57,7 @@ export default function ResultatsExamenPage() {
   const supabase = createClient();
 
   const [examenNom, setExamenNom] = useState('');
+  const [libelleEchec, setLibelleEchec] = useState('Refusés');
   const [resultats, setResultats] = useState<Resultat[]>([]);
   const [stats, setStats] = useState<Statistiques | null>(null);
   const [parClasse, setParClasse] = useState<MoyenneGroupe[]>([]);
@@ -74,12 +75,15 @@ export default function ResultatsExamenPage() {
     try {
       const { data: examen, error: examenError } = await supabase
         .from('examens')
-        .select('nom')
+        .select('nom, cycle')
         .eq('id', examenId)
         .single();
 
       if (examenError) throw new Error(`Erreur examen : ${examenError.message}`);
       setExamenNom(examen.nom);
+      // "Ajourné" est réservé au cycle universitaire (pas encore disponible dans EGS) ;
+      // primaire, collège et lycée utilisent tous "Refusé", conformément aux normes nationales.
+      setLibelleEchec(examen.cycle === 'universite' ? 'Ajournés' : 'Refusés');
 
       const [resResultats, resStats, resClasse, resSerie, resMatiere] = await Promise.all([
         supabase.rpc('calculer_resultats_examen', { p_examen_id: examenId }),
@@ -196,7 +200,7 @@ export default function ResultatsExamenPage() {
             { label: 'Absents', valeur: stats.absents },
             { label: 'Exclus', valeur: stats.exclus },
             { label: 'Admis', valeur: stats.admis },
-            { label: 'Ajournés', valeur: stats.ajournes },
+            { label: libelleEchec, valeur: stats.ajournes },
             { label: 'Taux de réussite', valeur: `${stats.pourcentage_admis}%` },
             { label: 'Moyenne générale', valeur: `${stats.moyenne_generale}/20` },
           ].map((s) => (
@@ -338,4 +342,5 @@ export default function ResultatsExamenPage() {
       )}
     </main>
   );
-}
+    }
+                                                              

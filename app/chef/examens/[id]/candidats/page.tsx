@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Fragment } from 'react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
@@ -34,6 +34,9 @@ export default function ExamenCandidatsPage() {
   const [etablissementId, setEtablissementId] = useState<string | null>(null);
   const [candidats, setCandidats] = useState<Candidat[]>([]);
   const [matieres, setMatieres] = useState<{ id: string; nom: string }[]>([]);
+  const [epreuves, setEpreuves] = useState<{ id: string; nom: string; matiere_nom: string }[]>([]);
+  const [dispenses, setDispenses] = useState<Record<string, Set<string>>>({}); // candidat_id -> Set<epreuve_id>
+  const [candidatOuvert, setCandidatOuvert] = useState<string | null>(null);
 
   const [recherche, setRecherche] = useState('');
   const [resultatsRecherche, setResultatsRecherche] = useState<EleveRecherche[]>([]);
@@ -80,6 +83,31 @@ export default function ExamenCandidatsPage() {
         .eq('etablissement_id', examen.etablissement_id)
         .order('nom');
       setMatieres(matieresData ?? []);
+
+      const { data: epreuvesData } = await supabase
+        .from('examens_matieres')
+        .select('id, nom, matieres(nom)')
+        .eq('examen_id', examenId);
+
+      type RowEp = { id: string; nom: string; matieres: { nom: string } | { nom: string }[] | null };
+      const listeEpreuves = ((epreuvesData ?? []) as unknown as RowEp[]).map((r) => {
+        const m = Array.isArray(r.matieres) ? r.matieres[0] : r.matieres;
+        return { id: r.id, nom: r.nom, matiere_nom: m?.nom ?? 'Inconnue' };
+      });
+      setEpreuves(listeEpreuves);
+
+      const candidatIds = brut.map((r) => r.id);
+      const { data: dispensesData } = await supabase
+        .from('examens_candidats_dispenses')
+        .select('examen_candidat_id, epreuve_id')
+        .in('examen_candidat_id', candidatIds.length > 0 ? candidatIds : ['00000000-0000-0000-0000-000000000000']);
+
+      const dispensesMap: Record<string, Set<string>> = {};
+      (dispensesData ?? []).forEach((d) => {
+        if (!dispensesMap[d.examen_candidat_id]) dispensesMap[d.examen_candidat_id] = new Set();
+        dispensesMap[d.examen_candidat_id].add(d.epreuve_id);
+      });
+      setDispenses(dispensesMap);
 
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
@@ -188,6 +216,32 @@ export default function ExamenCandidatsPage() {
       .eq('id', id);
     if (updateError) {
       setError(`Erreur mise à jour statut : ${updateError.message}`);
+    }
+  }
+
+  async function basculerDispense(candidatId: string, epreuveId: string) {
+    const dejaDispense = dispenses[candidatId]?.has(epreuveId) ?? false;
+
+    setDispenses((prev) => {
+      const copie = { ...prev };
+      const set = new Set(copie[candidatId] ?? []);
+      if (dejaDispense) set.delete(epreuveId); else set.add(epreuveId);
+      copie[candidatId] = set;
+      return copie;
+    });
+
+    if (dejaDispense) {
+      const { error: deleteError } = await supabase
+        .from('examens_candidats_dispenses')
+        .delete()
+        .eq('examen_candidat_id', candidatId)
+        .eq('epreuve_id', epreuveId);
+      if (deleteError) setError(`Erreur : ${deleteError.message}`);
+    } else {
+      const { error: insertError } = await supabase
+        .from('examens_candidats_dispenses')
+        .insert({ examen_candidat_id: candidatId, epreuve_id: epreuveId });
+      if (insertError) setError(`Erreur : ${insertError.message}`);
     }
   }
 
@@ -333,6 +387,7 @@ export default function ExamenCandidatsPage() {
               <th className="text-left px-3 py-2">Classe</th>
               <th className="text-left px-3 py-2">Type</th>
               <th className="text-left px-3 py-2 w-28">Statut</th>
+              <th className="text-left px-3 py-2 w-24">Dispenses</th>
               <th className="text-left px-3 py-2 w-32">LV1</th>
               <th className="text-left px-3 py-2 w-32">LV2</th>
               <th className="w-16"></th>
@@ -341,13 +396,14 @@ export default function ExamenCandidatsPage() {
           <tbody>
             {candidats.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-3 py-4 text-center text-gray-400">
+                <td colSpan={8} className="px-3 py-4 text-center text-gray-400">
                   Aucun candidat. Utilise "Tout sélectionner" pour peupler depuis les classes liées.
                 </td>
               </tr>
             ) : (
               candidats.map((c) => (
-                <tr key={c.id} className="border-t">
+                <Fragment key={c.id}>
+                <tr className="border-t">
                   <td className="px-3 py-2 whitespace-nowrap">{c.nom} {c.prenom}</td>
                   <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{c.classe_nom}</td>
                   <td className="px-3 py-2">
@@ -367,6 +423,14 @@ export default function ExamenCandidatsPage() {
                       <option value="absent">Absent</option>
                       <option value="exclu">Exclu</option>
                     </select>
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <button
+                      onClick={() => setCandidatOuvert(candidatOuvert === c.id ? null : c.id)}
+                      className="text-xs text-blue-600 whitespace-nowrap"
+                    >
+                      {(dispenses[c.id]?.size ?? 0) > 0 ? `${dispenses[c.id]!.size} dispense(s)` : 'Gérer'}
+                    </button>
                   </td>
                   <td className="px-2 py-1.5">
                     <select
@@ -398,6 +462,32 @@ export default function ExamenCandidatsPage() {
                     </button>
                   </td>
                 </tr>
+                {candidatOuvert === c.id && (
+                  <tr className="bg-gray-50 border-t">
+                    <td colSpan={8} className="px-3 py-3">
+                      <p className="text-xs font-medium mb-2">
+                        Épreuves dont {c.nom} {c.prenom} est dispensé(e) :
+                      </p>
+                      {epreuves.length === 0 ? (
+                        <p className="text-xs text-gray-400">Aucune épreuve configurée pour cet examen.</p>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-1">
+                          {epreuves.map((ep) => (
+                            <label key={ep.id} className="flex items-center gap-1.5 text-xs">
+                              <input
+                                type="checkbox"
+                                checked={dispenses[c.id]?.has(ep.id) ?? false}
+                                onChange={() => basculerDispense(c.id, ep.id)}
+                              />
+                              {ep.matiere_nom} — {ep.nom}
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))
             )}
           </tbody>
@@ -409,5 +499,4 @@ export default function ExamenCandidatsPage() {
       </p>
     </main>
   );
-    }
-        
+}

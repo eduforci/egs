@@ -177,6 +177,12 @@ export default function ExamenDetailsPage() {
         >
           Résultats
         </Link>
+        <Link
+          href={`/chef/examens/${examenId}/documents`}
+          className="border rounded-lg p-3 text-center text-sm font-medium hover:bg-gray-50"
+        >
+          Documents
+        </Link>
       </div>
 
       {/* Informations générales */}
@@ -227,5 +233,5 @@ export default function ExamenDetailsPage() {
       )}
     </main>
   );
-        }
-          
+    }
+        

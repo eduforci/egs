@@ -97,6 +97,12 @@ export default function ComptabiliteDashboardPage() {
         <Link href="/chef/comptabilite/frais" className="border rounded-lg p-3 text-center text-sm font-medium hover:bg-gray-50">
           Frais de scolarité
         </Link>
+        <Link href="/chef/comptabilite/echeanciers" className="border rounded-lg p-3 text-center text-sm font-medium hover:bg-gray-50">
+          Échéanciers
+        </Link>
+        <Link href="/chef/comptabilite/eleves" className="border rounded-lg p-3 text-center text-sm font-medium hover:bg-gray-50">
+          Comptes élèves
+        </Link>
       </div>
 
       {/* Indicateurs de base */}
@@ -160,5 +166,5 @@ export default function ComptabiliteDashboardPage() {
       </p>
     </main>
   );
-          }
+  }
         

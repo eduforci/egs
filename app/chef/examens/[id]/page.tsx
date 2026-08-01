@@ -183,6 +183,12 @@ export default function ExamenDetailsPage() {
         >
           Documents
         </Link>
+        <Link
+          href={`/chef/examens/${examenId}/parametres`}
+          className="border rounded-lg p-3 text-center text-sm font-medium hover:bg-gray-50"
+        >
+          Paramètres
+        </Link>
       </div>
 
       {/* Informations générales */}
@@ -233,5 +239,4 @@ export default function ExamenDetailsPage() {
       )}
     </main>
   );
-    }
-        
+        }

@@ -90,7 +90,7 @@ export default function ComptabiliteDashboardPage() {
       )}
 
       {/* Liens rapides */}
-      <div className="grid grid-cols-2 gap-2 mb-6">
+      <div className="grid grid-cols-3 gap-2 mb-6">
         <Link href="/chef/comptabilite/configuration" className="border rounded-lg p-3 text-center text-sm font-medium hover:bg-gray-50">
           Configuration
         </Link>
@@ -102,6 +102,9 @@ export default function ComptabiliteDashboardPage() {
         </Link>
         <Link href="/chef/comptabilite/eleves" className="border rounded-lg p-3 text-center text-sm font-medium hover:bg-gray-50">
           Comptes élèves
+        </Link>
+        <Link href="/chef/comptabilite/paiements" className="border rounded-lg p-3 text-center text-sm font-medium hover:bg-gray-50">
+          Paiements
         </Link>
       </div>
 
@@ -166,5 +169,5 @@ export default function ComptabiliteDashboardPage() {
       </p>
     </main>
   );
-  }
-        
+        }
+    

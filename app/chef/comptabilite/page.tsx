@@ -112,6 +112,9 @@ export default function ComptabiliteDashboardPage() {
         <Link href="/chef/comptabilite/banques" className="border rounded-lg p-3 text-center text-sm font-medium hover:bg-gray-50">
           Banques
         </Link>
+        <Link href="/chef/comptabilite/depenses-recettes" className="border rounded-lg p-3 text-center text-sm font-medium hover:bg-gray-50">
+          Dépenses & Recettes
+        </Link>
       </div>
 
       {/* Indicateurs de base */}

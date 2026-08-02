@@ -106,6 +106,12 @@ export default function ComptabiliteDashboardPage() {
         <Link href="/chef/comptabilite/paiements" className="border rounded-lg p-3 text-center text-sm font-medium hover:bg-gray-50">
           Paiements
         </Link>
+        <Link href="/chef/comptabilite/caisse" className="border rounded-lg p-3 text-center text-sm font-medium hover:bg-gray-50">
+          Caisse
+        </Link>
+        <Link href="/chef/comptabilite/banques" className="border rounded-lg p-3 text-center text-sm font-medium hover:bg-gray-50">
+          Banques
+        </Link>
       </div>
 
       {/* Indicateurs de base */}
@@ -169,5 +175,4 @@ export default function ComptabiliteDashboardPage() {
       </p>
     </main>
   );
-        }
-    
+}

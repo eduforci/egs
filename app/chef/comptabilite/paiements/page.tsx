@@ -196,13 +196,27 @@ export default function PaiementsPage() {
     const { data: grilleData } = await supabase.from('grille_frais').select('id, nom').in('id', grilleIds.length > 0 ? grilleIds : ['00000000-0000-0000-0000-000000000000']);
     const grilleMap = new Map((grilleData ?? []).map((g) => [g.id, g.nom]));
 
-    const liste: FraisEleve[] = (fraisData ?? []).map((f) => ({
-      id: f.id,
-      nom: f.grille_frais_id ? grilleMap.get(f.grille_frais_id) ?? 'Frais' : 'Frais',
-      montant_total: f.montant_total,
-      montant_paye: f.montant_paye,
-      solde: f.montant_total - f.montant_paye,
-    }));
+    const fraisIds = (fraisData ?? []).map((f) => f.id);
+    const { data: remisesData } = await supabase
+      .from('remises')
+      .select('frais_id, mode, valeur')
+      .in('frais_id', fraisIds.length > 0 ? fraisIds : ['00000000-0000-0000-0000-000000000000']);
+
+    const liste: FraisEleve[] = (fraisData ?? []).map((f) => {
+      const remisesDuFrais = (remisesData ?? []).filter((r) => r.frais_id === f.id);
+      const totalRemise = Math.min(
+        remisesDuFrais.reduce((sum, r) => sum + (r.mode === 'montant_fixe' ? Number(r.valeur) : (Number(f.montant_total) * Number(r.valeur)) / 100), 0),
+        Number(f.montant_total) || 0
+      );
+      const montantNet = Number(f.montant_total) - totalRemise;
+      return {
+        id: f.id,
+        nom: f.grille_frais_id ? grilleMap.get(f.grille_frais_id) ?? 'Frais' : 'Frais',
+        montant_total: montantNet,
+        montant_paye: f.montant_paye,
+        solde: montantNet - f.montant_paye,
+      };
+    });
     setFraisEleve(liste);
   }
 
@@ -476,6 +490,6 @@ export default function PaiementsPage() {
           @page { size: A4; margin: 15mm; }
         }
       `}</style>
-    </main>
+             </main>
   );
 }

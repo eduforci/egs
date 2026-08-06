@@ -115,6 +115,9 @@ export default function ComptabiliteDashboardPage() {
         <Link href="/chef/comptabilite/depenses-recettes" className="border rounded-lg p-3 text-center text-sm font-medium hover:bg-gray-50">
           Dépenses & Recettes
         </Link>
+        <Link href="/finances/rapports" className="border rounded-lg p-3 text-center text-sm font-medium hover:bg-gray-50">
+          Rapports
+        </Link>
       </div>
 
       {/* Indicateurs de base */}
@@ -173,9 +176,9 @@ export default function ComptabiliteDashboardPage() {
       </div>
 
       <p className="text-xs text-gray-400 mt-4">
-        Les indicateurs de caisse, recettes et paiements seront disponibles avec les prochaines phases
-        (Paiements, Caisse, Rapports financiers).
+        Retrouvez les indicateurs de caisse, banques et recettes/dépenses détaillés dans leurs modules
+        respectifs, et l'ensemble des rapports financiers dans la section Rapports.
       </p>
     </main>
   );
-}
+        }

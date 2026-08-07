@@ -75,6 +75,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: profileError.message }, { status: 500 });
   }
 
+await admin.from("enseignants").insert({
+    id: nouvelUser.user.id,
+    etablissement_id: chefProfile.etablissement_id,
+    statut: "actif",
+  });
+
   if (classeId && matiereId) {
     await admin.from("affectations_enseignant").insert({
       enseignant_id: nouvelUser.user.id,
@@ -85,4 +91,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ identifiant, motDePasseProvisoire });
 }
-  

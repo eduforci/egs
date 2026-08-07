@@ -152,6 +152,10 @@ export default function GestionEnseignants() {
               </h2>
               <span className="text-xs text-neutral-400">
                 {ens.identifiant} · {ens.role === "educateur" ? "Éducateur" : "Enseignant"}
+                {" · "}
+                <a href={`/chef/enseignants/${ens.id}`} className="text-blue-600 hover:underline">
+                  Détails
+                </a>
               </span>
             </div>
 

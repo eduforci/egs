@@ -88,8 +88,14 @@ export default function ChefDashboard() {
   <a href="/chef/enseignants" className="text-sm text-blue-600 hover:underline inline-block">
     → Voir et gérer tous les enseignants
   </a>
+  <a href="/chef/eleves" className="text-sm text-blue-600 hover:underline inline-block">
+    → Voir tous les élèves
+  </a>
   <a href="/chef/eleves/nouveau" className="text-sm text-blue-600 hover:underline inline-block">
     → Ajouter un élève
+  </a>
+  <a href="/chef/parents" className="text-sm text-blue-600 hover:underline inline-block">
+    → Voir et gérer les parents
   </a>
 </div>
       <form onSubmit={handleSubmit} className="bg-white border rounded-xl p-6 space-y-4">

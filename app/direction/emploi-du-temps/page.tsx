@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
-type Classe = { id: string; nom: string };
+type Classe = { id: string; nom: string; cycle: string | null };
 type Matiere = { id: string; nom: string };
 type Enseignant = { id: string; nom: string; prenom: string };
+type Periode = { id: string; ordre: number; heure_debut: string; heure_fin: string; est_pause: boolean };
 type Creneau = {
   id: string;
   jour: string;
@@ -14,6 +16,7 @@ type Creneau = {
   salle: string | null;
   matiere_id: string;
   enseignant_id: string;
+  periode_id: string | null;
   matieres?: { nom: string };
   profiles?: { nom: string; prenom: string };
 };
@@ -26,8 +29,7 @@ const JOURS_LABEL: Record<string, string> = {
 
 const FORM_VIDE = {
   jour: 'lundi',
-  heure_debut: '08:00',
-  heure_fin: '09:00',
+  periode_id: '',
   matiere_id: '',
   enseignant_id: '',
   salle: '',
@@ -35,11 +37,13 @@ const FORM_VIDE = {
 
 export default function EmploiDuTempsDirectionPage() {
   const supabase = createClient();
+  const searchParams = useSearchParams();
 
   const [classes, setClasses] = useState<Classe[]>([]);
-  const [classeId, setClasseId] = useState('');
+  const [classeId, setClasseId] = useState(searchParams.get('classe') || '');
   const [matieres, setMatieres] = useState<Matiere[]>([]);
   const [enseignants, setEnseignants] = useState<Enseignant[]>([]);
+  const [periodes, setPeriodes] = useState<Periode[]>([]);
   const [creneaux, setCreneaux] = useState<Creneau[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -48,6 +52,8 @@ export default function EmploiDuTempsDirectionPage() {
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState(FORM_VIDE);
+
+  const classeSelectionnee = classes.find((c) => c.id === classeId);
 
   useEffect(() => {
     const load = async () => {
@@ -64,7 +70,7 @@ export default function EmploiDuTempsDirectionPage() {
 
       const { data, error } = await supabase
         .from('classes')
-        .select('id, nom')
+        .select('id, nom, cycle')
         .eq('etablissement_id', profil.etablissement_id)
         .order('nom');
 
@@ -77,19 +83,24 @@ export default function EmploiDuTempsDirectionPage() {
     load();
   }, [supabase]);
 
+  // Charger matieres, enseignants et periodes fixes (selon le cycle de la classe)
   useEffect(() => {
     const loadRelated = async () => {
-      if (!classeId) return;
+      if (!classeId || !classeSelectionnee) return;
+
+      const { data: userData } = await supabase.auth.getUser();
+      const { data: profil } = await supabase
+        .from('profiles')
+        .select('etablissement_id')
+        .eq('id', userData?.user?.id)
+        .single();
 
       const { data: cm } = await supabase
         .from('classes_matieres')
         .select('matiere_id, matieres(id, nom)')
         .eq('classe_id', classeId);
 
-      const matieresListe = (cm || [])
-        .map((row: any) => row.matieres)
-        .filter(Boolean);
-      setMatieres(matieresListe);
+      setMatieres((cm || []).map((row: any) => row.matieres).filter(Boolean));
 
       const { data: aff } = await supabase
         .from('affectations_enseignant')
@@ -106,16 +117,34 @@ export default function EmploiDuTempsDirectionPage() {
       } else {
         setEnseignants([]);
       }
+
+      if (classeSelectionnee.cycle && profil?.etablissement_id) {
+        const { data: periodesData, error: periodesError } = await supabase
+          .from('creneaux_horaires_types')
+          .select('id, ordre, heure_debut, heure_fin, est_pause')
+          .eq('etablissement_id', profil.etablissement_id)
+          .eq('cycle', classeSelectionnee.cycle)
+          .eq('est_pause', false)
+          .order('ordre');
+
+        if (periodesError) {
+          setMessage({ type: 'error', text: 'Erreur chargement grille horaire: ' + periodesError.message });
+        } else {
+          setPeriodes(periodesData || []);
+        }
+      } else {
+        setPeriodes([]);
+      }
     };
     loadRelated();
-  }, [classeId, supabase]);
+  }, [classeId, classeSelectionnee, supabase]);
 
   const chargerCreneaux = useCallback(async () => {
     if (!classeId) return;
     setLoading(true);
     const { data, error } = await supabase
       .from('emploi_du_temps')
-      .select('id, jour, heure_debut, heure_fin, salle, matiere_id, enseignant_id, matieres(nom), profiles(nom, prenom)')
+      .select('id, jour, heure_debut, heure_fin, salle, matiere_id, enseignant_id, periode_id, matieres(nom), profiles(nom, prenom)')
       .eq('classe_id', classeId)
       .order('heure_debut');
 
@@ -143,8 +172,7 @@ export default function EmploiDuTempsDirectionPage() {
     setEditingId(c.id);
     setForm({
       jour: c.jour,
-      heure_debut: c.heure_debut.slice(0, 5),
-      heure_fin: c.heure_fin.slice(0, 5),
+      periode_id: c.periode_id || '',
       matiere_id: c.matiere_id,
       enseignant_id: c.enseignant_id,
       salle: c.salle || '',
@@ -163,14 +191,15 @@ export default function EmploiDuTempsDirectionPage() {
     setSaving(true);
     setMessage(null);
 
-    if (!form.matiere_id || !form.enseignant_id) {
-      setMessage({ type: 'error', text: 'Sélectionnez une matière et un enseignant.' });
+    if (!form.matiere_id || !form.enseignant_id || !form.periode_id) {
+      setMessage({ type: 'error', text: 'Sélectionnez une période, une matière et un enseignant.' });
       setSaving(false);
       return;
     }
 
-    if (form.heure_fin <= form.heure_debut) {
-      setMessage({ type: 'error', text: "L'heure de fin doit être après l'heure de début." });
+    const periode = periodes.find((p) => p.id === form.periode_id);
+    if (!periode) {
+      setMessage({ type: 'error', text: 'Période introuvable.' });
       setSaving(false);
       return;
     }
@@ -178,8 +207,8 @@ export default function EmploiDuTempsDirectionPage() {
     const { data: conflitEns } = await supabase.rpc('enseignant_en_conflit', {
       p_enseignant_id: form.enseignant_id,
       p_jour: form.jour,
-      p_heure_debut: form.heure_debut,
-      p_heure_fin: form.heure_fin,
+      p_heure_debut: periode.heure_debut,
+      p_heure_fin: periode.heure_fin,
       p_exclude_id: editingId,
     });
 
@@ -192,8 +221,8 @@ export default function EmploiDuTempsDirectionPage() {
     const { data: conflitClasse } = await supabase.rpc('classe_en_conflit', {
       p_classe_id: classeId,
       p_jour: form.jour,
-      p_heure_debut: form.heure_debut,
-      p_heure_fin: form.heure_fin,
+      p_heure_debut: periode.heure_debut,
+      p_heure_fin: periode.heure_fin,
       p_exclude_id: editingId,
     });
 
@@ -204,15 +233,15 @@ export default function EmploiDuTempsDirectionPage() {
     }
 
     if (editingId) {
-      // Modification d'un créneau existant
       const { error } = await supabase
         .from('emploi_du_temps')
         .update({
           matiere_id: form.matiere_id,
           enseignant_id: form.enseignant_id,
           jour: form.jour,
-          heure_debut: form.heure_debut,
-          heure_fin: form.heure_fin,
+          periode_id: form.periode_id,
+          heure_debut: periode.heure_debut,
+          heure_fin: periode.heure_fin,
           salle: form.salle || null,
         })
         .eq('id', editingId);
@@ -224,7 +253,6 @@ export default function EmploiDuTempsDirectionPage() {
       }
       setMessage({ type: 'success', text: 'Créneau modifié.' });
     } else {
-      // Ajout d'un nouveau créneau
       const { data: userData } = await supabase.auth.getUser();
       const { data: profil } = await supabase
         .from('profiles')
@@ -238,8 +266,9 @@ export default function EmploiDuTempsDirectionPage() {
         matiere_id: form.matiere_id,
         enseignant_id: form.enseignant_id,
         jour: form.jour,
-        heure_debut: form.heure_debut,
-        heure_fin: form.heure_fin,
+        periode_id: form.periode_id,
+        heure_debut: periode.heure_debut,
+        heure_fin: periode.heure_fin,
         salle: form.salle || null,
       });
 
@@ -292,7 +321,19 @@ export default function EmploiDuTempsDirectionPage() {
         </div>
       )}
 
-      {classeId && (
+      {classeId && !classeSelectionnee?.cycle && (
+        <div className="p-3 rounded-lg text-sm bg-orange-50 text-orange-700 border border-orange-200">
+          Cette classe n'a pas de cycle défini, impossible de charger la grille horaire.
+        </div>
+      )}
+
+      {classeId && classeSelectionnee?.cycle && periodes.length === 0 && (
+        <div className="p-3 rounded-lg text-sm bg-orange-50 text-orange-700 border border-orange-200">
+          Aucune période définie pour le cycle "{classeSelectionnee.cycle}". Configurez d'abord la grille horaire.
+        </div>
+      )}
+
+      {classeId && periodes.length > 0 && (
         <>
           {!showForm && (
             <button
@@ -325,25 +366,20 @@ export default function EmploiDuTempsDirectionPage() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Début</label>
-                  <input
-                    type="time"
-                    value={form.heure_debut}
-                    onChange={(e) => setForm({ ...form, heure_debut: e.target.value })}
-                    className="w-full border rounded-lg p-2"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Fin</label>
-                  <input
-                    type="time"
-                    value={form.heure_fin}
-                    onChange={(e) => setForm({ ...form, heure_fin: e.target.value })}
-                    className="w-full border rounded-lg p-2"
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Période</label>
+                <select
+                  value={form.periode_id}
+                  onChange={(e) => setForm({ ...form, periode_id: e.target.value })}
+                  className="w-full border rounded-lg p-2"
+                >
+                  <option value="">-- Choisir un créneau horaire --</option>
+                  {periodes.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.heure_debut.slice(0, 5)} - {p.heure_fin.slice(0, 5)}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -381,7 +417,7 @@ export default function EmploiDuTempsDirectionPage() {
                   value={form.salle}
                   onChange={(e) => setForm({ ...form, salle: e.target.value })}
                   className="w-full border rounded-lg p-2"
-                  placeholder="Ex: Salle 12"
+                  placeholder="Ex: SCL3, LABO PC, BIB/CDI"
                 />
               </div>
 

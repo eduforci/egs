@@ -58,11 +58,11 @@ export default function CahierAppelPage() {
     setLoading(true);
     setMessage(null);
 
+    // 1. Récupérer les eleves de la classe (identifiants + champs specifiques)
     const { data: elevesData, error: elevesError } = await supabase
       .from('eleves')
-      .select('id, nom, prenoms, matricule')
-      .eq('classe_id', classeId)
-      .order('nom', { ascending: true });
+      .select('id, matricule')
+      .eq('classe_id', classeId);
 
     if (elevesError) {
       setMessage({ type: 'error', text: "Erreur chargement élèves: " + elevesError.message });
@@ -70,6 +70,41 @@ export default function CahierAppelPage() {
       return;
     }
 
+    if (!elevesData || elevesData.length === 0) {
+      setEleves([]);
+      setLignes({});
+      setLoading(false);
+      return;
+    }
+
+    // 2. Récupérer nom/prenom via profiles (eleves.id = profiles.id)
+    const ids = elevesData.map((e) => e.id);
+    const { data: profilsData, error: profilsError } = await supabase
+      .from('profiles')
+      .select('id, nom, prenom')
+      .in('id', ids);
+
+    if (profilsError) {
+      setMessage({ type: 'error', text: "Erreur chargement profils: " + profilsError.message });
+      setLoading(false);
+      return;
+    }
+
+    const profilsParId = new Map((profilsData || []).map((p) => [p.id, p]));
+
+    const elevesComplets: Eleve[] = elevesData
+      .map((e) => {
+        const p = profilsParId.get(e.id);
+        return {
+          id: e.id,
+          matricule: e.matricule,
+          nom: p?.nom ?? '',
+          prenoms: p?.prenom ?? '',
+        };
+      })
+      .sort((a, b) => a.nom.localeCompare(b.nom));
+
+    // 3. Absences deja saisies pour cette classe/date
     const { data: absencesData, error: absencesError } = await supabase
       .from('absences')
       .select('eleve_id, type, duree_minutes, justifie, motif')
@@ -88,7 +123,7 @@ export default function CahierAppelPage() {
     );
 
     const nouvellesLignes: Record<string, LigneAppel> = {};
-    (elevesData || []).forEach((eleve) => {
+    elevesComplets.forEach((eleve) => {
       const abs = absencesParEleve.get(eleve.id);
       nouvellesLignes[eleve.id] = {
         eleve_id: eleve.id,
@@ -99,7 +134,7 @@ export default function CahierAppelPage() {
       };
     });
 
-    setEleves(elevesData || []);
+    setEleves(elevesComplets);
     setLignes(nouvellesLignes);
     setLoading(false);
   }, [classeId, date, supabase]);
@@ -298,4 +333,4 @@ export default function CahierAppelPage() {
       )}
     </div>
   );
-        }
+       }

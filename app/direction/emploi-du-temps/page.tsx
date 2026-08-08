@@ -4,10 +4,10 @@ import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
-type Classe = { id: string; nom: string; cycle: string | null };
+type Classe = { id: string; nom: string; cycle: string | null; annee_scolaire: string | null };
 type Matiere = { id: string; nom: string };
 type Enseignant = { id: string; nom: string; prenom: string };
-type Periode = { id: string; ordre: number; heure_debut: string; heure_fin: string; est_pause: boolean };
+type Periode = { id: string; ordre: number; heure_debut: string; heure_fin: string; est_pause: boolean; libelle: string | null };
 type Creneau = {
   id: string;
   jour: string;
@@ -20,11 +20,24 @@ type Creneau = {
   matieres?: { nom: string };
   profiles?: { nom: string; prenom: string };
 };
+type Etablissement = {
+  nom: string;
+  adresse: string | null;
+  telephone: string | null;
+  code_etablissement: string | null;
+  dren: string | null;
+  type_etablissement: string | null;
+};
+type ProfPrincipal = { nom: string; prenom: string; specialite: string | null };
 
 const JOURS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
 const JOURS_LABEL: Record<string, string> = {
   lundi: 'Lundi', mardi: 'Mardi', mercredi: 'Mercredi',
   jeudi: 'Jeudi', vendredi: 'Vendredi', samedi: 'Samedi',
+};
+const JOURS_LABEL_MAJ: Record<string, string> = {
+  lundi: 'LUNDI', mardi: 'MARDI', mercredi: 'MERCREDI',
+  jeudi: 'JEUDI', vendredi: 'VENDREDI', samedi: 'SAMEDI',
 };
 
 const FORM_VIDE = {
@@ -45,6 +58,8 @@ function EmploiDuTempsContenu() {
   const [enseignants, setEnseignants] = useState<Enseignant[]>([]);
   const [periodes, setPeriodes] = useState<Periode[]>([]);
   const [creneaux, setCreneaux] = useState<Creneau[]>([]);
+  const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
+  const [profPrincipal, setProfPrincipal] = useState<ProfPrincipal | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -68,9 +83,16 @@ function EmploiDuTempsContenu() {
 
       if (!profil?.etablissement_id) return;
 
+      const { data: etab } = await supabase
+        .from('etablissements')
+        .select('nom, adresse, telephone, code_etablissement, dren, type_etablissement')
+        .eq('id', profil.etablissement_id)
+        .single();
+      setEtablissement(etab || null);
+
       const { data, error } = await supabase
         .from('classes')
-        .select('id, nom, cycle')
+        .select('id, nom, cycle, annee_scolaire')
         .eq('etablissement_id', profil.etablissement_id)
         .order('nom');
 
@@ -117,13 +139,36 @@ function EmploiDuTempsContenu() {
         setEnseignants([]);
       }
 
+      // Professeur principal de la classe (via complement_service)
+      const { data: ppData } = await supabase
+        .from('complement_service')
+        .select('enseignant_id')
+        .eq('classe_id', classeId)
+        .eq('type', 'PP')
+        .maybeSingle();
+
+      if (ppData?.enseignant_id) {
+        const { data: ppProfil } = await supabase
+          .from('profiles')
+          .select('nom, prenom')
+          .eq('id', ppData.enseignant_id)
+          .single();
+        const { data: ppEns } = await supabase
+          .from('enseignants')
+          .select('specialite')
+          .eq('id', ppData.enseignant_id)
+          .single();
+        setProfPrincipal(ppProfil ? { nom: ppProfil.nom, prenom: ppProfil.prenom, specialite: ppEns?.specialite || null } : null);
+      } else {
+        setProfPrincipal(null);
+      }
+
       if (classeSelectionnee.cycle && profil?.etablissement_id) {
         const { data: periodesData, error: periodesError } = await supabase
           .from('creneaux_horaires_types')
-          .select('id, ordre, heure_debut, heure_fin, est_pause')
+          .select('id, ordre, heure_debut, heure_fin, est_pause, libelle')
           .eq('etablissement_id', profil.etablissement_id)
           .eq('cycle', classeSelectionnee.cycle)
-          .eq('est_pause', false)
           .order('ordre');
 
         if (periodesError) {
@@ -296,148 +341,275 @@ function EmploiDuTempsContenu() {
     chargerCreneaux();
   };
 
-  return (
-    <div className="max-w-xl mx-auto p-4 space-y-4">
-      <h1 className="text-2xl font-bold">Emploi du temps</h1>
+  const trouverCreneau = (jour: string, heureDebut: string, heureFin: string) => {
+    return creneaux.find(
+      (c) => c.jour === jour && c.heure_debut.slice(0, 5) === heureDebut.slice(0, 5) && c.heure_fin.slice(0, 5) === heureFin.slice(0, 5)
+    );
+  };
 
-      <div>
-        <label className="block text-sm font-medium mb-1">Classe</label>
-        <select
-          value={classeId}
-          onChange={(e) => { setClasseId(e.target.value); annulerForm(); }}
-          className="w-full border rounded-lg p-2"
-        >
-          <option value="">-- Sélectionner une classe --</option>
-          {classes.map((c) => (
-            <option key={c.id} value={c.id}>{c.nom}</option>
-          ))}
-        </select>
+  const joursAffiches = JOURS.slice(0, 5).concat(creneaux.some((c) => c.jour === 'samedi') ? ['samedi'] : []);
+
+  const totalHeuresSemaine = creneaux.reduce((sum, c) => {
+    const [h1, m1] = c.heure_debut.slice(0, 5).split(':').map(Number);
+    const [h2, m2] = c.heure_fin.slice(0, 5).split(':').map(Number);
+    return sum + ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+  }, 0);
+
+  return (
+    <div className="max-w-5xl mx-auto p-4 space-y-4">
+      <style>{`
+        @media print {
+          .no-print { display: none !important; }
+          body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+          @page { size: landscape; margin: 10mm; }
+        }
+        table.edt-table th, table.edt-table td {
+          border: 1px solid #999;
+          padding: 4px;
+          font-size: 10px;
+          text-align: center;
+        }
+        table.edt-table th { background: #e5e5e5; font-weight: bold; }
+        .pause-row td { background: #d5d5d5; font-weight: bold; }
+      `}</style>
+
+      <div className="no-print space-y-3">
+        <h1 className="text-2xl font-bold">Emploi du temps</h1>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Classe</label>
+          <select
+            value={classeId}
+            onChange={(e) => { setClasseId(e.target.value); annulerForm(); }}
+            className="w-full border rounded-lg p-2"
+          >
+            <option value="">-- Sélectionner une classe --</option>
+            {classes.map((c) => (
+              <option key={c.id} value={c.id}>{c.nom}</option>
+            ))}
+          </select>
+        </div>
+
+        {message && (
+          <div className={`p-3 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+            {message.text}
+          </div>
+        )}
+
+        {classeId && !classeSelectionnee?.cycle && (
+          <div className="p-3 rounded-lg text-sm bg-orange-50 text-orange-700 border border-orange-200">
+            Cette classe n'a pas de cycle défini, impossible de charger la grille horaire.
+          </div>
+        )}
+
+        {classeId && classeSelectionnee?.cycle && periodes.length === 0 && (
+          <div className="p-3 rounded-lg text-sm bg-orange-50 text-orange-700 border border-orange-200">
+            Aucune période définie pour le cycle "{classeSelectionnee.cycle}". Configurez d'abord la grille horaire.
+          </div>
+        )}
+
+        {classeId && periodes.length > 0 && (
+          <>
+            {!showForm && (
+              <div className="flex gap-2">
+                <button
+                  onClick={ouvrirFormAjout}
+                  className="flex-1 bg-gray-800 text-white py-2.5 rounded-lg font-medium"
+                >
+                  + Ajouter un créneau
+                </button>
+                <button
+                  onClick={() => window.print()}
+                  className="flex-1 bg-green-600 text-white py-2.5 rounded-lg font-medium"
+                >
+                  🖨️ Imprimer
+                </button>
+              </div>
+            )}
+
+            {showForm && (
+              <div className="border rounded-lg p-3 space-y-3 bg-gray-50">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium text-sm text-gray-700">
+                    {editingId ? 'Modifier le créneau' : 'Nouveau créneau'}
+                  </span>
+                  <button onClick={annulerForm} className="text-sm text-gray-500">Annuler</button>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Jour</label>
+                  <select
+                    value={form.jour}
+                    onChange={(e) => setForm({ ...form, jour: e.target.value })}
+                    className="w-full border rounded-lg p-2"
+                  >
+                    {JOURS.map((j) => (
+                      <option key={j} value={j}>{JOURS_LABEL[j]}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Période</label>
+                  <select
+                    value={form.periode_id}
+                    onChange={(e) => setForm({ ...form, periode_id: e.target.value })}
+                    className="w-full border rounded-lg p-2"
+                  >
+                    <option value="">-- Choisir un créneau horaire --</option>
+                    {periodes.filter((p) => !p.est_pause).map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.heure_debut.slice(0, 5)} - {p.heure_fin.slice(0, 5)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Matière</label>
+                  <select
+                    value={form.matiere_id}
+                    onChange={(e) => setForm({ ...form, matiere_id: e.target.value })}
+                    className="w-full border rounded-lg p-2"
+                  >
+                    <option value="">-- Choisir --</option>
+                    {matieres.map((m) => (
+                      <option key={m.id} value={m.id}>{m.nom}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Enseignant</label>
+                  <select
+                    value={form.enseignant_id}
+                    onChange={(e) => setForm({ ...form, enseignant_id: e.target.value })}
+                    className="w-full border rounded-lg p-2"
+                  >
+                    <option value="">-- Choisir --</option>
+                    {enseignants.map((e) => (
+                      <option key={e.id} value={e.id}>{e.nom} {e.prenom}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Salle (optionnel)</label>
+                  <input
+                    type="text"
+                    value={form.salle}
+                    onChange={(e) => setForm({ ...form, salle: e.target.value })}
+                    className="w-full border rounded-lg p-2"
+                    placeholder="Ex: SCL3, LABO PC, BIB/CDI"
+                  />
+                </div>
+
+                <button
+                  onClick={validerForm}
+                  disabled={saving}
+                  className="w-full bg-green-600 text-white py-2.5 rounded-lg font-medium disabled:opacity-50"
+                >
+                  {saving ? 'Enregistrement...' : editingId ? 'Enregistrer les modifications' : 'Ajouter'}
+                </button>
+              </div>
+            )}
+
+            {loading && <p className="text-gray-500">Chargement...</p>}
+          </>
+        )}
       </div>
 
-      {message && (
-        <div className={`p-3 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-          {message.text}
-        </div>
-      )}
+      {/* APERCU IMPRIMABLE - format officiel "Emploi du temps classe" */}
+      {classeId && classeSelectionnee && periodes.length > 0 && etablissement && (
+        <div className="space-y-3 border-t pt-4">
+          <div className="text-center text-xs font-bold leading-tight">
+            <div>MINISTÈRE DE L'ÉDUCATION NATIONALE ET DE L'ALPHABÉTISATION</div>
+            {etablissement.dren && <div>DRENA {etablissement.dren.toUpperCase()}</div>}
+          </div>
 
-      {classeId && !classeSelectionnee?.cycle && (
-        <div className="p-3 rounded-lg text-sm bg-orange-50 text-orange-700 border border-orange-200">
-          Cette classe n'a pas de cycle défini, impossible de charger la grille horaire.
-        </div>
-      )}
-
-      {classeId && classeSelectionnee?.cycle && periodes.length === 0 && (
-        <div className="p-3 rounded-lg text-sm bg-orange-50 text-orange-700 border border-orange-200">
-          Aucune période définie pour le cycle "{classeSelectionnee.cycle}". Configurez d'abord la grille horaire.
-        </div>
-      )}
-
-      {classeId && periodes.length > 0 && (
-        <>
-          {!showForm && (
-            <button
-              onClick={ouvrirFormAjout}
-              className="w-full bg-gray-800 text-white py-2.5 rounded-lg font-medium"
-            >
-              + Ajouter un créneau
-            </button>
-          )}
-
-          {showForm && (
-            <div className="border rounded-lg p-3 space-y-3 bg-gray-50">
-              <div className="flex justify-between items-center">
-                <span className="font-medium text-sm text-gray-700">
-                  {editingId ? 'Modifier le créneau' : 'Nouveau créneau'}
-                </span>
-                <button onClick={annulerForm} className="text-sm text-gray-500">Annuler</button>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Jour</label>
-                <select
-                  value={form.jour}
-                  onChange={(e) => setForm({ ...form, jour: e.target.value })}
-                  className="w-full border rounded-lg p-2"
-                >
-                  {JOURS.map((j) => (
-                    <option key={j} value={j}>{JOURS_LABEL[j]}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Période</label>
-                <select
-                  value={form.periode_id}
-                  onChange={(e) => setForm({ ...form, periode_id: e.target.value })}
-                  className="w-full border rounded-lg p-2"
-                >
-                  <option value="">-- Choisir un créneau horaire --</option>
-                  {periodes.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.heure_debut.slice(0, 5)} - {p.heure_fin.slice(0, 5)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Matière</label>
-                <select
-                  value={form.matiere_id}
-                  onChange={(e) => setForm({ ...form, matiere_id: e.target.value })}
-                  className="w-full border rounded-lg p-2"
-                >
-                  <option value="">-- Choisir --</option>
-                  {matieres.map((m) => (
-                    <option key={m.id} value={m.id}>{m.nom}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Enseignant</label>
-                <select
-                  value={form.enseignant_id}
-                  onChange={(e) => setForm({ ...form, enseignant_id: e.target.value })}
-                  className="w-full border rounded-lg p-2"
-                >
-                  <option value="">-- Choisir --</option>
-                  {enseignants.map((e) => (
-                    <option key={e.id} value={e.id}>{e.nom} {e.prenom}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Salle (optionnel)</label>
-                <input
-                  type="text"
-                  value={form.salle}
-                  onChange={(e) => setForm({ ...form, salle: e.target.value })}
-                  className="w-full border rounded-lg p-2"
-                  placeholder="Ex: SCL3, LABO PC, BIB/CDI"
-                />
-              </div>
-
-              <button
-                onClick={validerForm}
-                disabled={saving}
-                className="w-full bg-green-600 text-white py-2.5 rounded-lg font-medium disabled:opacity-50"
-              >
-                {saving ? 'Enregistrement...' : editingId ? 'Enregistrer les modifications' : 'Ajouter'}
-              </button>
+          <div className="flex justify-between items-start text-sm border-b pb-2">
+            <div>
+              <div className="font-bold">{etablissement.nom}</div>
+              {etablissement.telephone && <div className="text-xs">Tél : {etablissement.telephone}</div>}
+              {etablissement.adresse && <div className="text-xs">{etablissement.adresse}</div>}
             </div>
-          )}
+            <div className="text-right text-xs">
+              <div>Année Scolaire : {classeSelectionnee.annee_scolaire || '—'}</div>
+              {etablissement.code_etablissement && <div>Code : {etablissement.code_etablissement}</div>}
+              {etablissement.type_etablissement && <div>Statut : {etablissement.type_etablissement}</div>}
+            </div>
+          </div>
 
-          {loading && <p className="text-gray-500">Chargement...</p>}
+          <h2 className="text-center font-bold text-lg border py-1">
+            EMPLOI DU TEMPS CLASSE : {classeSelectionnee.nom.toUpperCase()}
+          </h2>
 
-          {!loading && JOURS.map((jour) => {
+          <div className="text-sm">
+            <strong>PROFESSEUR PRINCIPAL :</strong>{' '}
+            {profPrincipal
+              ? `${profPrincipal.nom} ${profPrincipal.prenom}${profPrincipal.specialite ? ` (Professeur de ${profPrincipal.specialite})` : ''}`
+              : 'Non désigné'}
+          </div>
+          <div className="text-sm">
+            <strong>NOMBRE HEURES DE COURS PAR SEMAINE =</strong> {totalHeuresSemaine}H
+    </div>
+
+          <div className="overflow-x-auto">
+            <table className="edt-table w-full border-collapse">
+              <thead>
+                <tr>
+                  <th>HORAIRES</th>
+                  {joursAffiches.map((j) => (
+                    <th key={j}>{JOURS_LABEL_MAJ[j]}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {periodes.map((p) => {
+                  if (p.est_pause) {
+                    return (
+                      <tr key={p.id} className="pause-row">
+                        <td>{p.heure_debut.slice(0, 5)} - {p.heure_fin.slice(0, 5)}</td>
+                        <td colSpan={joursAffiches.length}>{p.libelle}</td>
+                      </tr>
+                    );
+                  }
+                  return (
+                    <tr key={p.id}>
+                      <td>{p.heure_debut.slice(0, 5)} - {p.heure_fin.slice(0, 5)}</td>
+                      {joursAffiches.map((j) => {
+                        const c = trouverCreneau(j, p.heure_debut, p.heure_fin);
+                        return (
+                          <td key={j}>
+                            {c ? (
+                              <>
+                                <div>{c.matieres?.nom}</div>
+                                {c.salle && <div className="text-[9px] text-gray-600">{c.salle}</div>}
+                                {c.profiles && <div className="text-[9px] text-gray-500">{c.profiles.nom} {c.profiles.prenom?.charAt(0)}.</div>}
+                              </>
+                            ) : ''}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Liste des creneaux existants avec actions modifier/supprimer - no-print */}
+      {classeId && periodes.length > 0 && !loading && (
+        <div className="no-print space-y-3 border-t pt-4">
+          <h3 className="font-semibold text-gray-700">Gérer les créneaux (modifier/supprimer)</h3>
+          {JOURS.map((jour) => {
             const creneauxJour = creneaux.filter((c) => c.jour === jour);
             if (creneauxJour.length === 0) return null;
             return (
               <div key={jour} className="space-y-2">
-                <h2 className="font-semibold text-gray-700">{JOURS_LABEL[jour]}</h2>
+                <h4 className="font-medium text-sm text-gray-600">{JOURS_LABEL[jour]}</h4>
                 {creneauxJour.map((c) => (
                   <div key={c.id} className="border rounded-lg p-3 flex justify-between items-start">
                     <div>
@@ -448,23 +620,18 @@ function EmploiDuTempsContenu() {
                       </div>
                     </div>
                     <div className="flex gap-3 text-sm">
-                      <button onClick={() => ouvrirFormEdition(c)} className="text-blue-600">
-                        Modifier
-                      </button>
-                      <button onClick={() => supprimerCreneau(c.id)} className="text-red-600">
-                        Supprimer
-                      </button>
+                      <button onClick={() => ouvrirFormEdition(c)} className="text-blue-600">Modifier</button>
+                      <button onClick={() => supprimerCreneau(c.id)} className="text-red-600">Supprimer</button>
                     </div>
                   </div>
                 ))}
               </div>
             );
           })}
-
-          {!loading && creneaux.length === 0 && (
+          {creneaux.length === 0 && (
             <p className="text-gray-500 text-sm">Aucun créneau pour cette classe.</p>
           )}
-        </>
+        </div>
       )}
     </div>
   );
@@ -476,4 +643,4 @@ export default function EmploiDuTempsDirectionPage() {
       <EmploiDuTempsContenu />
     </Suspense>
   );
-            }
+                            }

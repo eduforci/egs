@@ -24,6 +24,15 @@ const JOURS_LABEL: Record<string, string> = {
   jeudi: 'Jeudi', vendredi: 'Vendredi', samedi: 'Samedi',
 };
 
+const FORM_VIDE = {
+  jour: 'lundi',
+  heure_debut: '08:00',
+  heure_fin: '09:00',
+  matiere_id: '',
+  enseignant_id: '',
+  salle: '',
+};
+
 export default function EmploiDuTempsDirectionPage() {
   const supabase = createClient();
 
@@ -35,18 +44,11 @@ export default function EmploiDuTempsDirectionPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const [form, setForm] = useState({
-    jour: 'lundi',
-    heure_debut: '08:00',
-    heure_fin: '09:00',
-    matiere_id: '',
-    enseignant_id: '',
-    salle: '',
-  });
+  const [form, setForm] = useState(FORM_VIDE);
 
-  // Charger les classes de l'établissement
   useEffect(() => {
     const load = async () => {
       const { data: userData } = await supabase.auth.getUser();
@@ -75,7 +77,6 @@ export default function EmploiDuTempsDirectionPage() {
     load();
   }, [supabase]);
 
-  // Charger matieres + enseignants disponibles pour la classe selectionnee
   useEffect(() => {
     const loadRelated = async () => {
       if (!classeId) return;
@@ -109,7 +110,6 @@ export default function EmploiDuTempsDirectionPage() {
     loadRelated();
   }, [classeId, supabase]);
 
-  // Charger les creneaux existants
   const chargerCreneaux = useCallback(async () => {
     if (!classeId) return;
     setLoading(true);
@@ -132,7 +132,34 @@ export default function EmploiDuTempsDirectionPage() {
     chargerCreneaux();
   }, [chargerCreneaux]);
 
-  const ajouterCreneau = async () => {
+  const ouvrirFormAjout = () => {
+    setEditingId(null);
+    setForm(FORM_VIDE);
+    setShowForm(true);
+    setMessage(null);
+  };
+
+  const ouvrirFormEdition = (c: Creneau) => {
+    setEditingId(c.id);
+    setForm({
+      jour: c.jour,
+      heure_debut: c.heure_debut.slice(0, 5),
+      heure_fin: c.heure_fin.slice(0, 5),
+      matiere_id: c.matiere_id,
+      enseignant_id: c.enseignant_id,
+      salle: c.salle || '',
+    });
+    setShowForm(true);
+    setMessage(null);
+  };
+
+  const annulerForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setForm(FORM_VIDE);
+  };
+
+  const validerForm = async () => {
     setSaving(true);
     setMessage(null);
 
@@ -148,12 +175,12 @@ export default function EmploiDuTempsDirectionPage() {
       return;
     }
 
-    // Verifier les conflits via les fonctions RPC
     const { data: conflitEns } = await supabase.rpc('enseignant_en_conflit', {
       p_enseignant_id: form.enseignant_id,
       p_jour: form.jour,
       p_heure_debut: form.heure_debut,
       p_heure_fin: form.heure_fin,
+      p_exclude_id: editingId,
     });
 
     if (conflitEns) {
@@ -167,6 +194,7 @@ export default function EmploiDuTempsDirectionPage() {
       p_jour: form.jour,
       p_heure_debut: form.heure_debut,
       p_heure_fin: form.heure_fin,
+      p_exclude_id: editingId,
     });
 
     if (conflitClasse) {
@@ -175,33 +203,57 @@ export default function EmploiDuTempsDirectionPage() {
       return;
     }
 
-    const { data: userData } = await supabase.auth.getUser();
-    const { data: profil } = await supabase
-      .from('profiles')
-      .select('etablissement_id')
-      .eq('id', userData?.user?.id)
-      .single();
+    if (editingId) {
+      // Modification d'un créneau existant
+      const { error } = await supabase
+        .from('emploi_du_temps')
+        .update({
+          matiere_id: form.matiere_id,
+          enseignant_id: form.enseignant_id,
+          jour: form.jour,
+          heure_debut: form.heure_debut,
+          heure_fin: form.heure_fin,
+          salle: form.salle || null,
+        })
+        .eq('id', editingId);
 
-    const { error } = await supabase.from('emploi_du_temps').insert({
-      etablissement_id: profil?.etablissement_id,
-      classe_id: classeId,
-      matiere_id: form.matiere_id,
-      enseignant_id: form.enseignant_id,
-      jour: form.jour,
-      heure_debut: form.heure_debut,
-      heure_fin: form.heure_fin,
-      salle: form.salle || null,
-    });
+      if (error) {
+        setMessage({ type: 'error', text: 'Erreur modification: ' + error.message });
+        setSaving(false);
+        return;
+      }
+      setMessage({ type: 'success', text: 'Créneau modifié.' });
+    } else {
+      // Ajout d'un nouveau créneau
+      const { data: userData } = await supabase.auth.getUser();
+      const { data: profil } = await supabase
+        .from('profiles')
+        .select('etablissement_id')
+        .eq('id', userData?.user?.id)
+        .single();
 
-    if (error) {
-      setMessage({ type: 'error', text: "Erreur ajout: " + error.message });
-      setSaving(false);
-      return;
+      const { error } = await supabase.from('emploi_du_temps').insert({
+        etablissement_id: profil?.etablissement_id,
+        classe_id: classeId,
+        matiere_id: form.matiere_id,
+        enseignant_id: form.enseignant_id,
+        jour: form.jour,
+        heure_debut: form.heure_debut,
+        heure_fin: form.heure_fin,
+        salle: form.salle || null,
+      });
+
+      if (error) {
+        setMessage({ type: 'error', text: "Erreur ajout: " + error.message });
+        setSaving(false);
+        return;
+      }
+      setMessage({ type: 'success', text: 'Créneau ajouté.' });
     }
 
-    setMessage({ type: 'success', text: 'Créneau ajouté.' });
-    setForm({ jour: 'lundi', heure_debut: '08:00', heure_fin: '09:00', matiere_id: '', enseignant_id: '', salle: '' });
+    setForm(FORM_VIDE);
     setShowForm(false);
+    setEditingId(null);
     setSaving(false);
     chargerCreneaux();
   };
@@ -212,6 +264,7 @@ export default function EmploiDuTempsDirectionPage() {
       setMessage({ type: 'error', text: 'Erreur suppression: ' + error.message });
       return;
     }
+    if (editingId === id) annulerForm();
     chargerCreneaux();
   };
 
@@ -223,7 +276,7 @@ export default function EmploiDuTempsDirectionPage() {
         <label className="block text-sm font-medium mb-1">Classe</label>
         <select
           value={classeId}
-          onChange={(e) => setClasseId(e.target.value)}
+          onChange={(e) => { setClasseId(e.target.value); annulerForm(); }}
           className="w-full border rounded-lg p-2"
         >
           <option value="">-- Sélectionner une classe --</option>
@@ -241,15 +294,24 @@ export default function EmploiDuTempsDirectionPage() {
 
       {classeId && (
         <>
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="w-full bg-gray-800 text-white py-2.5 rounded-lg font-medium"
-          >
-            {showForm ? 'Annuler' : '+ Ajouter un créneau'}
-          </button>
+          {!showForm && (
+            <button
+              onClick={ouvrirFormAjout}
+              className="w-full bg-gray-800 text-white py-2.5 rounded-lg font-medium"
+            >
+              + Ajouter un créneau
+            </button>
+          )}
 
           {showForm && (
             <div className="border rounded-lg p-3 space-y-3 bg-gray-50">
+              <div className="flex justify-between items-center">
+                <span className="font-medium text-sm text-gray-700">
+                  {editingId ? 'Modifier le créneau' : 'Nouveau créneau'}
+                </span>
+                <button onClick={annulerForm} className="text-sm text-gray-500">Annuler</button>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium mb-1">Jour</label>
                 <select
@@ -324,11 +386,11 @@ export default function EmploiDuTempsDirectionPage() {
               </div>
 
               <button
-                onClick={ajouterCreneau}
+                onClick={validerForm}
                 disabled={saving}
                 className="w-full bg-green-600 text-white py-2.5 rounded-lg font-medium disabled:opacity-50"
               >
-                {saving ? 'Ajout...' : 'Ajouter'}
+                {saving ? 'Enregistrement...' : editingId ? 'Enregistrer les modifications' : 'Ajouter'}
               </button>
             </div>
           )}
@@ -350,12 +412,14 @@ export default function EmploiDuTempsDirectionPage() {
                         {c.profiles?.nom} {c.profiles?.prenom}{c.salle ? ` — ${c.salle}` : ''}
                       </div>
                     </div>
-                    <button
-                      onClick={() => supprimerCreneau(c.id)}
-                      className="text-red-600 text-sm"
-                    >
-                      Supprimer
-                    </button>
+                    <div className="flex gap-3 text-sm">
+                      <button onClick={() => ouvrirFormEdition(c)} className="text-blue-600">
+                        Modifier
+                      </button>
+                      <button onClick={() => supprimerCreneau(c.id)} className="text-red-600">
+                        Supprimer
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -369,4 +433,4 @@ export default function EmploiDuTempsDirectionPage() {
       )}
     </div>
   );
-        }
+    }

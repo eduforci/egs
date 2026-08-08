@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
@@ -35,7 +35,7 @@ const FORM_VIDE = {
   salle: '',
 };
 
-export default function EmploiDuTempsDirectionPage() {
+function EmploiDuTempsContenu() {
   const supabase = createClient();
   const searchParams = useSearchParams();
 
@@ -83,7 +83,6 @@ export default function EmploiDuTempsDirectionPage() {
     load();
   }, [supabase]);
 
-  // Charger matieres, enseignants et periodes fixes (selon le cycle de la classe)
   useEffect(() => {
     const loadRelated = async () => {
       if (!classeId || !classeSelectionnee) return;
@@ -469,4 +468,12 @@ export default function EmploiDuTempsDirectionPage() {
       )}
     </div>
   );
-    }
+}
+
+export default function EmploiDuTempsDirectionPage() {
+  return (
+    <Suspense fallback={<p className="p-4 text-gray-500">Chargement...</p>}>
+      <EmploiDuTempsContenu />
+    </Suspense>
+  );
+            }

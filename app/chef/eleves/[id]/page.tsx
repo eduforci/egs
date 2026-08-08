@@ -156,11 +156,13 @@ export default function FicheElevePage() {
   async function enregistrerFiche() {
     setError(null);
     setMessage(null);
-    const { error: updateError } = await supabase
-      .from("eleves")
-      .update({ adresse: adresse || null, photo_url: photoUrl || null, statut })
-      .eq("id", eleveId);
-    if (updateError) { setError(updateError.message); return; }
+    const res = await fetch("/api/chef/modifier-eleve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eleveId, adresse, photoUrl, statut }),
+    });
+    const data = await res.json();
+    if (!res.ok) { setError(data.error || "Erreur lors de la mise à jour."); return; }
     setMessage("Fiche mise à jour.");
   }
 

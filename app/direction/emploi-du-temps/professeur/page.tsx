@@ -9,7 +9,6 @@ type Enseignant = {
   sexe: string | null;
   specialite: string | null;
   statut: string | null;
-  date_embauche: string | null;
   nom: string;
   prenom: string;
   telephone: string | null;
@@ -20,7 +19,8 @@ type Creneau = {
   heure_debut: string;
   heure_fin: string;
   salle: string | null;
-  classes?: { nom: string };
+  classe_id: string;
+  classes?: { nom: string; cycle: string | null; annee_scolaire: string | null };
   matieres?: { nom: string };
 };
 
@@ -36,8 +36,17 @@ type LigneRecap = {
 
 type ComplementService = { id: string; type: string; heures: number; classes?: { nom: string } };
 
+type Etablissement = {
+  nom: string;
+  adresse: string | null;
+  telephone: string | null;
+  code_etablissement: string | null;
+  dren: string | null;
+  type_etablissement: string | null;
+};
+
 const JOURS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
-const JOURS_LABEL: Record<string, string> = {
+const JOURS_LABEL_MAJ: Record<string, string> = {
   lundi: 'LUNDI', mardi: 'MARDI', mercredi: 'MERCREDI',
   jeudi: 'JEUDI', vendredi: 'VENDREDI', samedi: 'SAMEDI',
 };
@@ -51,7 +60,7 @@ export default function EmploiDuTempsProfesseurPage() {
   const [periodes, setPeriodes] = useState<Periode[]>([]);
   const [recap, setRecap] = useState<LigneRecap[]>([]);
   const [complements, setComplements] = useState<ComplementService[]>([]);
-  const [etablissementNom, setEtablissementNom] = useState('');
+  const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
   const [anneeScolaire, setAnneeScolaire] = useState('');
   const [loading, setLoading] = useState(false);
   const [erreur, setErreur] = useState('');
@@ -71,14 +80,14 @@ export default function EmploiDuTempsProfesseurPage() {
 
       const { data: etab } = await supabase
         .from('etablissements')
-        .select('nom')
+        .select('nom, adresse, telephone, code_etablissement, dren, type_etablissement')
         .eq('id', profil.etablissement_id)
         .single();
-      setEtablissementNom(etab?.nom || '');
+      setEtablissement(etab || null);
 
       const { data: ens, error } = await supabase
         .from('enseignants')
-        .select('id, matricule, sexe, specialite, statut, date_embauche, profiles(nom, prenom, telephone)')
+        .select('id, matricule, sexe, specialite, statut')
         .eq('etablissement_id', profil.etablissement_id);
 
       if (error) {
@@ -86,17 +95,39 @@ export default function EmploiDuTempsProfesseurPage() {
         return;
       }
 
-      const liste: Enseignant[] = (ens || []).map((e: any) => ({
-        id: e.id,
-        matricule: e.matricule,
-        sexe: e.sexe,
-        specialite: e.specialite,
-        statut: e.statut,
-        date_embauche: e.date_embauche,
-        nom: e.profiles?.nom ?? '',
-        prenom: e.profiles?.prenom ?? '',
-        telephone: e.profiles?.telephone ?? null,
-      })).sort((a, b) => a.nom.localeCompare(b.nom));
+      if (!ens || ens.length === 0) {
+        setEnseignants([]);
+        return;
+      }
+
+      const idsEns = ens.map((e) => e.id);
+      const { data: profs, error: profsError } = await supabase
+        .from('profiles')
+        .select('id, nom, prenom, telephone')
+        .in('id', idsEns);
+
+      if (profsError) {
+        setErreur(profsError.message);
+        return;
+      }
+
+      const profsParId = new Map((profs || []).map((p) => [p.id, p]));
+
+      const liste: Enseignant[] = ens
+        .map((e) => {
+          const p = profsParId.get(e.id);
+          return {
+            id: e.id,
+            matricule: e.matricule,
+            sexe: e.sexe,
+            specialite: e.specialite,
+            statut: e.statut,
+            nom: p?.nom ?? '',
+            prenom: p?.prenom ?? '',
+            telephone: p?.telephone ?? null,
+          };
+        })
+        .sort((a, b) => a.nom.localeCompare(b.nom));
 
       setEnseignants(liste);
     };
@@ -110,7 +141,7 @@ export default function EmploiDuTempsProfesseurPage() {
 
     const { data: creneauxData, error: creneauxError } = await supabase
       .from('emploi_du_temps')
-      .select('jour, heure_debut, heure_fin, salle, classes(nom, cycle), matieres(nom)')
+      .select('jour, heure_debut, heure_fin, salle, classe_id, classes(nom, cycle, annee_scolaire), matieres(nom)')
       .eq('enseignant_id', enseignantId)
       .order('heure_debut');
 
@@ -120,10 +151,12 @@ export default function EmploiDuTempsProfesseurPage() {
       return;
     }
 
-    setCreneaux((creneauxData as any) || []);
+    const liste = (creneauxData as any) || [];
+    setCreneaux(liste);
 
-    // Determiner le cycle de reference (premiere classe trouvee) pour charger la bonne grille
-    const cycleReference = (creneauxData as any)?.[0]?.classes?.cycle;
+    const cycleReference = liste[0]?.classes?.cycle;
+    const anneeRef = liste[0]?.classes?.annee_scolaire || new Date().getFullYear().toString();
+    setAnneeScolaire(anneeRef);
 
     const { data: userData } = await supabase.auth.getUser();
     const { data: profil } = await supabase
@@ -144,29 +177,18 @@ export default function EmploiDuTempsProfesseurPage() {
       setPeriodes([]);
     }
 
-    // Annee scolaire (prend celle de la premiere classe trouvee, sinon vide)
-    const { data: classesData } = await supabase
-      .from('classes')
-      .select('annee_scolaire')
-      .eq('id', (creneauxData as any)?.[0]?.classe_id)
-      .maybeSingle();
-    const annee = classesData?.annee_scolaire || new Date().getFullYear().toString();
-    setAnneeScolaire(annee);
-
-    // Recapitulatif via la fonction RPC
     const { data: recapData, error: recapError } = await supabase.rpc('recapitulatif_enseignant', {
       p_enseignant_id: enseignantId,
-      p_annee_scolaire: annee,
+      p_annee_scolaire: anneeRef,
     });
 
     if (!recapError) setRecap(recapData || []);
 
-    // Complement de service
     const { data: compData } = await supabase
       .from('complement_service')
       .select('id, type, heures, classes(nom)')
       .eq('enseignant_id', enseignantId)
-      .eq('annee_scolaire', annee);
+      .eq('annee_scolaire', anneeRef);
     setComplements((compData as any) || []);
 
     setLoading(false);
@@ -184,11 +206,11 @@ export default function EmploiDuTempsProfesseurPage() {
     );
   };
 
-  const joursUtilises = JOURS.filter((j) => creneaux.some((c) => c.jour === j) || j !== 'samedi');
   const joursAffiches = JOURS.slice(0, 5).concat(creneaux.some((c) => c.jour === 'samedi') ? ['samedi'] : []);
 
-  const totalHeures = recap.reduce((sum, r) => sum + Number(r.heures_semaine || 0), 0);
+  const totalHeuresRecap = recap.reduce((sum, r) => sum + Number(r.heures_semaine || 0), 0);
   const pp = complements.filter((c) => c.type === 'PP');
+  const autresComplements = complements.filter((c) => c.type !== 'PP');
 
   return (
     <div className="max-w-5xl mx-auto p-4 space-y-4">
@@ -201,7 +223,7 @@ export default function EmploiDuTempsProfesseurPage() {
         table.edt-table th, table.edt-table td {
           border: 1px solid #999;
           padding: 4px;
-          font-size: 11px;
+          font-size: 10px;
           text-align: center;
         }
         table.edt-table th { background: #e5e5e5; font-weight: bold; }
@@ -233,7 +255,7 @@ export default function EmploiDuTempsProfesseurPage() {
         {enseignantId && (
           <button
             onClick={() => window.print()}
-            className="w-full bg-gray-800 text-white py-2.5 rounded-lg font-medium"
+            className="w-full bg-green-600 text-white py-2.5 rounded-lg font-medium"
           >
             🖨️ Imprimer / Exporter en PDF
           </button>
@@ -242,23 +264,33 @@ export default function EmploiDuTempsProfesseurPage() {
 
       {loading && <p className="text-gray-500">Chargement...</p>}
 
-      {!loading && enseignant && (
-        <div className="space-y-4">
-          {/* En-tete document */}
-          <div className="border-b pb-3">
-            <div className="flex justify-between items-start text-sm">
-              <div>
-                <div className="font-bold text-lg">{etablissementNom}</div>
-              </div>
-              <div className="text-right">
-                <div>Année Scolaire : {anneeScolaire}</div>
-              </div>
+      {!loading && enseignant && etablissement && (
+        <div className="space-y-3">
+          <div className="text-center text-xs font-bold leading-tight">
+            <div>MINISTÈRE DE L'ÉDUCATION NATIONALE ET DE L'ALPHABÉTISATION</div>
+            {etablissement.dren && <div>DRENA {etablissement.dren.toUpperCase()}</div>}
+          </div>
+
+          <div className="flex justify-between items-start text-sm border-b pb-2">
+            <div>
+              <div className="font-bold">{etablissement.nom}</div>
+              {etablissement.telephone && <div className="text-xs">Tél : {etablissement.telephone}</div>}
+              {etablissement.adresse && <div className="text-xs">{etablissement.adresse}</div>}
             </div>
-            <h2 className="text-center font-bold text-xl mt-2 border py-1">EMPLOI DU TEMPS PROFESSEUR</h2>
-            <h3 className="font-bold text-lg mt-2">
+            <div className="text-right text-xs">
+              <div>Année Scolaire : {anneeScolaire}</div>
+              {etablissement.code_etablissement && <div>Code : {etablissement.code_etablissement}</div>}
+              {etablissement.type_etablissement && <div>Statut : {etablissement.type_etablissement}</div>}
+            </div>
+          </div>
+
+          <h2 className="text-center font-bold text-lg border py-1">EMPLOI DU TEMPS PROFESSEUR</h2>
+
+          <div>
+            <h3 className="font-bold text-base">
               M. {enseignant.nom} {enseignant.prenom} {enseignant.specialite ? `(${enseignant.specialite.toUpperCase()})` : ''}
             </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm mt-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm mt-1">
               <div><strong>Matricule:</strong> {enseignant.matricule}</div>
               <div><strong>Sexe:</strong> {enseignant.sexe || '—'}</div>
               <div><strong>Statut:</strong> {enseignant.statut || '—'}</div>
@@ -266,15 +298,14 @@ export default function EmploiDuTempsProfesseurPage() {
             </div>
             {pp.length > 0 && (
               <div className="text-sm mt-1">
-                <strong>Professeur principal:</strong> {pp.map((p) => p.classes?.nom).join(', ')}
+                <strong>Professeur principal :</strong> {pp.map((p) => p.classes?.nom).join(', ')}
               </div>
             )}
           </div>
 
-          {/* Grille horaire */}
           {periodes.length === 0 ? (
             <p className="text-gray-500 text-sm">
-              Aucune grille horaire disponible (le cycle des classes de cet enseignant n'a pas de créneaux configurés).
+              Aucune grille horaire disponible pour cet enseignant (pas de créneau créé, ou cycle sans grille configurée).
             </p>
           ) : (
             <div className="overflow-x-auto">
@@ -283,7 +314,7 @@ export default function EmploiDuTempsProfesseurPage() {
                   <tr>
                     <th>HORAIRES</th>
                     {joursAffiches.map((j) => (
-                      <th key={j}>{JOURS_LABEL[j]}</th>
+                      <th key={j}>{JOURS_LABEL_MAJ[j]}</th>
                     ))}
                   </tr>
                 </thead>
@@ -306,8 +337,8 @@ export default function EmploiDuTempsProfesseurPage() {
                             <td key={j}>
                               {c ? (
                                 <>
-                                  {c.classes?.nom} {c.matieres?.nom}
-                                  {c.salle ? ` (${c.salle})` : ''}
+                                  <div>{c.classes?.nom} {c.matieres?.nom}</div>
+                                  {c.salle && <div className="text-[9px] text-gray-600">{c.salle}</div>}
                                 </>
                               ) : ''}
                             </td>
@@ -321,52 +352,53 @@ export default function EmploiDuTempsProfesseurPage() {
             </div>
           )}
 
-          {/* Tableau recapitulatif */}
-          <div>
-            <h3 className="font-bold mb-2">TABLEAU RECAPITULATIF</h3>
-            <div className="overflow-x-auto">
-              <table className="edt-table w-full border-collapse">
-                <thead>
-                  <tr>
-                    <th>CLASSES</th>
-                    {recap.map((r) => (
-                      <th key={r.classe_id + r.matiere_nom}>{r.classe_nom}</th>
-                    ))}
-                    <th>TOTAL</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className="text-left font-medium">EFFECTIFS</td>
-                    {recap.map((r) => (
-                      <td key={r.classe_id + 'eff'}>{r.effectif}</td>
-                    ))}
-                    <td>—</td>
-                  </tr>
-                  <tr>
-                    <td className="text-left font-medium">DISCIPLINES</td>
-                    {recap.map((r) => (
-                      <td key={r.classe_id + 'disc'}>{r.matiere_nom}</td>
-                    ))}
-                    <td>—</td>
-                  </tr>
-                  <tr>
-                    <td className="text-left font-medium">HEURES D'ENSEIG.</td>
-                    {recap.map((r) => (
-                      <td key={r.classe_id + 'h'}>{r.heures_semaine}H</td>
-                    ))}
-                    <td className="font-bold">{totalHeures}H</td>
-                  </tr>
-                </tbody>
-              </table>
+          {recap.length > 0 && (
+            <div>
+              <h3 className="font-bold mb-2">TABLEAU RÉCAPITULATIF</h3>
+              <div className="overflow-x-auto">
+                <table className="edt-table w-full border-collapse">
+                  <thead>
+                    <tr>
+                      <th>CLASSES</th>
+                      {recap.map((r) => (
+                        <th key={r.classe_id + r.matiere_nom}>{r.classe_nom}</th>
+                      ))}
+                      <th>TOTAL</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="text-left font-medium">EFFECTIFS</td>
+                      {recap.map((r) => (
+                        <td key={r.classe_id + 'eff'}>{r.effectif}</td>
+                      ))}
+                      <td>—</td>
+                    </tr>
+                    <tr>
+                      <td className="text-left font-medium">DISCIPLINES</td>
+                      {recap.map((r) => (
+                        <td key={r.classe_id + 'disc'}>{r.matiere_nom}</td>
+                      ))}
+                      <td>—</td>
+                    </tr>
+                    <tr>
+                      <td className="text-left font-medium">HEURES D'ENSEIG.</td>
+                      {recap.map((r) => (
+                        <td key={r.classe_id + 'h'}>{r.heures_semaine}H</td>
+                      ))}
+                      <td className="font-bold">{totalHeuresRecap}H</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
 
-          {complements.length > 0 && (
+          {autresComplements.length > 0 && (
             <div>
               <h3 className="font-bold mb-2">COMPLÉMENT DE SERVICE</h3>
               <div className="flex flex-wrap gap-2">
-                {complements.map((c) => (
+                {autresComplements.map((c) => (
                   <div key={c.id} className="border rounded-lg px-3 py-1.5 text-sm">
                     {c.type} {c.classes?.nom ? `(${c.classes.nom})` : ''} — {c.heures}H
                   </div>
@@ -378,4 +410,4 @@ export default function EmploiDuTempsProfesseurPage() {
       )}
     </div>
   );
-    }
+}

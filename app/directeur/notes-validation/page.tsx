@@ -45,7 +45,7 @@ export default function NotesValidationPage() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [validating, setValidating] = useState(false);
 
-  const chargerCombos = useCallback(async () => {
+  const chargerCombos = useCallback(async (trimestreChoisi: number) => {
     setLoading(true);
     setMessage(null);
 
@@ -72,34 +72,11 @@ export default function NotesValidationPage() {
     const annee = etab?.annee_scolaire_active || new Date().getFullYear().toString();
     setAnneeScolaire(annee);
 
-    const aujourdHui = new Date().toISOString().slice(0, 10);
-    const { data: trimestreActif } = await supabase
-      .from('trimestres')
-      .select('numero')
-      .eq('etablissement_id', profil.etablissement_id)
-      .lte('date_debut', aujourdHui)
-      .gte('date_fin', aujourdHui)
-      .maybeSingle();
-
-    let trimestreNum = trimestreActif?.numero;
-    if (!trimestreNum) {
-      const { data: dernier } = await supabase
-        .from('trimestres')
-        .select('numero')
-        .eq('etablissement_id', profil.etablissement_id)
-        .order('numero', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      trimestreNum = dernier?.numero || 1;
-    }
-    setTrimestre(trimestreNum);
-
-    // Toutes les notes du trimestre pour cet etablissement
     const { data: notesData, error: notesError } = await supabase
       .from('notes')
       .select('classe_id, matiere_id, classes(nom), matieres(nom)')
       .eq('annee_scolaire', annee)
-      .eq('trimestre', trimestreNum);
+      .eq('trimestre', trimestreChoisi);
 
     if (notesError) {
       setMessage({ type: 'error', text: 'Erreur chargement notes: ' + notesError.message });
@@ -107,7 +84,6 @@ export default function NotesValidationPage() {
       return;
     }
 
-    // Regrouper par classe+matiere avec compte
     const grouped = new Map<string, { classe_id: string; classe_nom: string; matiere_id: string; matiere_nom: string; nb_notes: number }>();
     (notesData || []).forEach((n: any) => {
       const key = `${n.classe_id}__${n.matiere_id}`;
@@ -123,18 +99,16 @@ export default function NotesValidationPage() {
       grouped.get(key)!.nb_notes++;
     });
 
-    // Filtrer sur l'etablissement (via classes deja filtre implicitement car classes appartiennent a l'etab)
     const { data: validations } = await supabase
       .from('validations_notes')
       .select('classe_id, matiere_id, valide, valide_par, valide_at')
       .eq('annee_scolaire', annee)
-      .eq('trimestre', trimestreNum);
+      .eq('trimestre', trimestreChoisi);
 
     const validationsParKey = new Map(
       (validations || []).map((v) => [`${v.classe_id}__${v.matiere_id}`, v])
     );
 
-    // Recuperer les noms des valideurs
     const idsValideurs = (validations || []).filter((v) => v.valide_par).map((v) => v.valide_par);
     const { data: profilsValideurs } = idsValideurs.length > 0
       ? await supabase.from('profiles').select('id, nom, prenom').in('id', idsValideurs)
@@ -158,8 +132,8 @@ export default function NotesValidationPage() {
   }, [supabase]);
 
   useEffect(() => {
-    chargerCombos();
-  }, [chargerCombos]);
+    chargerCombos(trimestre);
+  }, [trimestre, chargerCombos]);
 
   const ouvrirDetail = async (combo: Combo) => {
     setComboOuverte(combo);
@@ -252,7 +226,7 @@ export default function NotesValidationPage() {
     setMessage({ type: 'success', text: 'Notes validées et verrouillées.' });
     setValidating(false);
     fermerDetail();
-    chargerCombos();
+    chargerCombos(trimestre);
   };
 
   const deverrouiller = async () => {
@@ -283,7 +257,7 @@ export default function NotesValidationPage() {
     setMessage({ type: 'success', text: 'Notes déverrouillées.' });
     setValidating(false);
     fermerDetail();
-    chargerCombos();
+    chargerCombos(trimestre);
   };
 
   const moyenneParEleve = (eleveId: string) => {
@@ -298,12 +272,26 @@ export default function NotesValidationPage() {
     .map((id) => notesDetail.find((n) => n.eleve_id === id)!)
     .sort((a, b) => a.eleve_nom.localeCompare(b.eleve_nom));
 
-  if (loading) return <p className="p-4 text-gray-500">Chargement...</p>;
-
   return (
     <div className="max-w-2xl mx-auto p-4 space-y-4">
       <h1 className="text-2xl font-bold">Notes à valider</h1>
-      <p className="text-sm text-gray-500">Trimestre {trimestre} — {anneeScolaire}</p>
+
+      {!comboOuverte && (
+        <div>
+          <label className="block text-sm font-medium mb-1">Trimestre</label>
+          <select
+            value={trimestre}
+            onChange={(e) => setTrimestre(parseInt(e.target.value))}
+            className="w-full border rounded-lg p-2"
+          >
+            <option value={1}>Trimestre 1</option>
+            <option value={2}>Trimestre 2</option>
+            <option value={3}>Trimestre 3</option>
+          </select>
+        </div>
+      )}
+
+      {anneeScolaire && <p className="text-sm text-gray-500">Année scolaire {anneeScolaire}</p>}
 
       {message && (
         <div className={`p-3 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
@@ -311,7 +299,9 @@ export default function NotesValidationPage() {
         </div>
       )}
 
-      {!comboOuverte && (
+      {loading && <p className="text-gray-500 text-sm">Chargement...</p>}
+
+      {!loading && !comboOuverte && (
         <div className="space-y-2">
           {combos.length === 0 && (
             <p className="text-gray-500 text-sm">Aucune note saisie pour ce trimestre.</p>
@@ -404,4 +394,4 @@ export default function NotesValidationPage() {
       )}
     </div>
   );
-      }
+                                    }

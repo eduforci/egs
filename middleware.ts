@@ -14,6 +14,11 @@ const ROLE_ROUTES: Record<string, string> = {
   "/educateur": "educateur",
 };
 
+// Exceptions : chemins normalement reserves a un role, mais accessibles aussi a d'autres roles
+const EXCEPTIONS: { prefix: string; rolesSupplementaires: string[] }[] = [
+  { prefix: "/chef/bulletins", rolesSupplementaires: ["directeur_etudes"] },
+];
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
 
@@ -65,7 +70,13 @@ export async function middleware(request: NextRequest) {
       .eq("id", user.id)
       .single();
 
-    if (profile?.role !== ROLE_ROUTES[matchedPrefix]) {
+    const roleRequis = ROLE_ROUTES[matchedPrefix];
+    const exception = EXCEPTIONS.find((ex) => path.startsWith(ex.prefix));
+    const rolesAutorises = exception
+      ? [roleRequis, ...exception.rolesSupplementaires]
+      : [roleRequis];
+
+    if (!profile?.role || !rolesAutorises.includes(profile.role)) {
       // Connecté, mais mauvais espace : renvoyé vers son propre tableau de bord
       return NextResponse.redirect(new URL("/login", request.url));
     }

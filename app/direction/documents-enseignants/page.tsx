@@ -49,16 +49,25 @@ const TITRES_DOCUMENT: Record<string, string> = {
   certificat_travail: 'CERTIFICAT DE TRAVAIL',
 };
 
+const TITRES_SIGNATAIRE = [
+  'Directeur des Études',
+  'Directrice des Études',
+  "Chef d'établissement",
+  'Directeur',
+  'Directrice',
+];
+
 export default function DocumentsEnseignantsPage() {
   const supabase = createClient();
 
   const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
   const [etablissementId, setEtablissementId] = useState('');
-  const [directeurEtudes, setDirecteurEtudes] = useState<{ nom: string; prenom: string } | null>(null);
   const [enseignants, setEnseignants] = useState<Enseignant[]>([]);
   const [enseignantId, setEnseignantId] = useState('');
   const [typeDocument, setTypeDocument] = useState('attestation_fin_contrat');
 
+  const [nomSignataire, setNomSignataire] = useState('');
+  const [titreSignataire, setTitreSignataire] = useState('Directeur des Études');
   const [poste, setPoste] = useState('');
   const [classesTenues, setClassesTenues] = useState('');
   const [dateDebut, setDateDebut] = useState('');
@@ -92,15 +101,6 @@ export default function DocumentsEnseignantsPage() {
         .single();
       setEtablissement(etab || null);
       setVilleSignature(etab?.ville || '');
-
-      const { data: de } = await supabase
-        .from('profiles')
-        .select('nom, prenom')
-        .eq('etablissement_id', profil.etablissement_id)
-        .eq('role', 'directeur_etudes')
-        .limit(1)
-        .maybeSingle();
-      setDirecteurEtudes(de || null);
 
       const { data: ens, error } = await supabase
         .from('enseignants')
@@ -178,6 +178,10 @@ export default function DocumentsEnseignantsPage() {
       setMessage({ type: 'error', text: 'Sélectionnez un enseignant.' });
       return;
     }
+    if (!nomSignataire.trim()) {
+      setMessage({ type: 'error', text: 'Indiquez le nom du signataire.' });
+      return;
+    }
     if (!dateDebut || !dateFin) {
       setMessage({ type: 'error', text: 'Précisez les dates de début et de fin.' });
       return;
@@ -214,6 +218,8 @@ export default function DocumentsEnseignantsPage() {
       date_debut_contrat: dateDebut,
       date_fin_contrat: dateFin,
       ville_signature: villeSignature.trim() || null,
+      nom_signataire: nomSignataire.trim(),
+      titre_signataire: titreSignataire,
       genere_par: userData?.user?.id,
     };
 
@@ -234,7 +240,7 @@ export default function DocumentsEnseignantsPage() {
     chargerHistorique();
   };
 
-  const reimprimer = (doc: DocumentGenere) => {
+  const reimprimer = (doc: any) => {
     setDocumentGenere(doc);
     setTimeout(() => window.print(), 200);
   };
@@ -288,8 +294,36 @@ export default function DocumentsEnseignantsPage() {
               </select>
             </div>
 
+            <div className="border-t pt-3">
+              <p className="text-sm font-medium text-gray-700 mb-2">Signataire</p>
+              <div className="grid grid-cols-1 gap-2">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Nom complet du signataire</label>
+                  <input
+                    type="text"
+                    value={nomSignataire}
+                    onChange={(e) => setNomSignataire(e.target.value)}
+                    className="w-full border rounded-lg p-2"
+                    placeholder="Ex: Gueugba Manha Herman"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Titre du signataire</label>
+                  <select
+                    value={titreSignataire}
+                    onChange={(e) => setTitreSignataire(e.target.value)}
+                    className="w-full border rounded-lg p-2"
+                  >
+                    {TITRES_SIGNATAIRE.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
             <div>
-              <label className="block text-sm font-medium mb-1">Poste occupé</label>
+              <label className="block text-sm font-medium mb-1">Poste occupé (par l'enseignant)</label>
               <input
                 type="text"
                 value={poste}
@@ -307,7 +341,7 @@ export default function DocumentsEnseignantsPage() {
                   value={classesTenues}
                   onChange={(e) => setClassesTenues(e.target.value)}
                   className="w-full border rounded-lg p-2"
-                  placeholder="Ex: 6e, 5e"
+                  placeholder="Ex: 6e à la 3e"
                 />
               </div>
             )}
@@ -360,7 +394,7 @@ export default function DocumentsEnseignantsPage() {
             {historique.length > 0 && (
               <div className="space-y-2 border-t pt-3">
                 <h3 className="font-semibold text-sm text-gray-700">Documents déjà générés</h3>
-                {historique.map((doc) => (
+                {historique.map((doc: any) => (
                   <div key={doc.id} className="border rounded-lg p-3 flex justify-between items-center text-sm">
                     <div>
                       <div className="font-medium">{TITRES_DOCUMENT[doc.type]}</div>
@@ -400,24 +434,25 @@ export default function DocumentsEnseignantsPage() {
               <div className="text-right leading-tight">
                 <div className="font-bold">RÉPUBLIQUE DE CÔTE D'IVOIRE</div>
                 <div>Union - Discipline - Travail</div>
-                <div className="mt-2">Année scolaire : {documentGenere.annee_scolaire}</div>
-                <div className="mt-1 font-medium">N° {documentGenere.numero}</div>
+                <div className="mt-2">Année scolaire : {(documentGenere as any).annee_scolaire}</div>
+                <div className="mt-1 font-medium">N° {(documentGenere as any).numero}</div>
               </div>
             </div>
 
             <h2 className="text-center font-bold text-xl border-2 inline-block px-6 py-2 mx-auto block w-fit">
-              {TITRES_DOCUMENT[documentGenere.type]}
+              {TITRES_DOCUMENT[(documentGenere as any).type]}
             </h2>
 
             <div className="text-sm leading-relaxed pt-4">
-              {documentGenere.type === 'attestation_fin_contrat' ? (
+              {(documentGenere as any).type === 'attestation_fin_contrat' ? (
                 <>
                   <p>Je soussigné(e),</p>
                   <p className="mt-2">
-                    <strong>{directeurEtudes ? `${directeurEtudes.nom} ${directeurEtudes.prenom}` : ''}</strong>,
+                    <strong>{(documentGenere as any).nom_signataire || nomSignataire},</strong>
                   </p>
                   <p className="mt-1">
-                    Directeur des Études {etablissement.type_etablissement === 'college' ? 'du Collège' : 'de l\'établissement'}{' '}
+                    {(documentGenere as any).titre_signataire || titreSignataire}{' '}
+                    {etablissement.type_etablissement === 'college' ? 'du Collège' : "de l'établissement"}{' '}
                     <strong>{etablissement.nom}</strong>
                     {etablissement.ville && <> (Situé à {etablissement.ville}),</>}
                   </p>
@@ -425,17 +460,17 @@ export default function DocumentsEnseignantsPage() {
                   <p className="mt-2">
                     <strong>M. {enseignantSelectionne.nom.toUpperCase()} {enseignantSelectionne.prenom}</strong>,
                   </p>
-                  <p className="mt-1">{poste || 'Enseignant'},</p>
+                  <p className="mt-1">{(documentGenere as any).poste || 'Enseignant'},</p>
                   <p className="mt-3">
-                    a exercé au sein de notre établissement du <strong>{formatDate(documentGenere.date_debut_contrat)}</strong> au{' '}
-                    <strong>{formatDate(documentGenere.date_fin_contrat)}</strong>, dans le cadre d'un contrat de travail à durée déterminée.
+                    a exercé au sein de notre établissement du <strong>{formatDate((documentGenere as any).date_debut_contrat)}</strong> au{' '}
+                    <strong>{formatDate((documentGenere as any).date_fin_contrat)}</strong>, dans le cadre d'un contrat de travail à durée déterminée.
                   </p>
                   <p className="mt-3">
-                    Durant cette période, {estFille ? 'elle' : 'il'} a assuré {estFille ? 'ses' : 'ses'} fonctions avec sérieux, professionnalisme et engagement.
+                    Durant cette période, {estFille ? 'elle' : 'il'} a assuré ses fonctions avec sérieux, professionnalisme et engagement.
                     {estFille ? ' Elle a contribué' : ' Il a contribué'} à la formation académique des élèves et au bon fonctionnement de l'établissement.
                   </p>
                   <p className="mt-3">
-                    Le présent contrat est arrivé à son terme le <strong>{formatDate(documentGenere.date_fin_contrat)}</strong>.
+                    Le présent contrat est arrivé à son terme le <strong>{formatDate((documentGenere as any).date_fin_contrat)}</strong>.
                   </p>
                   <p className="mt-3">
                     La présente attestation est délivrée à l'intéressé(e) pour servir et valoir ce que de droit.
@@ -444,17 +479,17 @@ export default function DocumentsEnseignantsPage() {
               ) : (
                 <>
                   <p>
-                    Je soussigné(e){directeurEtudes ? ` ${directeurEtudes.nom} ${directeurEtudes.prenom}` : ''}, en qualité de Directeur des Études
-                    de <strong>{etablissement.nom}</strong>, certifie que :
+                    Je soussigné(e) <strong>{(documentGenere as any).nom_signataire || nomSignataire}</strong>, en qualité de{' '}
+                    {(documentGenere as any).titre_signataire || titreSignataire} de <strong>{etablissement.nom}</strong>, certifie que :
                   </p>
                   <p className="mt-3">
                     <strong>M. {enseignantSelectionne.nom.toUpperCase()} {enseignantSelectionne.prenom}</strong> a été {estFille ? 'employée' : 'employé'}{' '}
-                    dans notre établissement du <strong>{formatDate(documentGenere.date_debut_contrat)}</strong> au{' '}
-                    <strong>{formatDate(documentGenere.date_fin_contrat)}</strong> et a occupé le poste de <strong>{poste}</strong>
-                    {documentGenere.classes_tenues && <> et a tenu les classes de <strong>{documentGenere.classes_tenues}</strong></>}.
+                    dans notre établissement du <strong>{formatDate((documentGenere as any).date_debut_contrat)}</strong> au{' '}
+                    <strong>{formatDate((documentGenere as any).date_fin_contrat)}</strong> et a occupé le poste de <strong>{(documentGenere as any).poste}</strong>
+                    {(documentGenere as any).classes_tenues && <> et a tenu les classes de <strong>{(documentGenere as any).classes_tenues}</strong></>}.
                   </p>
                   <p className="mt-3">
-                    {estFille ? 'Elle' : 'Il'} nous quitte à la date du <strong>{formatDate(documentGenere.date_fin_contrat)}</strong>.
+                    {estFille ? 'Elle' : 'Il'} nous quitte à la date du <strong>{formatDate((documentGenere as any).date_fin_contrat)}</strong>.
                   </p>
                   <p className="mt-3">
                     En foi de quoi, nous lui délivrons ce certificat pour servir et valoir ce que de droit.
@@ -465,8 +500,8 @@ export default function DocumentsEnseignantsPage() {
 
             <div className="flex justify-end pt-8">
               <div className="text-center text-sm">
-                <div>Fait à {documentGenere.ville_signature || etablissement.ville || '—'}, le {new Date(documentGenere.date_emission).toLocaleDateString('fr-FR')}</div>
-                <div className="mt-1">Signature et cachet du Directeur des Études</div>
+                <div>Fait à {(documentGenere as any).ville_signature || etablissement.ville || '—'}, le {new Date((documentGenere as any).date_emission).toLocaleDateString('fr-FR')}</div>
+                <div className="mt-1">Signature et cachet du {(documentGenere as any).titre_signataire || titreSignataire}</div>
                 <div className="mt-16">___________________________</div>
               </div>
             </div>

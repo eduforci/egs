@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
-type Eleve = { id: string; matricule: string; nom: string; prenom: string; classe_nom: string | null; classe_id: string | null };
+type Eleve = { id: string; matricule: string; nom: string; prenom: string; classe_nom: string | null; classe_id: string | null; sexe: string | null };
 type Etablissement = {
   nom: string;
   adresse: string | null;
@@ -75,7 +75,7 @@ export default function DocumentsAdministratifsPage() {
 
       const { data: elevesData, error: elevesError } = await supabase
         .from('eleves')
-        .select('id, matricule, classe_id, classes(nom)')
+        .select('id, matricule, classe_id, sexe, classes(nom)')
         .eq('etablissement_id', profil.etablissement_id);
 
       if (elevesError) {
@@ -102,6 +102,7 @@ export default function DocumentsAdministratifsPage() {
             prenom: p?.prenom ?? '',
             classe_nom: e.classes?.nom ?? null,
             classe_id: e.classe_id,
+            sexe: e.sexe,
           };
         })
         .sort((a, b) => a.nom.localeCompare(b.nom));
@@ -113,6 +114,7 @@ export default function DocumentsAdministratifsPage() {
   }, [supabase]);
 
   const eleveSelectionne = eleves.find((e) => e.id === eleveId);
+  const estFille = eleveSelectionne?.sexe === 'F';
 
   const chargerHistorique = useCallback(async () => {
     if (!eleveId) {
@@ -331,14 +333,14 @@ export default function DocumentsAdministratifsPage() {
 
               {documentGenere.type === 'certificat_scolarite' && (
                 <p className="mt-4">
-                  est régulièrement inscrit(e) dans notre établissement au titre de l'année scolaire {documentGenere.annee_scolaire},
+                  est régulièrement {estFille ? 'inscrite' : 'inscrit'} dans notre établissement au titre de l'année scolaire {documentGenere.annee_scolaire},
                   en classe de <strong>{documentGenere.classe_nom || eleveSelectionne.classe_nom}</strong>.
                 </p>
               )}
 
               {documentGenere.type === 'attestation_reussite' && (
                 <p className="mt-4">
-                  a suivi avec succès les enseignements de la classe de <strong>{documentGenere.classe_nom || eleveSelectionne.classe_nom}</strong> au
+                  a {estFille ? 'suivie' : 'suivi'} avec succès les enseignements de la classe de <strong>{documentGenere.classe_nom || eleveSelectionne.classe_nom}</strong> au
                   titre de l'année scolaire {documentGenere.annee_scolaire}.
                   {documentGenere.motif && <> {documentGenere.motif}.</>}
                 </p>
@@ -346,14 +348,14 @@ export default function DocumentsAdministratifsPage() {
 
               {documentGenere.type === 'certificat_radiation' && (
                 <p className="mt-4">
-                  a été radié(e) des effectifs de notre établissement, où il/elle était inscrit(e) en classe de{' '}
+                  a été {estFille ? 'radiée' : 'radié'} des effectifs de notre établissement, où {estFille ? 'elle' : 'il'} était {estFille ? 'inscrite' : 'inscrit'} en classe de{' '}
                   <strong>{documentGenere.classe_nom || eleveSelectionne.classe_nom}</strong>, au titre de l'année scolaire {documentGenere.annee_scolaire}.
                   {documentGenere.motif && <> Motif : {documentGenere.motif}.</>}
                 </p>
               )}
 
               <p className="mt-6">
-                En foi de quoi, le présent {documentGenere.type === 'certificat_radiation' || documentGenere.type === 'certificat_scolarite' ? 'certificat' : 'attestation'} lui est délivré(e) pour servir et valoir ce que de droit.
+                En foi de quoi, le présent {documentGenere.type === 'certificat_radiation' || documentGenere.type === 'certificat_scolarite' ? 'certificat' : 'attestation'} lui est {estFille ? 'délivrée' : 'délivré'} pour servir et valoir ce que de droit.
               </p>
             </div>
 
@@ -369,4 +371,4 @@ export default function DocumentsAdministratifsPage() {
       )}
     </div>
   );
-                                          }
+  }

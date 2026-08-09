@@ -14,6 +14,8 @@ type Enseignant = {
   telephone: string | null;
 };
 
+type Classe = { id: string; nom: string };
+
 type Creneau = {
   jour: string;
   heure_debut: string;
@@ -34,7 +36,7 @@ type LigneRecap = {
   heures_semaine: number;
 };
 
-type ComplementService = { id: string; type: string; heures: number; classes?: { nom: string } };
+type ComplementService = { id: string; type: string; heures: number; classe_id: string | null; classes?: { nom: string } };
 
 type Etablissement = {
   nom: string;
@@ -43,6 +45,7 @@ type Etablissement = {
   code_etablissement: string | null;
   dren: string | null;
   type_etablissement: string | null;
+  annee_scolaire_active: string | null;
 };
 
 const JOURS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
@@ -51,19 +54,34 @@ const JOURS_LABEL_MAJ: Record<string, string> = {
   jeudi: 'JEUDI', vendredi: 'VENDREDI', samedi: 'SAMEDI',
 };
 
+const TYPES_COMPLEMENT = ['PP', 'CE', 'UP'];
+
+const FORM_COMPLEMENT_VIDE = {
+  type: 'PP',
+  classe_id: '',
+  heures: '1',
+};
+
 export default function EmploiDuTempsProfesseurPage() {
   const supabase = createClient();
 
   const [enseignants, setEnseignants] = useState<Enseignant[]>([]);
   const [enseignantId, setEnseignantId] = useState('');
+  const [toutesClasses, setToutesClasses] = useState<Classe[]>([]);
   const [creneaux, setCreneaux] = useState<Creneau[]>([]);
   const [periodes, setPeriodes] = useState<Periode[]>([]);
   const [recap, setRecap] = useState<LigneRecap[]>([]);
   const [complements, setComplements] = useState<ComplementService[]>([]);
   const [etablissement, setEtablissement] = useState<Etablissement | null>(null);
+  const [etablissementId, setEtablissementId] = useState('');
   const [anneeScolaire, setAnneeScolaire] = useState('');
   const [loading, setLoading] = useState(false);
   const [erreur, setErreur] = useState('');
+
+  const [showFormComplement, setShowFormComplement] = useState(false);
+  const [formComplement, setFormComplement] = useState(FORM_COMPLEMENT_VIDE);
+  const [savingComplement, setSavingComplement] = useState(false);
+  const [messageComplement, setMessageComplement] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -77,13 +95,21 @@ export default function EmploiDuTempsProfesseurPage() {
         .single();
 
       if (!profil?.etablissement_id) return;
+      setEtablissementId(profil.etablissement_id);
 
       const { data: etab } = await supabase
         .from('etablissements')
-        .select('nom, adresse, telephone, code_etablissement, dren, type_etablissement')
+        .select('nom, adresse, telephone, code_etablissement, dren, type_etablissement, annee_scolaire_active')
         .eq('id', profil.etablissement_id)
         .single();
       setEtablissement(etab || null);
+
+      const { data: classesData } = await supabase
+        .from('classes')
+        .select('id, nom')
+        .eq('etablissement_id', profil.etablissement_id)
+        .order('nom');
+      setToutesClasses(classesData || []);
 
       const { data: ens, error } = await supabase
         .from('enseignants')
@@ -138,6 +164,8 @@ export default function EmploiDuTempsProfesseurPage() {
     if (!enseignantId) return;
     setLoading(true);
     setErreur('');
+    setShowFormComplement(false);
+    setMessageComplement(null);
 
     const { data: creneauxData, error: creneauxError } = await supabase
       .from('emploi_du_temps')
@@ -155,21 +183,14 @@ export default function EmploiDuTempsProfesseurPage() {
     setCreneaux(liste);
 
     const cycleReference = liste[0]?.classes?.cycle;
-    const anneeRef = liste[0]?.classes?.annee_scolaire || new Date().getFullYear().toString();
+    const anneeRef = liste[0]?.classes?.annee_scolaire || etablissement?.annee_scolaire_active || new Date().getFullYear().toString();
     setAnneeScolaire(anneeRef);
 
-    const { data: userData } = await supabase.auth.getUser();
-    const { data: profil } = await supabase
-      .from('profiles')
-      .select('etablissement_id')
-      .eq('id', userData?.user?.id)
-      .single();
-
-    if (cycleReference && profil?.etablissement_id) {
+    if (cycleReference && etablissementId) {
       const { data: periodesData } = await supabase
         .from('creneaux_horaires_types')
         .select('ordre, heure_debut, heure_fin, est_pause, libelle')
-        .eq('etablissement_id', profil.etablissement_id)
+        .eq('etablissement_id', etablissementId)
         .eq('cycle', cycleReference)
         .order('ordre');
       setPeriodes(periodesData || []);
@@ -186,13 +207,13 @@ export default function EmploiDuTempsProfesseurPage() {
 
     const { data: compData } = await supabase
       .from('complement_service')
-      .select('id, type, heures, classes(nom)')
+      .select('id, type, heures, classe_id, classes(nom)')
       .eq('enseignant_id', enseignantId)
       .eq('annee_scolaire', anneeRef);
     setComplements((compData as any) || []);
 
     setLoading(false);
-  }, [enseignantId, supabase]);
+  }, [enseignantId, supabase, etablissementId, etablissement]);
 
   useEffect(() => {
     chargerDonnees();
@@ -211,6 +232,60 @@ export default function EmploiDuTempsProfesseurPage() {
   const totalHeuresRecap = recap.reduce((sum, r) => sum + Number(r.heures_semaine || 0), 0);
   const pp = complements.filter((c) => c.type === 'PP');
   const autresComplements = complements.filter((c) => c.type !== 'PP');
+
+  const ouvrirAjoutComplement = () => {
+    setFormComplement(FORM_COMPLEMENT_VIDE);
+    setShowFormComplement(true);
+    setMessageComplement(null);
+  };
+
+  const annulerComplement = () => {
+    setShowFormComplement(false);
+    setFormComplement(FORM_COMPLEMENT_VIDE);
+  };
+
+  const ajouterComplement = async () => {
+    setSavingComplement(true);
+    setMessageComplement(null);
+
+    if (formComplement.type === 'PP' && !formComplement.classe_id) {
+      setMessageComplement({ type: 'error', text: 'Choisissez la classe dont il est professeur principal.' });
+      setSavingComplement(false);
+      return;
+    }
+
+    const heures = parseFloat(formComplement.heures) || 0;
+
+    const { error } = await supabase.from('complement_service').insert({
+      etablissement_id: etablissementId,
+      enseignant_id: enseignantId,
+      type: formComplement.type,
+      classe_id: formComplement.classe_id || null,
+      heures,
+      annee_scolaire: anneeScolaire,
+    });
+
+    if (error) {
+      setMessageComplement({ type: 'error', text: 'Erreur: ' + error.message });
+      setSavingComplement(false);
+      return;
+    }
+
+    setMessageComplement({ type: 'success', text: 'Ajouté.' });
+    setShowFormComplement(false);
+    setFormComplement(FORM_COMPLEMENT_VIDE);
+    setSavingComplement(false);
+    chargerDonnees();
+  };
+
+  const supprimerComplement = async (id: string) => {
+    const { error } = await supabase.from('complement_service').delete().eq('id', id);
+    if (error) {
+      setMessageComplement({ type: 'error', text: 'Erreur suppression: ' + error.message });
+      return;
+    }
+    chargerDonnees();
+  };
 
   return (
     <div className="max-w-5xl mx-auto p-4 space-y-4">
@@ -394,18 +469,103 @@ export default function EmploiDuTempsProfesseurPage() {
             </div>
           )}
 
-          {autresComplements.length > 0 && (
-            <div>
-              <h3 className="font-bold mb-2">COMPLÉMENT DE SERVICE</h3>
+          {/* COMPLEMENT DE SERVICE - affichage imprimable */}
+          <div>
+            <h3 className="font-bold mb-2">COMPLÉMENT DE SERVICE</h3>
+            {complements.length === 0 ? (
+              <p className="text-sm text-gray-500 no-print">Aucun complément de service renseigné.</p>
+            ) : (
               <div className="flex flex-wrap gap-2">
-                {autresComplements.map((c) => (
-                  <div key={c.id} className="border rounded-lg px-3 py-1.5 text-sm">
-                    {c.type} {c.classes?.nom ? `(${c.classes.nom})` : ''} — {c.heures}H
+                {complements.map((c) => (
+                  <div key={c.id} className="border rounded-lg px-3 py-1.5 text-sm flex items-center gap-2">
+                    <span>{c.type} {c.classes?.nom ? `(${c.classes.nom})` : ''} — {c.heures}H</span>
+                    <button
+                      onClick={() => supprimerComplement(c.id)}
+                      className="no-print text-red-600 text-xs"
+                    >
+                      ✕
+                    </button>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
+
+          {/* FORMULAIRE AJOUT COMPLEMENT - no-print */}
+          <div className="no-print space-y-2 border-t pt-3">
+            {messageComplement && (
+              <div className={`p-3 rounded-lg text-sm ${messageComplement.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                {messageComplement.text}
+              </div>
+            )}
+
+            {!showFormComplement && (
+              <button
+                onClick={ouvrirAjoutComplement}
+                className="w-full bg-gray-800 text-white py-2.5 rounded-lg font-medium"
+              >
+                + Ajouter PP / CE / UP
+              </button>
+            )}
+
+            {showFormComplement && (
+              <div className="border rounded-lg p-3 space-y-3 bg-gray-50">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium text-sm text-gray-700">Nouveau complément de service</span>
+                  <button onClick={annulerComplement} className="text-sm text-gray-500">Annuler</button>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Type</label>
+                  <select
+                    value={formComplement.type}
+                    onChange={(e) => setFormComplement({ ...formComplement, type: e.target.value })}
+                    className="w-full border rounded-lg p-2"
+                  >
+                    {TYPES_COMPLEMENT.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {formComplement.type === 'PP' && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Classe (professeur principal de)</label>
+                    <select
+                      value={formComplement.classe_id}
+                      onChange={(e) => setFormComplement({ ...formComplement, classe_id: e.target.value })}
+                      className="w-full border rounded-lg p-2"
+                    >
+                      <option value="">-- Choisir --</option>
+                      {toutesClasses.map((c) => (
+                        <option key={c.id} value={c.id}>{c.nom}</option>
+                      ))}
+                      </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Heures</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    value={formComplement.heures}
+                    onChange={(e) => setFormComplement({ ...formComplement, heures: e.target.value })}
+                    className="w-full border rounded-lg p-2"
+                  />
+                </div>
+
+                <button
+                  onClick={ajouterComplement}
+                  disabled={savingComplement}
+                  className="w-full bg-green-600 text-white py-2.5 rounded-lg font-medium disabled:opacity-50"
+                >
+                  {savingComplement ? 'Enregistrement...' : 'Ajouter'}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

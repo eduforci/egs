@@ -1,136 +1,405 @@
-"use client";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
 
-import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
+function StatCard({
+  label,
+  value,
+  description,
+  href,
+}: {
+  label: string;
+  value: number;
+  description: string;
+  href?: string;
+}) {
+  const content = (
+    <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+      <p className="text-sm font-medium text-neutral-500">{label}</p>
 
-export default function ChefDashboard() {
-  const supabase = createClient();
-  const [nom, setNom] = useState("");
-  const [prenom, setPrenom] = useState("");
-  const [classeId, setClasseId] = useState("");
-  const [matiereId, setMatiereId] = useState("");
-  const [classes, setClasses] = useState<any[]>([]);
-  const [matieres, setMatieres] = useState<any[]>([]);
-  const [chargement, setChargement] = useState(false);
-  const [erreur, setErreur] = useState<string | null>(null);
-  const [resultat, setResultat] = useState<{ identifiant: string; motDePasseProvisoire: string } | null>(null);
-
-  useEffect(() => {
-    async function charger() {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("etablissement_id")
-        .eq("id", user?.id)
-        .single();
-
-      if (profile?.etablissement_id) {
-        const { data: c } = await supabase
-          .from("classes")
-          .select("id, nom")
-          .eq("etablissement_id", profile.etablissement_id);
-        const { data: m } = await supabase
-          .from("matieres")
-          .select("id, nom")
-          .eq("etablissement_id", profile.etablissement_id);
-        setClasses(c ?? []);
-        setMatieres(m ?? []);
-      }
-    }
-    charger();
-  }, []);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setErreur(null);
-    setChargement(true);
-    setResultat(null);
-
-    const res = await fetch("/api/chef/creer-enseignant", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nom, prenom, classeId, matiereId }),
-    });
-
-    const data = await res.json();
-    setChargement(false);
-
-    if (!res.ok) {
-      setErreur(data.error || "Erreur lors de la création.");
-      return;
-    }
-
-    setResultat(data);
-    setNom("");
-    setPrenom("");
-    setClasseId("");
-    setMatiereId("");
-  }
-
-  return (
-    <main className="p-6 sm:p-8 max-w-lg mx-auto">
-      <h1 className="font-display text-3xl font-semibold mb-1">Ajouter un enseignant</h1>
-      <p className="text-neutral-500 mb-6">
-        Créez le compte, puis transmettez l'identifiant et le mot de passe provisoire à l'enseignant.
+      <p className="mt-2 text-3xl font-semibold tracking-tight text-neutral-950">
+        {value.toLocaleString("fr-FR")}
       </p>
 
-      {resultat && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6 text-sm">
-          <p className="font-medium text-green-800 mb-2">Compte créé avec succès</p>
-          <p>Identifiant : <strong>{resultat.identifiant}</strong></p>
-          <p>Mot de passe provisoire : <strong>{resultat.motDePasseProvisoire}</strong></p>
-          <p className="text-green-700 mt-2 text-xs">
-            Notez ces informations maintenant, elles ne seront plus affichées.
+      <p className="mt-1 text-xs text-neutral-500">
+        {description}
+      </p>
+    </div>
+  );
+
+  return href ? (
+    <Link href={href} className="block">
+      {content}
+    </Link>
+  ) : (
+    content
+  );
+}
+
+function QuickAction({
+  href,
+  title,
+  description,
+}: {
+  href: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="block rounded-xl border border-neutral-200 bg-white p-4 transition hover:border-neutral-400 hover:shadow-sm"
+    >
+      <p className="font-medium text-neutral-900">{title}</p>
+      <p className="mt-1 text-xs text-neutral-500">{description}</p>
+    </Link>
+  );
+}
+
+export default async function ChefDashboard() {
+  const supabase = await createClient();
+
+  // Utilisateur connecté
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return null;
+  }
+
+  // Profil du chef
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("nom, prenom, etablissement_id")
+    .eq("id", user.id)
+    .single();
+
+  const etablissementId = profile?.etablissement_id;
+
+  if (!etablissementId) {
+    return (
+      <main className="min-h-screen bg-neutral-50 p-6 sm:p-8">
+        <div className="mx-auto max-w-3xl rounded-2xl border border-red-200 bg-red-50 p-6">
+          <h1 className="text-xl font-semibold text-red-800">
+            Établissement introuvable
+          </h1>
+
+          <p className="mt-2 text-sm text-red-700">
+            Votre compte chef d'établissement n'est associé à aucun établissement.
           </p>
         </div>
-      )}
-<div className="flex flex-col gap-1 mb-4">
-  <a href="/chef/enseignants" className="text-sm text-blue-600 hover:underline inline-block">
-    → Voir et gérer tous les enseignants
-  </a>
-  <a href="/chef/eleves" className="text-sm text-blue-600 hover:underline inline-block">
-    → Voir tous les élèves
-  </a>
-  <a href="/chef/eleves/nouveau" className="text-sm text-blue-600 hover:underline inline-block">
-    → Ajouter un élève
-  </a>
-  <a href="/chef/parents" className="text-sm text-blue-600 hover:underline inline-block">
-    → Voir et gérer les parents
-  </a>
-</div>
-      <form onSubmit={handleSubmit} className="bg-white border rounded-xl p-6 space-y-4">
-        {erreur && <div className="bg-red-50 text-red-700 text-sm p-3 rounded-lg">{erreur}</div>}
+      </main>
+    );
+  }
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Nom *</label>
-          <input value={nom} onChange={(e) => setNom(e.target.value)} required className="w-full border rounded-lg p-2" />
-        </div>
+  // Établissement du chef
+  const { data: etablissement } = await supabase
+    .from("etablissements")
+    .select("id, nom, ville, statut")
+    .eq("id", etablissementId)
+    .single();
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Prénom *</label>
-          <input value={prenom} onChange={(e) => setPrenom(e.target.value)} required className="w-full border rounded-lg p-2" />
-        </div>
+  // Statistiques de l'établissement
+  const [
+    elevesResult,
+    enseignantsResult,
+    parentsResult,
+    classesResult,
+  ] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("etablissement_id", etablissementId)
+      .eq("role", "eleve"),
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Classe (optionnel)</label>
-          <select value={classeId} onChange={(e) => setClasseId(e.target.value)} className="w-full border rounded-lg p-2">
-            <option value="">— Aucune —</option>
-            {classes.map((c) => <option key={c.id} value={c.id}>{c.nom}</option>)}
-          </select>
-        </div>
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("etablissement_id", etablissementId)
+      .eq("role", "enseignant"),
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Matière (optionnel)</label>
-          <select value={matiereId} onChange={(e) => setMatiereId(e.target.value)} className="w-full border rounded-lg p-2">
-            <option value="">— Aucune —</option>
-            {matieres.map((m) => <option key={m.id} value={m.id}>{m.nom}</option>)}
-          </select>
-        </div>
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("etablissement_id", etablissementId)
+      .eq("role", "parent"),
 
-        <button type="submit" disabled={chargement} className="w-full bg-black text-white rounded-lg p-3 font-medium disabled:opacity-50">
-          {chargement ? "Création..." : "Créer le compte enseignant"}
-        </button>
-      </form>
+    supabase
+      .from("classes")
+      .select("id", { count: "exact", head: true })
+      .eq("etablissement_id", etablissementId),
+  ]);
+
+  const nombreEleves = elevesResult.count ?? 0;
+  const nombreEnseignants = enseignantsResult.count ?? 0;
+  const nombreParents = parentsResult.count ?? 0;
+  const nombreClasses = classesResult.count ?? 0;
+
+  return (
+    <main className="min-h-screen bg-neutral-50 p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-7xl">
+
+        {/* EN-TÊTE */}
+        <header className="mb-8">
+          <p className="mb-1 text-sm font-medium text-neutral-500">
+            EGS • Chef d'établissement
+          </p>
+
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h1 className="font-display text-3xl font-semibold tracking-tight text-neutral-950 sm:text-4xl">
+                Bonjour{profile?.prenom ? `, ${profile.prenom}` : ""} 👋
+              </h1>
+
+              <p className="mt-2 text-sm text-neutral-500 sm:text-base">
+                Voici la situation actuelle de votre établissement.
+              </p>
+
+              {etablissement && (
+                <p className="mt-2 text-sm font-medium text-neutral-700">
+                  {etablissement.nom}
+                  {etablissement.ville
+                    ? ` • ${etablissement.ville}`
+                    : ""}
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/chef/eleves/nouveau"
+                className="rounded-xl bg-black px-4 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-800"
+              >
+                + Nouvel élève
+              </Link>
+
+              <Link
+                href="/chef/dashboard"
+                className="rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 hover:border-neutral-300"
+              >
+                Actualiser
+              </Link>
+            </div>
+          </div>
+        </header>
+
+        {/* STATISTIQUES */}
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+
+          <StatCard
+            label="Élèves"
+            value={nombreEleves}
+            description="Élèves de l'établissement"
+            href="/chef/eleves"
+          />
+
+          <StatCard
+            label="Enseignants"
+            value={nombreEnseignants}
+            description="Enseignants enregistrés"
+            href="/chef/enseignants"
+          />
+
+          <StatCard
+            label="Parents"
+            value={nombreParents}
+            description="Parents enregistrés"
+            href="/chef/parents"
+          />
+
+          <StatCard
+            label="Classes"
+            value={nombreClasses}
+            description="Classes configurées"
+          />
+
+        </section>
+
+        {/* CONTENU */}
+        <section className="mt-6 grid gap-6 lg:grid-cols-[1.35fr_1fr]">
+
+          {/* SITUATION */}
+          <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+
+            <div className="mb-6">
+              <h2 className="font-semibold text-neutral-950">
+                Situation de l'établissement
+              </h2>
+
+              <p className="mt-1 text-sm text-neutral-500">
+                Vue synthétique de vos principaux effectifs.
+              </p>
+            </div>
+
+            <div className="space-y-5">
+
+              <div>
+                <div className="mb-2 flex justify-between text-sm">
+                  <span className="text-neutral-600">
+                    Élèves
+                  </span>
+
+                  <span className="font-semibold text-neutral-900">
+                    {nombreEleves}
+                  </span>
+                </div>
+
+                <div className="h-2 rounded-full bg-neutral-100">
+                  <div
+                    className="h-2 rounded-full bg-neutral-900"
+                    style={{
+                      width: `${Math.min(nombreEleves, 100)}%`,
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-2 flex justify-between text-sm">
+                  <span className="text-neutral-600">
+                    Enseignants
+                  </span>
+
+                  <span className="font-semibold text-neutral-900">
+                    {nombreEnseignants}
+                  </span>
+                </div>
+
+                <div className="h-2 rounded-full bg-neutral-100">
+                  <div
+                    className="h-2 rounded-full bg-neutral-700"
+                    style={{
+                      width: `${Math.min(nombreEnseignants * 3, 100)}%`,
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-2 flex justify-between text-sm">
+                  <span className="text-neutral-600">
+                    Parents
+                  </span>
+
+                  <span className="font-semibold text-neutral-900">
+                    {nombreParents}
+                  </span>
+                </div>
+
+                <div className="h-2 rounded-full bg-neutral-100">
+                  <div
+                    className="h-2 rounded-full bg-neutral-500"
+                    style={{
+                      width: `${Math.min(nombreParents, 100)}%`,
+                    }}
+                  />
+                </div>
+              </div>
+
+            </div>
+
+            <div className="mt-7 rounded-xl bg-neutral-50 p-4">
+              <p className="text-sm font-medium text-neutral-900">
+                Statut de l'établissement
+              </p>
+
+              <p className="mt-1 text-sm text-neutral-500">
+                Abonnement :{" "}
+                <span className="font-medium text-neutral-900">
+                  {etablissement?.statut ?? "—"}
+                </span>
+              </p>
+            </div>
+
+          </div>
+
+          {/* ACTIONS RAPIDES */}
+          <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+
+            <h2 className="font-semibold text-neutral-950">
+              Actions rapides
+            </h2>
+
+            <p className="mt-1 text-sm text-neutral-500">
+              Accédez rapidement aux opérations principales.
+            </p>
+
+            <div className="mt-5 grid gap-3">
+
+              <QuickAction
+                href="/chef/eleves/nouveau"
+                title="+ Ajouter un élève"
+                description="Enregistrer un nouvel élève."
+              />
+
+              <QuickAction
+                href="/chef/enseignants"
+                title="👨‍🏫 Gérer les enseignants"
+                description="Consulter et gérer les enseignants."
+              />
+
+              <QuickAction
+                href="/chef/eleves"
+                title="🎓 Gérer les élèves"
+                description="Consulter les élèves de l'établissement."
+              />
+
+              <QuickAction
+                href="/chef/parents"
+                title="👨‍👩‍👧 Gérer les parents"
+                description="Consulter les parents et leurs enfants."
+              />
+
+            </div>
+
+          </div>
+
+        </section>
+
+        {/* MODULES */}
+        <section className="mt-6 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+
+          <div className="mb-5">
+            <h2 className="font-semibold text-neutral-950">
+              Gestion de l'établissement
+            </h2>
+
+            <p className="mt-1 text-sm text-neutral-500">
+              Accès aux principaux modules administratifs.
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+
+            <QuickAction
+              href="/chef/enseignants"
+              title="Enseignants"
+              description="Gestion des enseignants."
+            />
+
+            <QuickAction
+              href="/chef/eleves"
+              title="Élèves"
+              description="Gestion des élèves."
+            />
+
+            <QuickAction
+              href="/chef/parents"
+              title="Parents"
+              description="Gestion des parents."
+            />
+
+            <QuickAction
+              href="/emploi-du-temps"
+              title="Emploi du temps"
+              description="Consulter les emplois du temps."
+            />
+
+          </div>
+
+        </section>
+
+      </div>
     </main>
   );
-            }
+    }

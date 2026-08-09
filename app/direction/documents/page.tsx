@@ -8,6 +8,7 @@ type Etablissement = {
   nom: string;
   adresse: string | null;
   telephone: string | null;
+  email: string | null;
   code_etablissement: string | null;
   dren: string | null;
   type_etablissement: string | null;
@@ -68,7 +69,7 @@ export default function DocumentsAdministratifsPage() {
 
       const { data: etab } = await supabase
         .from('etablissements')
-        .select('nom, adresse, telephone, code_etablissement, dren, type_etablissement, annee_scolaire_active, titre_responsable')
+        .select('nom, adresse, telephone, email, code_etablissement, dren, type_etablissement, annee_scolaire_active, titre_responsable')
         .eq('id', profil.etablissement_id)
         .single();
       setEtablissement(etab || null);
@@ -299,24 +300,25 @@ export default function DocumentsAdministratifsPage() {
           </button>
 
           <div className="border p-8 space-y-6">
-            <div className="text-center text-xs font-bold leading-tight">
-              <div>MINISTÈRE DE L'ÉDUCATION NATIONALE ET DE L'ALPHABÉTISATION</div>
-              {etablissement.dren && <div>DRENA {etablissement.dren.toUpperCase()}</div>}
-            </div>
-
-            <div className="flex justify-between items-start text-sm border-b pb-3">
-              <div>
-                <div className="font-bold">{etablissement.nom}</div>
-                {etablissement.telephone && <div className="text-xs">Tél : {etablissement.telephone}</div>}
-                {etablissement.adresse && <div className="text-xs">{etablissement.adresse}</div>}
-              </div>
-              <div className="text-right text-xs">
-                <div>Année Scolaire : {documentGenere.annee_scolaire}</div>
+            <div className="flex justify-between items-start text-xs">
+              <div className="leading-tight">
+                <div className="font-bold">MINISTÈRE DE L'ÉDUCATION NATIONALE ET DE L'ALPHABÉTISATION</div>
+                {etablissement.dren && <div>DREN {etablissement.dren.toUpperCase()}</div>}
+                <div className="mt-2 font-bold">{etablissement.nom}</div>
+                {etablissement.email && <div>Email : {etablissement.email}</div>}
+                {etablissement.telephone && <div>Tél : {etablissement.telephone}</div>}
+                {etablissement.adresse && <div>{etablissement.adresse}</div>}
                 {etablissement.code_etablissement && <div>Code : {etablissement.code_etablissement}</div>}
+              </div>
+              <div className="text-right leading-tight">
+                <div className="font-bold">RÉPUBLIQUE DE CÔTE D'IVOIRE</div>
+                <div>Union - Discipline - Travail</div>
+                <div className="mt-2">Année Scolaire : {documentGenere.annee_scolaire}</div>
                 {etablissement.type_etablissement && <div>Statut : {etablissement.type_etablissement}</div>}
                 <div className="mt-1 font-medium">N° {documentGenere.numero}</div>
               </div>
             </div>
+            <div className="border-b pb-2"></div>
 
             <h2 className="text-center font-bold text-xl underline">
               {TITRES_DOCUMENT[documentGenere.type]}
@@ -371,4 +373,4 @@ export default function DocumentsAdministratifsPage() {
       )}
     </div>
   );
-  }
+        }

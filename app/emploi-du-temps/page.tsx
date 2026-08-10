@@ -54,19 +54,29 @@ export default function EmploiDuTempsConsultationPage() {
 
       const { data: liens } = await supabase
         .from('parents_eleves')
-        .select('eleve_id, eleves(id, classe_id, profiles(nom, prenom))')
+        .select('eleve_id, eleves(id, classe_id)')
         .eq('parent_id', userData.user.id);
 
+      const idsEnfants = (liens || []).map((l: any) => l.eleve_id);
+      const { data: profs } = idsEnfants.length > 0
+        ? await supabase.from('profiles').select('id, nom, prenom').in('id', idsEnfants)
+        : { data: [] };
+      const profsParId = new Map((profs || []).map((p) => [p.id, p]));
+
       const listeEnfants = (liens || [])
-        .map((l: any) => l.eleves && {
-          id: l.eleves.id,
-          classe_id: l.eleves.classe_id,
-          nom: l.eleves.profiles?.nom ?? '',
-          prenom: l.eleves.profiles?.prenom ?? '',
+        .map((l: any) => {
+          const p = profsParId.get(l.eleve_id);
+          return l.eleves && {
+            id: l.eleves.id,
+            classe_id: l.eleves.classe_id,
+            nom: p?.nom ?? '',
+            prenom: p?.prenom ?? '',
+          };
         })
         .filter(Boolean);
 
       setEnfants(listeEnfants);
+      
       if (listeEnfants.length > 0) setClasseId(listeEnfants[0].classe_id);
       setLoading(false);
     };

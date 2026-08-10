@@ -1,10 +1,157 @@
-export default function Dashboard() {
+'use client';
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
+
+type Enfant = {
+  id: string;
+  nom: string;
+  prenom: string;
+  classe_nom: string;
+  matricule: string;
+  absencesNonJustifiees: number;
+};
+
+export default function DashboardParent() {
+  const supabase = createClient();
+  const [prenom, setPrenom] = useState('');
+  const [etablissementNom, setEtablissementNom] = useState('');
+  const [enfants, setEnfants] = useState<Enfant[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [erreur, setErreur] = useState('');
+
+  useEffect(() => {
+    const charger = async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user) return;
+
+      const { data: profil } = await supabase
+        .from('profiles')
+        .select('prenom, etablissement_id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (!profil?.etablissement_id) {
+        setErreur("Établissement introuvable pour ce compte.");
+        setLoading(false);
+        return;
+      }
+
+      setPrenom(profil.prenom || '');
+
+      const { data: etab } = await supabase
+        .from('etablissements')
+        .select('nom')
+        .eq('id', profil.etablissement_id)
+        .single();
+      setEtablissementNom(etab?.nom || '');
+
+      const { data: liens, error: liensError } = await supabase
+        .from('parents_eleves')
+        .select('eleve_id, eleves(id, matricule, classe_id, classes(nom))')
+        .eq('parent_id', userData.user.id);
+
+      if (liensError) {
+        setErreur(liensError.message);
+        setLoading(false);
+        return;
+      }
+
+      const idsEleves = (liens || []).map((l: any) => l.eleve_id);
+      const { data: profs } = idsEleves.length > 0
+        ? await supabase.from('profiles').select('id, nom, prenom').in('id', idsEleves)
+        : { data: [] };
+      const profsParId = new Map((profs || []).map((p) => [p.id, p]));
+
+      const { data: absencesData } = idsEleves.length > 0
+        ? await supabase
+            .from('absences')
+            .select('eleve_id, justifie')
+            .in('eleve_id', idsEleves)
+            .eq('type', 'absence')
+            .eq('justifie', false)
+        : { data: [] };
+
+      const compteurAbsences = new Map<string, number>();
+      (absencesData || []).forEach((a) => {
+        compteurAbsences.set(a.eleve_id, (compteurAbsences.get(a.eleve_id) || 0) + 1);
+      });
+
+      const liste: Enfant[] = (liens || []).map((l: any) => {
+        const p = profsParId.get(l.eleve_id);
+        return {
+          id: l.eleve_id,
+          nom: p?.nom || '',
+          prenom: p?.prenom || '',
+          matricule: l.eleves?.matricule || '',
+          classe_nom: l.eleves?.classes?.nom || '',
+          absencesNonJustifiees: compteurAbsences.get(l.eleve_id) || 0,
+        };
+      });
+
+      setEnfants(liste);
+      setLoading(false);
+    };
+    charger();
+  }, [supabase]);
+
+  if (loading) return <p className="p-4 text-gray-500">Chargement...</p>;
+
   return (
-    <main className="p-8">
-      <h1 className="font-display text-3xl font-semibold">Tableau de bord — parent</h1>
-      <p className="text-neutral-500 mt-2">
-        À construire, sur le même modèle que app/admin/dashboard/page.tsx.
-      </p>
-    </main>
+    <div className="max-w-2xl mx-auto p-4 space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">Bonjour, {prenom} 👋</h1>
+        <p className="text-gray-600">Espace parent</p>
+        <p className="text-sm text-gray-500">{etablissementNom}</p>
+      </div>
+
+      {erreur && (
+        <div className="p-3 rounded-lg text-sm bg-red-50 text-red-700 border border-red-200">
+          {erreur}
+        </div>
+      )}
+
+      {enfants.length === 0 && !erreur && (
+        <p className="text-gray-500 text-sm">Aucun enfant associé à votre compte.</p>
+      )}
+
+      <div className="space-y-4">
+        {enfants.map((e) => (
+          <div key={e.id} className="border rounded-xl p-4 space-y-3">
+            <div>
+              <div className="font-semibold text-lg">{e.nom} {e.prenom}</div>
+              <div className="text-sm text-gray-500">{e.classe_nom} — {e.matricule}</div>
+              {e.absencesNonJustifiees > 0 && (
+                <div className="mt-1 inline-block text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">
+                  {e.absencesNonJustifiees} absence(s) non justifiée(s)
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <Link
+                href="/absences"
+                className="text-center text-sm border rounded-lg py-2 hover:bg-gray-50"
+              >
+                📋<br />Absences
+              </Link>
+              <Link
+                href="/emploi-du-temps"
+                className="text-center text-sm border rounded-lg py-2 hover:bg-gray-50"
+              >
+                📅<br />Emploi du temps
+              </Link>
+              <Link
+                href="/parent/bulletins"
+                className="text-center text-sm border rounded-lg py-2 hover:bg-gray-50"
+              >
+                📄<br />Bulletins
+              </Link>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
-}
+    }

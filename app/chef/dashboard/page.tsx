@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import RepartitionChart from "./repartition-chart";
+import EvolutionChart from "./evolution-chart";
 
 function StatCard({
   label,
@@ -129,6 +130,40 @@ export default async function ChefDashboard() {
     { nom: "Parents", valeur: nombreParents, couleur: "#a3a3a3" },
   ];
 
+  const MOIS_LABEL = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+  const aujourdHui = new Date();
+  const ilYA6Mois = new Date(aujourdHui.getFullYear(), aujourdHui.getMonth() - 5, 1);
+
+  const { data: paiementsRecents } = await supabase
+    .from("paiements")
+    .select("montant, date_paiement")
+    .eq("etablissement_id", etablissementId)
+    .eq("annule", false)
+    .gte("date_paiement", ilYA6Mois.toISOString().slice(0, 10));
+
+  const moisRange: { cle: string; label: string }[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(aujourdHui.getFullYear(), aujourdHui.getMonth() - i, 1);
+    moisRange.push({
+      cle: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+      label: MOIS_LABEL[d.getMonth()],
+    });
+  }
+
+  const totauxParMois = new Map(moisRange.map((m) => [m.cle, 0]));
+  (paiementsRecents || []).forEach((p) => {
+    const d = new Date(p.date_paiement);
+    const cle = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    if (totauxParMois.has(cle)) {
+      totauxParMois.set(cle, (totauxParMois.get(cle) || 0) + Number(p.montant));
+    }
+  });
+
+  const donneesEvolution = moisRange.map((m) => ({
+    mois: m.label,
+    montant: totauxParMois.get(m.cle) || 0,
+  }));
+
   return (
     <main className="min-h-screen bg-neutral-50 p-4 sm:p-6 lg:p-8">
       <div className="mx-auto max-w-7xl">
@@ -210,6 +245,29 @@ export default async function ChefDashboard() {
           </div>
 
           <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+            <div className="mb-4">
+              <h2 className="font-semibold text-neutral-950">
+                Évolution des recettes
+              </h2>
+              <p className="mt-1 text-sm text-neutral-500">
+                6 derniers mois, paiements encaissés.
+              </p>
+            </div>
+            <EvolutionChart data={donneesEvolution} />
+          </div>
+        </section>
+
+        <section className="mt-6 grid gap-6 lg:grid-cols-[1.35fr_1fr]">
+          <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+            <h2 className="font-semibold text-neutral-950">
+              Statut de l'établissement
+            </h2>
+            <p className="mt-1 text-sm text-neutral-500">
+              Abonnement : <span className="font-medium text-neutral-900">{etablissement?.statut ?? "—"}</span>
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
             <h2 className="font-semibold text-neutral-950">Actions rapides</h2>
             <p className="mt-1 text-sm text-neutral-500">
               Accédez rapidement aux opérations principales.
@@ -276,4 +334,4 @@ export default async function ChefDashboard() {
       </div>
     </main>
   );
-                       }
+                }

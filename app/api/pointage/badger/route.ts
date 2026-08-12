@@ -31,6 +31,7 @@ type ConfigurationPointage = {
   pointage_eleves: boolean;
   tolerance_retard_minutes: number;
   tolerance_depart_anticipe_minutes: number;
+  ouverture_anticipee_minutes: number;
 };
 
 const ROLES_POINTAGE: {
@@ -49,34 +50,41 @@ const ROLES_POINTAGE: {
   ],
 };
 
+function includesRole(
+  liste: RolePointagePersonnel[],
+  role: RolePointagePersonnel
+): boolean {
+  return (liste as string[]).includes(role);
+}
+
 function roleAutorise(
   role: RolePointagePersonnel,
   config: ConfigurationPointage
 ): boolean {
   if (
     config.pointage_enseignants &&
-    ROLES_POINTAGE.enseignants.includes(role)
+    includesRole(ROLES_POINTAGE.enseignants, role)
   ) {
     return true;
   }
 
   if (
     config.pointage_educateurs &&
-    ROLES_POINTAGE.educateurs.includes(role)
+    includesRole(ROLES_POINTAGE.educateurs, role)
   ) {
     return true;
   }
 
   if (
     config.pointage_direction &&
-    ROLES_POINTAGE.direction.includes(role)
+    includesRole(ROLES_POINTAGE.direction, role)
   ) {
     return true;
   }
 
   if (
     config.pointage_administration &&
-    ROLES_POINTAGE.administration.includes(role)
+    includesRole(ROLES_POINTAGE.administration, role)
   ) {
     return true;
   }
@@ -111,6 +119,15 @@ function estRolePointagePersonnel(
     role === 'secretaire' ||
     role === 'caissier'
   );
+}
+
+function heureMoinsMinutes(heure: string, minutes: number): string {
+  const [h, m] = heure.split(':').map(Number);
+  let total = h * 60 + m - minutes;
+  if (total < 0) total = 0;
+  const hh = Math.floor(total / 60);
+  const mm = total % 60;
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
 }
 
 export async function POST(request: Request) {
@@ -244,7 +261,7 @@ export async function POST(request: Request) {
     } = await supabase
       .from('pointage_configurations')
       .select(
-        'pointage_actif, pointage_enseignants, pointage_educateurs, pointage_direction, pointage_administration, pointage_eleves, tolerance_retard_minutes, tolerance_depart_anticipe_minutes'
+        'pointage_actif, pointage_enseignants, pointage_educateurs, pointage_direction, pointage_administration, pointage_eleves, tolerance_retard_minutes, tolerance_depart_anticipe_minutes, ouverture_anticipee_minutes'
       )
       .eq(
         'etablissement_id',
@@ -462,13 +479,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const periode = (periodes || []).find(
-      (p) =>
-        heureMinute >=
-          p.heure_debut.slice(0, 5) &&
-        heureMinute <=
-          p.heure_fin.slice(0, 5)
-    );
+    const periode = (periodes || []).find((p) => {
+      const debutAnticipe = heureMoinsMinutes(
+        p.heure_debut.slice(0, 5),
+        config.ouverture_anticipee_minutes
+      );
+      return (
+        heureMinute >= debutAnticipe &&
+        heureMinute <= p.heure_fin.slice(0, 5)
+      );
+    });
 
     if (!periode) {
       return NextResponse.json(
@@ -709,4 +729,4 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-             }
+        }

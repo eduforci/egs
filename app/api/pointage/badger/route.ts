@@ -630,82 +630,55 @@ export async function POST(request: Request) {
     }
 
     // -------------------------------------------------------------------------
+    // VALEURS CONFORMES À LA BASE DE DONNÉES
+    // -------------------------------------------------------------------------
+
+    const typeEvenementDB =
+      type_evenement === 'arrivee'
+        ? 'entree'
+        : 'sortie';
+
+    // -------------------------------------------------------------------------
     // ENREGISTREMENT
     // -------------------------------------------------------------------------
-// -------------------------------------------------------------------------
-// VALEURS CONFORMES À LA BASE DE DONNÉES
-// -------------------------------------------------------------------------
 
-const typeEvenementDB =
-  type_evenement === 'arrivee'
-    ? 'entree'
-    : 'sortie';
+    const {
+      data: pointage,
+      error: insertError,
+    } = await supabase
+      .from('pointages')
+      .insert({
+        etablissement_id: profil.etablissement_id,
+        profile_id: profil.id,
+        periode_id: periode.id,
+        device_id: device.id,
+        date_pointage: datePointage,
+        heure_pointage: heurePointage,
+        type_evenement: typeEvenementDB,
+        methode: 'device',
+        statut: 'enregistre',
+      })
+      .select()
+      .single();
 
-// -------------------------------------------------------------------------
-// ENREGISTREMENT
-// -------------------------------------------------------------------------
+    if (insertError) {
+      console.error('ERREUR INSERTION POINTAGE:', {
+        message: insertError.message,
+        details: insertError.details,
+        hint: insertError.hint,
+        code: insertError.code,
+      });
 
-const {
-  data: pointage,
-  error: insertError,
-} = await supabase
-  .from('pointages')
-  .insert({
-    etablissement_id: profil.etablissement_id,
-    profile_id: profil.id,
-    periode_id: periode.id,
-    device_id: device.id,
-    date_pointage: datePointage,
-    heure_pointage: heurePointage,
-
-    // La base utilise entree / sortie
-    type_evenement: typeEvenementDB,
-
-    // La base utilise device
-    methode: 'device',
-
-    // Le statut de la ligne est l'état administratif
-    statut: 'enregistre',
-  })
-  .select()
-  .single();
-
-if (insertError) {
-  console.error('ERREUR INSERTION POINTAGE:', {
-    message: insertError.message,
-    details: insertError.details,
-    hint: insertError.hint,
-    code: insertError.code,
-  });
-
-  return NextResponse.json(
-    {
-      error: 'Impossible d’enregistrer le pointage.',
-      details: insertError.message,
-      code: insertError.code,
-      hint: insertError.hint,
-    },
-    { status: 500 }
-  );
-}
-
-if (insertError) {
-  console.error('ERREUR INSERTION POINTAGE:', {
-    message: insertError.message,
-    details: insertError.details,
-    hint: insertError.hint,
-    code: insertError.code,
-  });
-
-  return NextResponse.json(
-    {
-      error: 'Impossible d’enregistrer le pointage.',
-      details: insertError.message,
-      code: insertError.code,
-    },
-    { status: 500 }
-  );
-}
+      return NextResponse.json(
+        {
+          error: 'Impossible d’enregistrer le pointage.',
+          details: insertError.message,
+          code: insertError.code,
+          hint: insertError.hint,
+        },
+        { status: 500 }
+      );
+    }
 
     // -------------------------------------------------------------------------
     // MISE À JOUR DE L'APPAREIL

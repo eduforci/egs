@@ -632,26 +632,62 @@ export async function POST(request: Request) {
     // -------------------------------------------------------------------------
     // ENREGISTREMENT
     // -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+// VALEURS CONFORMES À LA BASE DE DONNÉES
+// -------------------------------------------------------------------------
 
-    const {
-      data: pointage,
-      error: insertError,
-    } = await supabase
-      .from('pointages')
-      .insert({
-        etablissement_id:
-          profil.etablissement_id,
-        profile_id: profil.id,
-        periode_id: periode.id,
-        device_id: device.id,
-        date_pointage: datePointage,
-        heure_pointage: heurePointage,
-        type_evenement,
-        methode: 'appareil',
-        statut,
-      })
-      .select()
-      .single();
+const typeEvenementDB =
+  type_evenement === 'arrivee'
+    ? 'entree'
+    : 'sortie';
+
+// -------------------------------------------------------------------------
+// ENREGISTREMENT
+// -------------------------------------------------------------------------
+
+const {
+  data: pointage,
+  error: insertError,
+} = await supabase
+  .from('pointages')
+  .insert({
+    etablissement_id: profil.etablissement_id,
+    profile_id: profil.id,
+    periode_id: periode.id,
+    device_id: device.id,
+    date_pointage: datePointage,
+    heure_pointage: heurePointage,
+
+    // La base utilise entree / sortie
+    type_evenement: typeEvenementDB,
+
+    // La base utilise device
+    methode: 'device',
+
+    // Le statut de la ligne est l'état administratif
+    statut: 'enregistre',
+  })
+  .select()
+  .single();
+
+if (insertError) {
+  console.error('ERREUR INSERTION POINTAGE:', {
+    message: insertError.message,
+    details: insertError.details,
+    hint: insertError.hint,
+    code: insertError.code,
+  });
+
+  return NextResponse.json(
+    {
+      error: 'Impossible d’enregistrer le pointage.',
+      details: insertError.message,
+      code: insertError.code,
+      hint: insertError.hint,
+    },
+    { status: 500 }
+  );
+}
 
 if (insertError) {
   console.error('ERREUR INSERTION POINTAGE:', {

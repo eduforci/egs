@@ -653,20 +653,23 @@ export async function POST(request: Request) {
       .select()
       .single();
 
-    if (insertError) {
-      console.error(
-        'Erreur insertion pointage:',
-        insertError
-      );
+if (insertError) {
+  console.error('ERREUR INSERTION POINTAGE:', {
+    message: insertError.message,
+    details: insertError.details,
+    hint: insertError.hint,
+    code: insertError.code,
+  });
 
-      return NextResponse.json(
-        {
-          error:
-            'Impossible d’enregistrer le pointage.',
-        },
-        { status: 500 }
-      );
-    }
+  return NextResponse.json(
+    {
+      error: 'Impossible d’enregistrer le pointage.',
+      details: insertError.message,
+      code: insertError.code,
+    },
+    { status: 500 }
+  );
+}
 
     // -------------------------------------------------------------------------
     // MISE À JOUR DE L'APPAREIL

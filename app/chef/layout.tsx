@@ -34,6 +34,16 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    titre: 'POINTAGE',
+    items: [
+      { label: 'Badger', href: '/pointage', icon: '👆' },
+      { label: 'Configuration', href: '/direction/pointage/configuration', icon: '⚙️' },
+      { label: 'Suivi du jour', href: '/direction/pointage/suivi', icon: '📋' },
+      { label: 'Justifications', href: '/direction/pointage/justifications', icon: '✅' },
+      { label: 'Rapports', href: '/direction/pointage/rapports', icon: '📊' },
+    ],
+  },
+  {
     titre: 'DOCUMENTS',
     items: [
       { label: 'Documents élèves', href: '/direction/documents', icon: '📁' },

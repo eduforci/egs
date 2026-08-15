@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import AbsencesChart from './absences-chart';
 
 type Stats = {
   nbClasses: number;
@@ -13,11 +14,16 @@ type Stats = {
   bulletinsAPreparer: number;
 };
 
+type DonneeJour = { jour: string; absences: number };
+
+const JOURS_LABEL = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+
 export default function DashboardDirecteurEtudes() {
   const supabase = createClient();
   const [prenom, setPrenom] = useState('');
   const [etablissementNom, setEtablissementNom] = useState('');
   const [stats, setStats] = useState<Stats | null>(null);
+  const [absencesParJour, setAbsencesParJour] = useState<DonneeJour[]>([]);
   const [loading, setLoading] = useState(true);
   const [erreur, setErreur] = useState('');
 
@@ -119,6 +125,39 @@ export default function DashboardDirecteurEtudes() {
         if (!combosValidees.has(combo)) notesAValider++;
       });
 
+      // Absences des 7 derniers jours
+      const il7Jours = new Date();
+      il7Jours.setDate(il7Jours.getDate() - 6);
+      const il7JoursStr = il7Jours.toISOString().slice(0, 10);
+
+      const { data: absencesRecentes } = await supabase
+        .from('absences')
+        .select('date')
+        .eq('etablissement_id', profil.etablissement_id)
+        .eq('type', 'absence')
+        .gte('date', il7JoursStr);
+
+      const joursRange: { cle: string; label: string }[] = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        joursRange.push({
+          cle: d.toISOString().slice(0, 10),
+          label: JOURS_LABEL[d.getDay()],
+        });
+      }
+
+      const compteParJour = new Map(joursRange.map((j) => [j.cle, 0]));
+      (absencesRecentes || []).forEach((a) => {
+        if (compteParJour.has(a.date)) {
+          compteParJour.set(a.date, (compteParJour.get(a.date) || 0) + 1);
+        }
+      });
+
+      setAbsencesParJour(
+        joursRange.map((j) => ({ jour: j.label, absences: compteParJour.get(j.cle) || 0 }))
+      );
+
       setStats({
         nbClasses: nbClasses || 0,
         nbMatieres: nbMatieres || 0,
@@ -161,6 +200,11 @@ export default function DashboardDirecteurEtudes() {
           <div className="text-2xl font-bold">{stats?.nbAbsences}</div>
           <div className="text-xs text-gray-500 mt-1">Absences</div>
         </div>
+      </div>
+
+      <div className="border rounded-xl p-4">
+        <h2 className="font-semibold mb-3">Absences — 7 derniers jours</h2>
+        <AbsencesChart data={absencesParJour} />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -215,4 +259,4 @@ export default function DashboardDirecteurEtudes() {
       </div>
     </div>
   );
-              }
+        }

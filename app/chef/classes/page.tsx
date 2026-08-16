@@ -13,6 +13,17 @@ type Classe = {
   annee_scolaire: string;
 };
 
+type MatiereOption = {
+  id: string;
+  nom: string;
+  coefficient_defaut: number;
+};
+
+type Selection = {
+  checked: boolean;
+  coefficient: number;
+};
+
 const CYCLES = [
   { value: '', label: 'Non précisé' },
   { value: 'maternelle', label: 'Maternelle' },
@@ -27,11 +38,15 @@ export default function ClassesPage() {
   const [etablissementId, setEtablissementId] = useState<string | null>(null);
   const [anneeActive, setAnneeActive] = useState('');
   const [classes, setClasses] = useState<Classe[]>([]);
+  const [matieresEtablissement, setMatieresEtablissement] = useState<MatiereOption[]>([]);
 
   const [nom, setNom] = useState('');
   const [niveau, setNiveau] = useState('');
   const [cycle, setCycle] = useState('');
   const [serie, setSerie] = useState('');
+
+  const [selection, setSelection] = useState<Record<string, Selection>>({});
+  const [classeModele, setClasseModele] = useState('');
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -73,6 +88,22 @@ export default function ClassesPage() {
 
       if (classesError) throw new Error(`Erreur classes : ${classesError.message}`);
       setClasses(classesData ?? []);
+
+      const { data: matieresData, error: matieresError } = await supabase
+        .from('matieres')
+        .select('id, nom, coefficient_defaut')
+        .eq('etablissement_id', profile.etablissement_id)
+        .order('nom');
+
+      if (matieresError) throw new Error(`Erreur matières : ${matieresError.message}`);
+      setMatieresEtablissement(matieresData ?? []);
+
+      // Sélection initiale : rien de coché, coefficient par défaut pré-rempli
+      const selectionInitiale: Record<string, Selection> = {};
+      (matieresData ?? []).forEach((m) => {
+        selectionInitiale[m.id] = { checked: false, coefficient: m.coefficient_defaut ?? 1 };
+      });
+      setSelection(selectionInitiale);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur inconnue');
     } finally {
@@ -84,6 +115,60 @@ export default function ClassesPage() {
     charger();
   }, [charger]);
 
+  // Pré-coche automatiquement "Conduite" dès que le cycle choisi est collège ou lycée
+  useEffect(() => {
+    if (cycle !== 'college' && cycle !== 'lycee') return;
+    const conduite = matieresEtablissement.find((m) => m.nom === 'Conduite');
+    if (!conduite) return;
+    setSelection((prev) => ({
+      ...prev,
+      [conduite.id]: { checked: true, coefficient: 1 },
+    }));
+  }, [cycle, matieresEtablissement]);
+
+  function toggleMatiere(matiereId: string) {
+    setSelection((prev) => ({
+      ...prev,
+      [matiereId]: { ...prev[matiereId], checked: !prev[matiereId]?.checked },
+    }));
+  }
+
+  function modifierCoefficientSelection(matiereId: string, coefficient: number) {
+    setSelection((prev) => ({
+      ...prev,
+      [matiereId]: { ...prev[matiereId], coefficient },
+    }));
+  }
+
+  async function copierDepuisClasse(classeId: string) {
+    setClasseModele(classeId);
+    if (!classeId) return;
+
+    const { data: matieresClasse, error: err } = await supabase
+      .from('classes_matieres')
+      .select('matiere_id, coefficient')
+      .eq('classe_id', classeId);
+
+    if (err) {
+      setError(`Erreur copie des matières : ${err.message}`);
+      return;
+    }
+
+    setSelection((prev) => {
+      const copie = { ...prev };
+      // On décoche tout d'abord, puis on coche seulement les matières du modèle
+      Object.keys(copie).forEach((id) => {
+        copie[id] = { ...copie[id], checked: false };
+      });
+      (matieresClasse ?? []).forEach((mc) => {
+        if (copie[mc.matiere_id]) {
+          copie[mc.matiere_id] = { checked: true, coefficient: mc.coefficient };
+        }
+      });
+      return copie;
+    });
+  }
+
   async function creerClasse() {
     if (!nom.trim() || !niveau.trim() || !etablissementId) {
       setError('Nom et niveau sont obligatoires.');
@@ -93,26 +178,57 @@ export default function ClassesPage() {
     setError(null);
     setSucces(null);
 
-    const { error: insertError } = await supabase.from('classes').insert({
-      etablissement_id: etablissementId,
-      nom: nom.trim(),
-      niveau: niveau.trim(),
-      cycle: cycle || null,
-      serie: serie.trim() || null,
-      annee_scolaire: anneeActive,
-    });
+    const { data: classeCreee, error: insertError } = await supabase
+      .from('classes')
+      .insert({
+        etablissement_id: etablissementId,
+        nom: nom.trim(),
+        niveau: niveau.trim(),
+        cycle: cycle || null,
+        serie: serie.trim() || null,
+        annee_scolaire: anneeActive,
+      })
+      .select('id')
+      .single();
 
-    setSaving(false);
-    if (insertError) {
-      setError(`Erreur création : ${insertError.message}`);
+    if (insertError || !classeCreee) {
+      setSaving(false);
+      setError(`Erreur création : ${insertError?.message}`);
       return;
     }
 
-    setSucces('Classe créée.');
+    const matieresACreer = Object.entries(selection)
+      .filter(([, sel]) => sel.checked)
+      .map(([matiereId, sel]) => ({
+        classe_id: classeCreee.id,
+        matiere_id: matiereId,
+        coefficient: sel.coefficient,
+      }));
+
+    if (matieresACreer.length > 0) {
+      const { error: matieresError } = await supabase
+        .from('classes_matieres')
+        .insert(matieresACreer);
+
+      if (matieresError) {
+        setSaving(false);
+        setError(`Classe créée, mais erreur lors de l'ajout des matières : ${matieresError.message}`);
+        charger();
+        return;
+      }
+    }
+
+    setSaving(false);
+    setSucces(
+      matieresACreer.length > 0
+        ? `Classe créée avec ${matieresACreer.length} matière(s).`
+        : 'Classe créée sans matière. Tu pourras en ajouter depuis la page "Matières".'
+    );
     setNom('');
     setNiveau('');
     setCycle('');
     setSerie('');
+    setClasseModele('');
     charger();
   }
 
@@ -129,6 +245,8 @@ export default function ClassesPage() {
     }
     charger();
   }
+
+  const nbSelectionnees = Object.values(selection).filter((s) => s.checked).length;
 
   if (loading) return <p className="p-6 text-sm text-gray-500">Chargement...</p>;
 
@@ -206,7 +324,7 @@ export default function ClassesPage() {
             type="text"
             value={nom}
             onChange={(e) => setNom(e.target.value)}
-            placeholder="Nom de la classe (ex: 6ème A)"
+            placeholder="Nom de la classe (ex: 6ème A, 6e 2, Tle D5...)"
             className="w-full border rounded-md px-3 py-2 text-sm"
           />
 
@@ -237,6 +355,60 @@ export default function ClassesPage() {
             className="w-full border rounded-md px-3 py-2 text-sm"
           />
 
+          {/* Sélection des matières */}
+          <div className="border-t pt-3">
+            <p className="text-xs text-gray-600 mb-2">
+              Matières de la classe ({nbSelectionnees} sélectionnée{nbSelectionnees > 1 ? 's' : ''})
+            </p>
+
+            {classes.length > 0 && (
+              <select
+                value={classeModele}
+                onChange={(e) => copierDepuisClasse(e.target.value)}
+                className="w-full border rounded-md px-3 py-2 text-sm mb-3"
+              >
+                <option value="">Copier les matières depuis une classe existante...</option>
+                {classes.map((c) => (
+                  <option key={c.id} value={c.id}>{c.nom}</option>
+                ))}
+              </select>
+            )}
+
+            {matieresEtablissement.length === 0 ? (
+              <p className="text-xs text-gray-400">
+                Aucune matière n'existe encore pour cet établissement. Tu pourras en créer depuis
+                la page "Matières" d'une classe.
+              </p>
+            ) : (
+              <div className="border rounded-md divide-y max-h-64 overflow-y-auto">
+                {matieresEtablissement.map((m) => {
+                  const sel = selection[m.id] ?? { checked: false, coefficient: m.coefficient_defaut ?? 1 };
+                  return (
+                    <label key={m.id} className="flex items-center gap-2 px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={sel.checked}
+                        onChange={() => toggleMatiere(m.id)}
+                      />
+                      <span className="flex-1">{m.nom}</span>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        value={sel.coefficient}
+                        onChange={(e) =>
+                          modifierCoefficientSelection(m.id, parseFloat(e.target.value) || 0)
+                        }
+                        disabled={!sel.checked}
+                        className="w-14 border rounded px-1 py-0.5 text-center text-xs disabled:opacity-40"
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           <button
             onClick={creerClasse}
             disabled={saving || !nom.trim() || !niveau.trim()}
@@ -248,5 +420,5 @@ export default function ClassesPage() {
       </div>
     </main>
   );
-             }
-        
+    }
+      

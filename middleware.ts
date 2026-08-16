@@ -18,7 +18,10 @@ const ROLE_ROUTES: Record<string, string> = {
 const EXCEPTIONS: { prefix: string; rolesSupplementaires: string[] }[] = [
   { prefix: "/chef/bulletins", rolesSupplementaires: ["directeur_etudes"] },
 ];
-
+const EXCEPTIONS: { prefix: string; rolesSupplementaires: string[] }[] = [
+  { prefix: "/chef/bulletins", rolesSupplementaires: ["directeur_etudes"] },
+  { prefix: "/chef/comptabilite", rolesSupplementaires: ["comptable"] },
+];
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
 

@@ -17,9 +17,6 @@ const ROLE_ROUTES: Record<string, string> = {
 // Exceptions : chemins normalement reserves a un role, mais accessibles aussi a d'autres roles
 const EXCEPTIONS: { prefix: string; rolesSupplementaires: string[] }[] = [
   { prefix: "/chef/bulletins", rolesSupplementaires: ["directeur_etudes"] },
-];
-const EXCEPTIONS: { prefix: string; rolesSupplementaires: string[] }[] = [
-  { prefix: "/chef/bulletins", rolesSupplementaires: ["directeur_etudes"] },
   { prefix: "/chef/comptabilite", rolesSupplementaires: ["comptable"] },
 ];
 export async function middleware(request: NextRequest) {

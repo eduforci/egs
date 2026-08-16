@@ -16,7 +16,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     titre: 'FINANCES',
     items: [
-      { label: 'Frais de scolarité', href: '/finances', icon: '💰' },
+      { label: 'Frais de scolarité', href: '/chef/comptabilite', icon: '💰' },
       { label: 'Rapports financiers', href: '/finances/rapports', icon: '📊' },
       { label: 'Relances impayés', href: '/direction/relances', icon: '📨' },
     ],

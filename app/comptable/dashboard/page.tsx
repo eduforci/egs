@@ -232,7 +232,7 @@ export default async function ComptableDashboard() {
 
             <div className="mt-5 grid gap-3">
               <ActionCard
-                href="/chef/comptabilite"
+                href="/chef/comptabilite/frais"
                 title="💰 Frais de scolarité"
                 description="Consulter les frais et situations des élèves."
               />

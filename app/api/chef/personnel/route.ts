@@ -12,10 +12,12 @@ const ROLES_AUTORISES = [
 
 type RoleAutorise = (typeof ROLES_AUTORISES)[number];
 
+// Préfixes distincts pour chaque rôle, afin d'éviter toute confusion :
+// "directeur_etudes" utilise "DE" (et non "DIR", réservé au chef d'établissement).
 const PREFIXES: Record<RoleAutorise, string> = {
   enseignant: "ENS",
   educateur: "EDU",
-  directeur_etudes: "DIR",
+  directeur_etudes: "DE",
   comptable: "COM",
   secretaire: "SEC",
 };
@@ -129,4 +131,4 @@ export async function POST(request: Request) {
     console.error("Erreur création personnel :", error);
     return NextResponse.json({ error: "Une erreur inattendue est survenue." }, { status: 500 });
   }
-      }
+}

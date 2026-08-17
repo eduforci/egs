@@ -131,4 +131,5 @@ export async function POST(request: Request) {
     console.error("Erreur création personnel :", error);
     return NextResponse.json({ error: "Une erreur inattendue est survenue." }, { status: 500 });
   }
-}
+        }
+  

@@ -54,16 +54,16 @@ export async function POST(request: Request) {
   const { data: existants } = await admin
     .from("profiles")
     .select("identifiant")
-    .like("identifiant", "DIR-%");
+    .like("identifiant", "CE-%");
 
   const maxNumero = (existants ?? []).reduce((max, p) => {
-    const match = p.identifiant?.match(/^DIR-(\d+)$/);
+    const match = p.identifiant?.match(/^CE-(\d+)$/);
     const n = match ? parseInt(match[1], 10) : 0;
     return n > max ? n : max;
   }, 0);
 
   const numero = String(maxNumero + 1).padStart(4, "0");
-  const identifiant = `DIR-${numero}`;
+  const identifiant = `CE-${numero}`;
   const emailTechnique = `${identifiant.toLowerCase()}@${etablissementId}.egs.local`;
   const motDePasseProvisoire = Math.random().toString(36).slice(-8) + "A1!";
 

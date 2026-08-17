@@ -26,16 +26,16 @@ export default function NouvelEtablissement() {
   const [typeEtablissement, setTypeEtablissement] = useState<(typeof TYPES)[number]["value"]>("college");
   const [systeme, setSysteme] = useState("ivoirien");
   const [anneeScolaire, setAnneeScolaire] = useState("2025-2026");
-  const [nomDirecteur, setNomDirecteur] = useState("");
-  const [prenomDirecteur, setPrenomDirecteur] = useState("");
+  const [nomChef, setNomChef] = useState("");
+  const [prenomChef, setPrenomChef] = useState("");
 
   const [chargement, setChargement] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [resultat, setResultat] = useState<{
     classes: number;
     matieres: number;
-    identifiantDirecteur: string;
-    motDePasseDirecteur: string;
+    identifiantChef: string;
+    motDePasseChef: string;
   } | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -46,8 +46,8 @@ export default function NouvelEtablissement() {
       setErreur("Le nom de l'établissement est obligatoire.");
       return;
     }
-    if (!nomDirecteur.trim() || !prenomDirecteur.trim()) {
-      setErreur("Le nom et le prénom du directeur sont obligatoires.");
+    if (!nomChef.trim() || !prenomChef.trim()) {
+      setErreur("Le nom et le prénom du chef d'établissement sont obligatoires.");
       return;
     }
 
@@ -89,24 +89,24 @@ export default function NouvelEtablissement() {
       return;
     }
 
-    // Création automatique du compte directeur
-    const reponseDirecteur = await fetch("/api/admin/creer-directeur", {
+    // Création automatique du compte chef d'établissement
+    const reponseChef = await fetch("/api/admin/creer-directeur", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         etablissementId: nouvelEtab.id,
-        nom: nomDirecteur.trim(),
-        prenom: prenomDirecteur.trim(),
+        nom: nomChef.trim(),
+        prenom: prenomChef.trim(),
       }),
     });
 
-    const dataDirecteur = await reponseDirecteur.json();
+    const dataChef = await reponseChef.json();
 
     setChargement(false);
 
-    if (!reponseDirecteur.ok) {
+    if (!reponseChef.ok) {
       setErreur(
-        `Établissement initialisé, mais la création du compte directeur a échoué : ${dataDirecteur.error}. Tu peux réessayer depuis la fiche de l'établissement.`
+        `Établissement initialisé, mais la création du compte chef d'établissement a échoué : ${dataChef.error}. Tu peux réessayer depuis la fiche de l'établissement.`
       );
       return;
     }
@@ -114,8 +114,8 @@ export default function NouvelEtablissement() {
     setResultat({
       classes: initData?.classes_creees ?? 0,
       matieres: initData?.matieres_creees ?? 0,
-      identifiantDirecteur: dataDirecteur.identifiant,
-      motDePasseDirecteur: dataDirecteur.motDePasseProvisoire,
+      identifiantChef: dataChef.identifiant,
+      motDePasseChef: dataChef.motDePasseProvisoire,
     });
   }
 
@@ -135,13 +135,13 @@ export default function NouvelEtablissement() {
         </div>
 
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 space-y-2 mb-4">
-          <h2 className="font-medium text-amber-900">Identifiants du directeur</h2>
+          <h2 className="font-medium text-amber-900">Identifiants du chef d'établissement</h2>
           <p className="text-sm text-amber-800">
-            Transmets ces identifiants au directeur. Il les changera à sa première connexion.
+            Transmets ces identifiants au chef d'établissement. Il les changera à sa première connexion.
           </p>
           <div className="bg-white rounded-lg p-3 font-mono text-sm space-y-1">
-            <p>Identifiant : <span className="font-semibold">{resultat.identifiantDirecteur}</span></p>
-            <p>Mot de passe : <span className="font-semibold">{resultat.motDePasseDirecteur}</span></p>
+            <p>Identifiant : <span className="font-semibold">{resultat.identifiantChef}</span></p>
+            <p>Mot de passe : <span className="font-semibold">{resultat.motDePasseChef}</span></p>
           </div>
         </div>
 
@@ -160,7 +160,7 @@ export default function NouvelEtablissement() {
         Nouvel établissement
       </h1>
       <p className="text-neutral-500 mb-6">
-        Renseignez les informations. Les classes, matières et le compte directeur seront créés automatiquement.
+        Renseignez les informations. Les classes, matières et le compte chef d'établissement seront créés automatiquement.
       </p>
 
       <form
@@ -283,14 +283,14 @@ export default function NouvelEtablissement() {
         </div>
 
         <div className="pt-2 border-t">
-          <h2 className="text-sm font-semibold mt-4 mb-3">Directeur de l'établissement</h2>
+          <h2 className="text-sm font-semibold mt-4 mb-3">Chef d'établissement</h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Nom *</label>
               <input
                 type="text"
-                value={nomDirecteur}
-                onChange={(e) => setNomDirecteur(e.target.value)}
+                value={nomChef}
+                onChange={(e) => setNomChef(e.target.value)}
                 required
                 className="w-full border rounded-lg p-2"
               />
@@ -299,8 +299,8 @@ export default function NouvelEtablissement() {
               <label className="block text-sm font-medium mb-1">Prénom *</label>
               <input
                 type="text"
-                value={prenomDirecteur}
-                onChange={(e) => setPrenomDirecteur(e.target.value)}
+                value={prenomChef}
+                onChange={(e) => setPrenomChef(e.target.value)}
                 required
                 className="w-full border rounded-lg p-2"
               />
@@ -319,4 +319,4 @@ export default function NouvelEtablissement() {
     </main>
   );
         }
-        
+      

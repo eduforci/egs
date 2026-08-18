@@ -89,9 +89,14 @@ export default function ListeElevesPage() {
     <main className="p-6 sm:p-8 max-w-3xl mx-auto">
       <div className="flex items-center justify-between mb-1">
         <h1 className="font-display text-3xl font-semibold">Élèves</h1>
-        <Link href="/chef/eleves/nouveau" className="bg-black text-white rounded-lg px-3 py-1.5 text-sm font-medium">
-          + Ajouter
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/chef/eleves/import" className="border border-black text-black rounded-lg px-3 py-1.5 text-sm font-medium">
+            Importer
+          </Link>
+          <Link href="/chef/eleves/nouveau" className="bg-black text-white rounded-lg px-3 py-1.5 text-sm font-medium">
+            + Ajouter
+          </Link>
+        </div>
       </div>
       <p className="text-neutral-500 mb-6">{eleves.length} élève(s)</p>
 
@@ -131,3 +136,4 @@ export default function ListeElevesPage() {
     </main>
   );
           }
+    

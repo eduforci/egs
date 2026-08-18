@@ -2,11 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-function genererMatricule() {
-  const n = Math.floor(100000 + Math.random() * 900000);
-  return `ELV${n}`;
-}
-
 function genererMotDePasseTemporaire() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
   let out = "";
@@ -18,14 +13,16 @@ function genererMotDePasseTemporaire() {
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { nom, prenom, classe_id, date_naissance } = body ?? {};
+  const { nom, prenom, matricule, classe_id, date_naissance } = body ?? {};
 
-  if (!nom || !prenom || !classe_id) {
+  if (!nom || !prenom || !matricule || !classe_id) {
     return NextResponse.json(
-      { error: "Nom, prénom et classe sont obligatoires." },
+      { error: "Nom, prénom, matricule et classe sont obligatoires." },
       { status: 400 }
     );
   }
+
+  const matriculeNettoye = matricule.toString().trim();
 
   // 1. Vérifier que l'appelant est bien connecté et autorisé
   const supabase = await createClient();
@@ -72,40 +69,40 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 3. Créer le compte (email interne synthétique, mot de passe temporaire)
   const admin = createAdminClient();
 
-  let matricule = "";
-  let userId = "";
-  const motDePasse = genererMotDePasseTemporaire();
+  // 3. Le matricule est délivré par le ministère : on vérifie juste qu'il
+  // n'est pas déjà utilisé dans EGS, sans jamais en générer un nous-mêmes.
+  const { data: matriculeExistant } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("identifiant", matriculeNettoye)
+    .maybeSingle();
 
-  for (let tentative = 0; tentative < 5; tentative++) {
-    matricule = genererMatricule();
-    const emailSynthetique = `${matricule.toLowerCase()}@eleves.egs.local`;
-
-    const { data: created, error: createError } = await admin.auth.admin.createUser({
-      email: emailSynthetique,
-      password: motDePasse,
-      email_confirm: true,
-    });
-
-    if (!createError && created?.user) {
-      userId = created.user.id;
-      break;
-    }
-
-    // Collision improbable sur le matricule/email : on retente
-    if (createError && !createError.message.includes("already")) {
-      return NextResponse.json({ error: createError.message }, { status: 500 });
-    }
+  if (matriculeExistant) {
+    return NextResponse.json(
+      { error: `Le matricule "${matriculeNettoye}" est déjà utilisé par un autre compte.` },
+      { status: 409 }
+    );
   }
 
-  if (!userId) {
+  const motDePasse = genererMotDePasseTemporaire();
+  const emailSynthetique = `${matriculeNettoye.toLowerCase()}@eleves.egs.local`;
+
+  const { data: created, error: createError } = await admin.auth.admin.createUser({
+    email: emailSynthetique,
+    password: motDePasse,
+    email_confirm: true,
+  });
+
+  if (createError || !created?.user) {
     return NextResponse.json(
-      { error: "Impossible de générer un matricule unique. Réessayez." },
+      { error: createError?.message || "Erreur lors de la création du compte." },
       { status: 500 }
     );
   }
+
+  const userId = created.user.id;
 
   // 4. Profil + fiche élève
   const { error: profileError } = await admin.from("profiles").insert({
@@ -114,7 +111,7 @@ export async function POST(request: NextRequest) {
     etablissement_id: profile.etablissement_id,
     nom,
     prenom,
-    identifiant: matricule,
+    identifiant: matriculeNettoye,
     must_change_password: true,
   });
 
@@ -127,8 +124,9 @@ export async function POST(request: NextRequest) {
     id: userId,
     etablissement_id: profile.etablissement_id,
     classe_id,
-    matricule,
+    matricule: matriculeNettoye,
     date_naissance: date_naissance || null,
+    statut: "actif",
   });
 
   if (eleveError) {
@@ -136,5 +134,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: eleveError.message }, { status: 500 });
   }
 
-  return NextResponse.json({ matricule, motDePasse });
+  return NextResponse.json({ matricule: matriculeNettoye, motDePasse });
 }

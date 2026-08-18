@@ -12,6 +12,7 @@ type Classe = {
 export default function NouvelEleveForm({ classes }: { classes: Classe[] }) {
   const [nom, setNom] = useState("");
   const [prenom, setPrenom] = useState("");
+  const [matricule, setMatricule] = useState("");
   const [classeId, setClasseId] = useState(classes[0]?.id ?? "");
   const [dateNaissance, setDateNaissance] = useState("");
   const [loading, setLoading] = useState(false);
@@ -25,8 +26,8 @@ export default function NouvelEleveForm({ classes }: { classes: Classe[] }) {
     e.preventDefault();
     setError(null);
 
-    if (!nom.trim() || !prenom.trim() || !classeId) {
-      setError("Nom, prénom et classe sont obligatoires.");
+    if (!nom.trim() || !prenom.trim() || !matricule.trim() || !classeId) {
+      setError("Nom, prénom, matricule et classe sont obligatoires.");
       return;
     }
 
@@ -38,6 +39,7 @@ export default function NouvelEleveForm({ classes }: { classes: Classe[] }) {
         body: JSON.stringify({
           nom: nom.trim(),
           prenom: prenom.trim(),
+          matricule: matricule.trim(),
           classe_id: classeId,
           date_naissance: dateNaissance || null,
         }),
@@ -61,6 +63,7 @@ export default function NouvelEleveForm({ classes }: { classes: Classe[] }) {
   function reinitialiser() {
     setNom("");
     setPrenom("");
+    setMatricule("");
     setDateNaissance("");
     setResultat(null);
     setError(null);
@@ -90,7 +93,7 @@ export default function NouvelEleveForm({ classes }: { classes: Classe[] }) {
 
         <div className="bg-white border rounded-xl p-5 space-y-3 mb-4">
           <div>
-            <span className="text-xs uppercase text-neutral-500">Identifiant</span>
+            <span className="text-xs uppercase text-neutral-500">Identifiant (matricule)</span>
             <p className="font-mono text-lg font-semibold">{resultat.matricule}</p>
           </div>
           <div>
@@ -126,10 +129,25 @@ export default function NouvelEleveForm({ classes }: { classes: Classe[] }) {
         Créer un compte élève
       </h1>
       <p className="text-neutral-500 mb-6 text-sm">
-        Un identifiant et un mot de passe temporaire seront générés automatiquement.
+        Renseigne le matricule officiel délivré par le ministère. Un mot de passe
+        temporaire sera généré automatiquement.
       </p>
 
       <form onSubmit={handleSubmit} className="bg-white border rounded-xl p-5 space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            Matricule <span className="text-neutral-400">(ministère)</span>
+          </label>
+          <input
+            type="text"
+            value={matricule}
+            onChange={(e) => setMatricule(e.target.value)}
+            className="w-full border rounded-lg p-2.5 font-mono"
+            placeholder="ex: 21427141U"
+            required
+          />
+        </div>
+
         <div>
           <label className="block text-sm font-medium mb-1">Nom</label>
           <input
@@ -199,4 +217,3 @@ export default function NouvelEleveForm({ classes }: { classes: Classe[] }) {
     </main>
   );
       }
-            

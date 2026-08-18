@@ -26,11 +26,83 @@ type ResultatLigne = {
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
+const ENTETES_CONNUES = ['matricule', 'nom', 'prénom', 'prenom', 'niveau', 'sexe', 'date de naissance'];
+
+function normaliserDate(valeur: string): string {
+  const v = valeur.trim();
+  if (!v) return '';
+  if (DATE_REGEX.test(v)) return v;
+  const d = new Date(v);
+  if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+  return '';
+}
+
+// Transforme un tableau de lignes brutes (chaînes de caractères par colonne)
+// en lignes validées, en repérant les en-têtes si elles sont reconnaissables,
+// sinon en supposant l'ordre du modèle : Matricule, Nom, Prénom, Niveau, Sexe, Date de naissance.
+function construireLignes(rangees: string[][]): LigneParsee[] {
+  if (rangees.length === 0) return [];
+
+  let indexDepart = 0;
+  let ordre = ['matricule', 'nom', 'prenom', 'niveau', 'sexe', 'date de naissance'];
+
+  const premiereLigne = rangees[0].map((c) => c.trim().toLowerCase().replace('é', 'e'));
+  const ressembleEntete = premiereLigne.some((c) => ENTETES_CONNUES.some((e) => e.replace('é', 'e') === c));
+
+  if (ressembleEntete) {
+    ordre = premiereLigne.map((c) => (c === 'prénom' ? 'prenom' : c));
+    indexDepart = 1;
+  }
+
+  const matriculesVus = new Set<string>();
+  const lignes: LigneParsee[] = [];
+
+  for (let i = indexDepart; i < rangees.length; i++) {
+    const rangee = rangees[i];
+    if (rangee.every((c) => !c.trim())) continue; // ligne vide ignorée
+
+    const valeurs: Record<string, string> = {};
+    ordre.forEach((cle, idx) => {
+      valeurs[cle] = (rangee[idx] ?? '').trim();
+    });
+
+    const nom = valeurs['nom'] ?? '';
+    const prenom = valeurs['prenom'] ?? '';
+    const matricule = valeurs['matricule'] ?? '';
+    const niveau = valeurs['niveau'] ?? '';
+    const sexeRaw = (valeurs['sexe'] ?? '').toUpperCase();
+    const sexe = sexeRaw === 'M' || sexeRaw === 'F' ? sexeRaw : '';
+    const dateNaissance = normaliserDate(valeurs['date de naissance'] ?? '');
+
+    let erreurLocale: string | null = null;
+    if (!nom || !prenom || !matricule || !niveau) {
+      erreurLocale = 'Nom, prénom, matricule et niveau sont obligatoires.';
+    } else if (matriculesVus.has(matricule)) {
+      erreurLocale = 'Matricule en double dans ce fichier.';
+    }
+    if (matricule) matriculesVus.add(matricule);
+
+    lignes.push({
+      nom,
+      prenom,
+      matricule,
+      niveau,
+      sexe,
+      date_naissance: dateNaissance,
+      valide: erreurLocale === null,
+      erreurLocale,
+    });
+  }
+
+  return lignes;
+}
+
 export default function ImportElevesPage() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [lignes, setLignes] = useState<LigneParsee[]>([]);
   const [nomFichier, setNomFichier] = useState('');
+  const [texteCollé, setTexteCollé] = useState('');
   const [erreurFichier, setErreurFichier] = useState<string | null>(null);
 
   const [importing, setImporting] = useState(false);
@@ -74,13 +146,19 @@ export default function ImportElevesPage() {
     }
   }
 
+  function reinitialiserApercu() {
+    setLignes([]);
+    setResultats([]);
+    setResume(null);
+    setErreurFichier(null);
+  }
+
   function handleFichier(e: React.ChangeEvent<HTMLInputElement>) {
     const fichier = e.target.files?.[0];
     if (!fichier) return;
 
-    setErreurFichier(null);
-    setResultats([]);
-    setResume(null);
+    reinitialiserApercu();
+    setTexteCollé('');
     setNomFichier(fichier.name);
 
     const reader = new FileReader();
@@ -89,69 +167,48 @@ export default function ImportElevesPage() {
         const data = evt.target?.result;
         const classeur = XLSX.read(data, { type: 'binary' });
         const feuille = classeur.Sheets[classeur.SheetNames[0]];
-        const lignesBrutes = XLSX.utils.sheet_to_json<Record<string, any>>(feuille, { defval: '' });
+        const rangees: string[][] = XLSX.utils.sheet_to_json(feuille, { header: 1, defval: '' });
 
-        if (lignesBrutes.length === 0) {
+        if (rangees.length === 0) {
           setErreurFichier('Le fichier ne contient aucune ligne exploitable.');
-          setLignes([]);
           return;
         }
 
-        const matriculesVus = new Set<string>();
-
-        const parsees: LigneParsee[] = lignesBrutes.map((row) => {
-          const cle = (k: string) =>
-            Object.keys(row).find((c) => c.trim().toLowerCase() === k.toLowerCase());
-
-          const nom = (row[cle('nom') ?? 'Nom'] ?? '').toString().trim();
-          const prenom = (row[cle('prénom') ?? cle('prenom') ?? 'Prénom'] ?? '').toString().trim();
-          const matricule = (row[cle('matricule') ?? 'Matricule'] ?? '').toString().trim();
-          const niveau = (row[cle('niveau') ?? 'Niveau'] ?? '').toString().trim();
-          const sexeRaw = (row[cle('sexe') ?? 'Sexe'] ?? '').toString().trim().toUpperCase();
-          const sexe = sexeRaw === 'M' || sexeRaw === 'F' ? sexeRaw : '';
-          let dateNaissance = (row[cle('date de naissance') ?? 'Date de naissance'] ?? '')
-            .toString()
-            .trim();
-
-          if (dateNaissance && !DATE_REGEX.test(dateNaissance)) {
-            const dateExcel = new Date(dateNaissance);
-            if (!isNaN(dateExcel.getTime())) {
-              dateNaissance = dateExcel.toISOString().split('T')[0];
-            } else {
-              dateNaissance = '';
-            }
-          }
-
-          let erreurLocale: string | null = null;
-          if (!nom || !prenom || !matricule || !niveau) {
-            erreurLocale = 'Nom, prénom, matricule et niveau sont obligatoires.';
-          } else if (matriculesVus.has(matricule)) {
-            erreurLocale = 'Matricule en double dans ce fichier.';
-          }
-
-          if (matricule) matriculesVus.add(matricule);
-
-          return {
-            nom,
-            prenom,
-            matricule,
-            niveau,
-            sexe,
-            date_naissance: dateNaissance,
-            valide: erreurLocale === null,
-            erreurLocale,
-          };
-        });
-
-        setLignes(parsees);
+        setLignes(construireLignes(rangees.map((r) => r.map((c) => (c ?? '').toString()))));
       } catch (err) {
         setErreurFichier(
           "Impossible de lire ce fichier. Vérifie qu'il s'agit bien d'un fichier Excel (.xlsx) ou CSV valide."
         );
-        setLignes([]);
       }
     };
     reader.readAsBinaryString(fichier);
+  }
+
+  function analyserTexteColle() {
+    if (!texteCollé.trim()) return;
+
+    reinitialiserApercu();
+    setNomFichier('');
+    if (inputRef.current) inputRef.current.value = '';
+
+    // Les données copiées depuis Excel/Google Sheets utilisent des tabulations ;
+    // à défaut, on retombe sur la virgule ou le point-virgule.
+    const lignesTexte = texteCollé.split(/\r?\n/).filter((l) => l.trim() !== '');
+    const separateur = lignesTexte[0]?.includes('\t')
+      ? '\t'
+      : lignesTexte[0]?.includes(';')
+      ? ';'
+      : ',';
+
+    const rangees = lignesTexte.map((l) => l.split(separateur));
+    const construites = construireLignes(rangees);
+
+    if (construites.length === 0) {
+      setErreurFichier("Impossible d'interpréter le texte collé. Vérifie le format (une ligne par élève).");
+      return;
+    }
+
+    setLignes(construites);
   }
 
   async function lancerImport() {
@@ -189,6 +246,7 @@ export default function ImportElevesPage() {
       setResume({ nbSucces: data.nbSucces ?? 0, nbEchecs: data.nbEchecs ?? 0 });
       setLignes([]);
       setNomFichier('');
+      setTexteCollé('');
       if (inputRef.current) inputRef.current.value = '';
     } catch (err) {
       setErreurFichier(err instanceof Error ? err.message : 'Erreur réseau.');
@@ -222,17 +280,18 @@ export default function ImportElevesPage() {
     <main className="p-4 md:p-6 max-w-3xl mx-auto pb-16">
       <h1 className="text-xl font-bold mb-1">Import en masse des élèves</h1>
       <p className="text-sm text-gray-500 mb-4">
-        Importe une liste d'élèves avec leur matricule officiel (délivré par le ministère)
-        depuis un fichier Excel ou CSV. Chaque élève est placé dans la classe par défaut
-        de son niveau (créée automatiquement si besoin) ; tu pourras ensuite répartir les
-        élèves dans des sous-classes ou classes d'excellence.
+        Importe une liste d'élèves avec leur matricule officiel (délivré par le ministère),
+        soit en envoyant un fichier Excel/CSV, soit en collant directement les données
+        copiées depuis un tableau. Chaque élève est placé dans la classe par défaut de son
+        niveau (créée automatiquement si besoin) ; tu pourras ensuite répartir les élèves
+        dans des sous-classes ou classes d'excellence.
       </p>
 
       {/* Modèle */}
       <div className="border rounded-lg p-4 mb-6">
         <p className="font-semibold text-sm mb-2">1. Télécharger le modèle (optionnel)</p>
         <p className="text-xs text-gray-500 mb-3">
-          Colonnes attendues : <strong>Matricule</strong> (officiel, ministère),{' '}
+          Colonnes attendues, dans cet ordre : <strong>Matricule</strong> (officiel, ministère),{' '}
           <strong>Nom</strong>, <strong>Prénom</strong>, <strong>Niveau</strong>{' '}
           (toutes obligatoires), <strong>Sexe</strong> (M/F), <strong>Date de naissance</strong>{' '}
           (AAAA-MM-JJ) — ces deux dernières sont optionnelles.
@@ -253,9 +312,9 @@ export default function ImportElevesPage() {
         </div>
       </div>
 
-      {/* Upload */}
-      <div className="border rounded-lg p-4 mb-6">
-        <p className="font-semibold text-sm mb-2">2. Importer ton fichier</p>
+      {/* Upload fichier */}
+      <div className="border rounded-lg p-4 mb-4">
+        <p className="font-semibold text-sm mb-2">2a. Importer un fichier</p>
         <input
           ref={inputRef}
           type="file"
@@ -264,12 +323,36 @@ export default function ImportElevesPage() {
           className="text-sm"
         />
         {nomFichier && <p className="text-xs text-gray-500 mt-2">Fichier chargé : {nomFichier}</p>}
-        {erreurFichier && (
-          <div className="bg-red-50 border border-red-300 text-red-700 text-sm rounded-md p-3 mt-3">
-            {erreurFichier}
-          </div>
-        )}
       </div>
+
+      {/* Coller directement */}
+      <div className="border rounded-lg p-4 mb-6">
+        <p className="font-semibold text-sm mb-2">2b. Ou coller les données directement</p>
+        <p className="text-xs text-gray-500 mb-2">
+          Sélectionne et copie les colonnes depuis Excel, Google Sheets ou un tableau, puis
+          colle-les ci-dessous (une ligne par élève, colonnes dans l'ordre du modèle).
+        </p>
+        <textarea
+          value={texteCollé}
+          onChange={(e) => setTexteCollé(e.target.value)}
+          rows={6}
+          placeholder="21427141U	Kouassi	Awa	6ème	F	2013-04-12"
+          className="w-full border rounded-md px-3 py-2 text-xs font-mono"
+        />
+        <button
+          onClick={analyserTexteColle}
+          disabled={!texteCollé.trim()}
+          className="mt-2 border rounded-md px-3 py-2 text-xs font-medium disabled:opacity-50"
+        >
+          Analyser le texte collé
+        </button>
+      </div>
+
+      {erreurFichier && (
+        <div className="bg-red-50 border border-red-300 text-red-700 text-sm rounded-md p-3 mb-4">
+          {erreurFichier}
+        </div>
+      )}
 
       {/* Aperçu */}
       {lignes.length > 0 && (
@@ -321,9 +404,7 @@ export default function ImportElevesPage() {
             disabled={importing || nbValides === 0}
             className="w-full bg-black text-white rounded-md py-2 text-sm disabled:opacity-50 mt-4"
           >
-            {importing
-              ? 'Import en cours...'
-              : `Importer ${nbValides} élève(s)`}
+            {importing ? 'Import en cours...' : `Importer ${nbValides} élève(s)`}
           </button>
         </div>
       )}
@@ -375,5 +456,4 @@ export default function ImportElevesPage() {
       )}
     </main>
   );
-    }
-            
+  }

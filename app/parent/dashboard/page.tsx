@@ -11,7 +11,16 @@ type Enfant = {
   classe_nom: string;
   matricule: string;
   absencesNonJustifiees: number;
+  moyenneGenerale: number | null;
+  soldeAPayer: number;
 };
+
+function trimestreActuel(): number {
+  const mois = new Date().getMonth() + 1; // 1-12
+  if (mois >= 9 || mois <= 12) return 1;
+  if (mois >= 1 && mois <= 3) return 2;
+  return 3;
+}
 
 export default function DashboardParent() {
   const supabase = createClient();
@@ -42,10 +51,13 @@ export default function DashboardParent() {
 
       const { data: etab } = await supabase
         .from('etablissements')
-        .select('nom')
+        .select('nom, annee_scolaire_active')
         .eq('id', profil.etablissement_id)
         .single();
       setEtablissementNom(etab?.nom || '');
+
+      const anneeScolaire = etab?.annee_scolaire_active || '';
+      const trimestre = trimestreActuel();
 
       const { data: liens, error: liensError } = await supabase
         .from('parents_eleves')
@@ -78,6 +90,39 @@ export default function DashboardParent() {
         compteurAbsences.set(a.eleve_id, (compteurAbsences.get(a.eleve_id) || 0) + 1);
       });
 
+      // Solde à payer : somme des frais dus pour l'année active, tous frais confondus
+      const { data: fraisData } = idsEleves.length > 0
+        ? await supabase
+            .from('frais_scolarite')
+            .select('eleve_id, montant_total, montant_paye')
+            .in('eleve_id', idsEleves)
+            .eq('annee_scolaire', anneeScolaire)
+        : { data: [] };
+
+      const soldeParEleve = new Map<string, number>();
+      (fraisData || []).forEach((f) => {
+        const reste = Number(f.montant_total || 0) - Number(f.montant_paye || 0);
+        soldeParEleve.set(f.eleve_id, (soldeParEleve.get(f.eleve_id) || 0) + Math.max(reste, 0));
+      });
+
+      // Moyenne générale : on réutilise generer_bulletin (même logique que les bulletins officiels)
+      const moyenneParEleve = new Map<string, number | null>();
+      await Promise.all(
+        idsEleves.map(async (eleveId) => {
+          try {
+            const { data: bulletin } = await supabase.rpc('generer_bulletin', {
+              p_eleve_id: eleveId,
+              p_trimestre: trimestre,
+              p_annee_scolaire: anneeScolaire,
+            });
+            const moyenne = (bulletin as any)?.moyenne_generale ?? null;
+            moyenneParEleve.set(eleveId, typeof moyenne === 'number' ? moyenne : null);
+          } catch {
+            moyenneParEleve.set(eleveId, null);
+          }
+        })
+      );
+
       const liste: Enfant[] = (liens || []).map((l: any) => {
         const p = profsParId.get(l.eleve_id);
         return {
@@ -87,6 +132,8 @@ export default function DashboardParent() {
           matricule: l.eleves?.matricule || '',
           classe_nom: l.eleves?.classes?.nom || '',
           absencesNonJustifiees: compteurAbsences.get(l.eleve_id) || 0,
+          moyenneGenerale: moyenneParEleve.get(l.eleve_id) ?? null,
+          soldeAPayer: soldeParEleve.get(l.eleve_id) || 0,
         };
       });
 
@@ -129,6 +176,21 @@ export default function DashboardParent() {
               )}
             </div>
 
+            <div className="grid grid-cols-2 gap-2">
+              <div className="border rounded-lg p-2.5 text-center">
+                <p className="text-xs text-gray-500">Moyenne générale</p>
+                <p className="text-lg font-semibold">
+                  {e.moyenneGenerale !== null ? `${e.moyenneGenerale.toFixed(2)}/20` : '—'}
+                </p>
+              </div>
+              <div className="border rounded-lg p-2.5 text-center">
+                <p className="text-xs text-gray-500">Solde à payer</p>
+                <p className={`text-lg font-semibold ${e.soldeAPayer > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  {e.soldeAPayer.toLocaleString('fr-FR')} F
+                </p>
+              </div>
+            </div>
+
             <div className="grid grid-cols-3 gap-2">
               <Link
                 href="/absences"
@@ -154,4 +216,5 @@ export default function DashboardParent() {
       </div>
     </div>
   );
-    }
+        }
+      

@@ -18,6 +18,9 @@ const ROLE_ROUTES: Record<string, string> = {
 const EXCEPTIONS: { prefix: string; rolesSupplementaires: string[] }[] = [
   { prefix: "/chef/bulletins", rolesSupplementaires: ["directeur_etudes"] },
   { prefix: "/chef/comptabilite", rolesSupplementaires: ["comptable"] },
+  { prefix: "/chef/classes", rolesSupplementaires: ["directeur_etudes"] },
+  { prefix: "/chef/eleves", rolesSupplementaires: ["directeur_etudes"] },
+  { prefix: "/chef/examens", rolesSupplementaires: ["directeur_etudes"] },
 ];
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -104,3 +107,4 @@ export const config = {
     "/educateur/:path*",
   ],
 };
+        

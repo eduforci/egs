@@ -14,34 +14,24 @@ const NAV_GROUPS: NavGroup[] = [
     items: [{ label: 'Accueil', href: '/directeur/dashboard', icon: '🏠' }],
   },
   {
-    titre: 'PÉDAGOGIE',
+    titre: 'GESTION',
     items: [
-      { label: 'Notes à valider', href: '/directeur/notes-validation', icon: '📝' },
-      { label: 'Résultats', href: '/directeur/resultats', icon: '📊' },
-      { label: 'Bulletins', href: '/directeur/bulletins', icon: '📄' },
-      { label: 'Absences', href: '/directeur/absences', icon: '📋' },
-      { label: 'Emploi du temps', href: '/direction/emploi-du-temps', icon: '📅' },
+      { label: 'Classes', href: '/chef/classes', icon: '🏫' },
+      { label: 'Élèves', href: '/chef/eleves', icon: '🎓' },
+      { label: 'Examens', href: '/chef/examens', icon: '📝' },
+      { label: 'Bulletins', href: '/chef/bulletins', icon: '📄' },
+    ],
+  },
+  {
+    titre: 'COMMUNICATION SMS',
+    items: [
+      { label: 'Message libre', href: '/directeur/sms/message', icon: '💬' },
+      { label: 'Relances impayés', href: '/directeur/sms/relances', icon: '📨' },
     ],
   },
   {
     titre: 'POINTAGE',
-    items: [
-      { label: 'Badger', href: '/pointage', icon: '👆' },
-      { label: 'Suivi du jour', href: '/direction/pointage/suivi', icon: '📋' },
-      { label: 'Justifications', href: '/direction/pointage/justifications', icon: '✅' },
-      { label: 'Rapports', href: '/direction/pointage/rapports', icon: '📊' },
-    ],
-  },
-  {
-    titre: 'DOCUMENTS',
-    items: [
-      { label: 'Documents élèves', href: '/direction/documents', icon: '📁' },
-      { label: 'Documents enseignants', href: '/direction/documents-enseignants', icon: '📁' },
-    ],
-  },
-  {
-    titre: 'COMMUNICATION',
-    items: [{ label: 'Messagerie', href: '/direction/messagerie', icon: '💬' }],
+    items: [{ label: 'Badger', href: '/pointage', icon: '👆' }],
   },
 ];
 
@@ -135,7 +125,7 @@ export default function DirecteurLayout({ children }: { children: React.ReactNod
           </div>
           <div className="text-xs">
             <div className="font-medium">{prenom} {nom}</div>
-            <div className="text-neutral-400">Direction des études</div>
+            <div className="text-neutral-400">Directeur des études</div>
           </div>
         </div>
       </aside>
@@ -165,4 +155,5 @@ export default function DirecteurLayout({ children }: { children: React.ReactNod
       </div>
     </div>
   );
-}
+        }
+              

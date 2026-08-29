@@ -62,6 +62,14 @@ function IconSettings({ className }: { className?: string }) {
   );
 }
 
+function IconMessage({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
 function IconMenu({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -129,6 +137,10 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
+    title: "Communication",
+    items: [{ label: "Messages", href: "/admin/messages", icon: IconMessage }],
+  },
+  {
     title: "Administration",
     items: [
       { label: "Journaux d'activité", href: "/admin/journaux", icon: IconScroll },
@@ -137,18 +149,47 @@ const navGroups: NavGroup[] = [
   },
 ];
 
+type Notification = {
+  id: string;
+  titre: string;
+  contenu: string;
+  lien: string | null;
+  lu: boolean;
+  created_at: string;
+};
+
+type MessageSupport = {
+  id: string;
+  sujet: string;
+  statut: string;
+  created_at: string;
+  etablissement_nom: string;
+};
+
 export function AdminShell({
   children,
   fullName,
   roleLabel,
   anneeScolaire,
+  notifications,
+  notificationsNonLues,
+  messages,
+  messagesNonLus,
+  marquerToutesNotificationsLues,
 }: {
   children: React.ReactNode;
   fullName: string;
   roleLabel: string;
   anneeScolaire: string | null;
+  notifications: Notification[];
+  notificationsNonLues: number;
+  messages: MessageSupport[];
+  messagesNonLus: number;
+  marquerToutesNotificationsLues: () => Promise<void>;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [messagesOpen, setMessagesOpen] = useState(false);
   const pathname = usePathname();
 
   const initials = fullName
@@ -212,19 +253,146 @@ export function AdminShell({
               </div>
             )}
 
-            <button
-              className="relative rounded-lg p-2 text-[#6B6459] hover:bg-[#F1EEE4]"
-              aria-label="Notifications"
-            >
-              <IconBell className="h-5 w-5" />
-            </button>
+            {/* NOTIFICATIONS */}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setNotifOpen((v) => !v);
+                  setMessagesOpen(false);
+                }}
+                className="relative rounded-lg p-2 text-[#6B6459] hover:bg-[#F1EEE4]"
+                aria-label="Notifications"
+              >
+                <IconBell className="h-5 w-5" />
+                {notificationsNonLues > 0 && (
+                  <span className="absolute right-1 top-1 flex h-2 w-2 rounded-full bg-red-500" />
+                )}
+              </button>
 
-            <button
-              className="relative rounded-lg p-2 text-[#6B6459] hover:bg-[#F1EEE4]"
-              aria-label="Messages"
-            >
-              <IconMail className="h-5 w-5" />
-            </button>
+              {notifOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
+                  <div className="absolute right-0 z-50 mt-2 w-80 rounded-2xl border border-[#E7E2D6] bg-white shadow-lg">
+                    <div className="flex items-center justify-between border-b border-[#F1EEE4] px-4 py-3">
+                      <p className="text-sm font-semibold text-[#1C1B18]">Notifications</p>
+                      {notificationsNonLues > 0 && (
+                        <form action={marquerToutesNotificationsLues}>
+                          <button
+                            type="submit"
+                            className="text-xs font-medium text-[#0B3D2E] hover:underline"
+                          >
+                            Tout marquer comme lu
+                          </button>
+                        </form>
+                      )}
+                    </div>
+
+                    <div className="max-h-80 overflow-y-auto">
+                      {notifications.length === 0 ? (
+                        <p className="px-4 py-8 text-center text-sm text-[#8A8272]">
+                          Aucune notification.
+                        </p>
+                      ) : (
+                        notifications.map((n) => (
+                          <Link
+                            key={n.id}
+                            href={n.lien ?? "/admin/notifications"}
+                            onClick={() => setNotifOpen(false)}
+                            className={`block border-b border-[#F1EEE4] px-4 py-3 last:border-b-0 hover:bg-[#FAF8F3] ${
+                              !n.lu ? "bg-[#0B3D2E]/5" : ""
+                            }`}
+                          >
+                            <p className="text-sm font-medium text-[#1C1B18]">{n.titre}</p>
+                            <p className="mt-0.5 line-clamp-2 text-xs text-[#8A8272]">
+                              {n.contenu}
+                            </p>
+                          </Link>
+                        ))
+                      )}
+                    </div>
+
+                    <Link
+                      href="/admin/notifications"
+                      onClick={() => setNotifOpen(false)}
+                      className="block border-t border-[#F1EEE4] px-4 py-2.5 text-center text-sm font-medium text-[#0B3D2E] hover:bg-[#FAF8F3]"
+                    >
+                      Voir tout
+                    </Link>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* MESSAGES */}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setMessagesOpen((v) => !v);
+                  setNotifOpen(false);
+                }}
+                className="relative rounded-lg p-2 text-[#6B6459] hover:bg-[#F1EEE4]"
+                aria-label="Messages"
+              >
+                <IconMail className="h-5 w-5" />
+                {messagesNonLus > 0 && (
+                  <span className="absolute right-1 top-1 flex h-2 w-2 rounded-full bg-red-500" />
+                )}
+              </button>
+
+              {messagesOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setMessagesOpen(false)} />
+                  <div className="absolute right-0 z-50 mt-2 w-80 rounded-2xl border border-[#E7E2D6] bg-white shadow-lg">
+                    <div className="border-b border-[#F1EEE4] px-4 py-3">
+                      <p className="text-sm font-semibold text-[#1C1B18]">
+                        Messages de support
+                      </p>
+                    </div>
+
+                    <div className="max-h-80 overflow-y-auto">
+                      {messages.length === 0 ? (
+                        <p className="px-4 py-8 text-center text-sm text-[#8A8272]">
+                          Aucun message.
+                        </p>
+                      ) : (
+                        messages.map((m) => (
+                          <Link
+                            key={m.id}
+                            href={`/admin/messages/${m.id}`}
+                            onClick={() => setMessagesOpen(false)}
+                            className={`block border-b border-[#F1EEE4] px-4 py-3 last:border-b-0 hover:bg-[#FAF8F3] ${
+                              m.statut === "nouveau" ? "bg-[#0B3D2E]/5" : ""
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-sm font-medium text-[#1C1B18]">
+                                {m.etablissement_nom}
+                              </p>
+                              {m.statut === "nouveau" && (
+                                <span className="shrink-0 rounded-full bg-[#C9962B]/15 px-2 py-0.5 text-[10px] font-medium text-[#8A6A1A]">
+                                  Nouveau
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-0.5 line-clamp-1 text-xs text-[#8A8272]">
+                              {m.sujet}
+                            </p>
+                          </Link>
+                        ))
+                      )}
+                    </div>
+
+                    <Link
+                      href="/admin/messages"
+                      onClick={() => setMessagesOpen(false)}
+                      className="block border-t border-[#F1EEE4] px-4 py-2.5 text-center text-sm font-medium text-[#0B3D2E] hover:bg-[#FAF8F3]"
+                    >
+                      Voir tout
+                    </Link>
+                  </div>
+                </>
+              )}
+            </div>
 
             <div className="flex items-center gap-2.5 border-l border-[#E7E2D6] pl-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#0B3D2E] text-xs font-semibold text-[#EFE6C8]">
@@ -279,7 +447,7 @@ function SidebarContent({
               {group.items.map((item) => {
                 const active =
                   pathname === item.href ||
-                  (item.href !== "/admin" && pathname.startsWith(item.href));
+                  (item.href !== "/admin/dashboard" && pathname.startsWith(item.href));
 
                 const Icon = item.icon;
 
@@ -310,4 +478,4 @@ function SidebarContent({
       </div>
     </>
   );
-                                  }
+                              }

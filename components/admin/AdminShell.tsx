@@ -118,7 +118,7 @@ type NavGroup = {
 const navGroups: NavGroup[] = [
   {
     title: "Tableau de bord",
-    items: [{ label: "Vue d'ensemble", href: "/admin", icon: IconDashboard }],
+    items: [{ label: "Vue d'ensemble", href: "/admin/dashboard", icon: IconDashboard }],
   },
   {
     title: "Plateforme",

@@ -20,7 +20,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Enseignants', href: '/chef/enseignants', icon: '👨‍🏫' },
       { label: 'Élèves', href: '/chef/eleves', icon: '🎓' },
       { label: 'Parents', href: '/chef/parents', icon: '👨‍👩‍👧' },
-      { label: 'Personnel', href: '/chef/personnel/nouveau', icon: '🧑‍💼' },
+      { label: 'Personnel', href: '/chef/personnel', icon: '🧑‍💼' },
       { label: 'Emploi du temps', href: '/direction/emploi-du-temps', icon: '📅' },
       { label: 'Examens', href: '/chef/examens', icon: '📝' },
       { label: 'Bulletins', href: '/chef/bulletins', icon: '📄' },

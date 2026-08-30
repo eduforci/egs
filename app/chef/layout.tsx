@@ -56,12 +56,18 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
+const ROLE_LABELS: Record<string, string> = {
+  chef: "Chef d'établissement",
+  directeur_etudes: 'Directeur des études',
+};
+
 export default function ChefLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const supabase = createClient();
   const [menuOuvert, setMenuOuvert] = useState(false);
   const [nom, setNom] = useState('');
   const [prenom, setPrenom] = useState('');
+  const [role, setRole] = useState('');
   const [etablissementNom, setEtablissementNom] = useState('');
 
   useEffect(() => {
@@ -71,12 +77,13 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
 
       const { data: profil } = await supabase
         .from('profiles')
-        .select('nom, prenom, etablissement_id')
+        .select('nom, prenom, role, etablissement_id')
         .eq('id', userData.user.id)
         .single();
 
       setNom(profil?.nom || '');
       setPrenom(profil?.prenom || '');
+      setRole(profil?.role || '');
 
       if (profil?.etablissement_id) {
         const { data: etab } = await supabase
@@ -93,6 +100,8 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     setMenuOuvert(false);
   }, [pathname]);
+
+  const estVisiteurDirecteur = role === 'directeur_etudes';
 
   return (
     <div className="min-h-screen bg-neutral-50 flex">
@@ -147,7 +156,7 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
           </div>
           <div className="text-xs">
             <div className="font-medium">{prenom} {nom}</div>
-            <div className="text-neutral-400">Chef d'établissement</div>
+            <div className="text-neutral-400">{ROLE_LABELS[role] || 'Chef d\'établissement'}</div>
           </div>
         </div>
       </aside>
@@ -174,8 +183,23 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
           </div>
         </header>
 
+        {/* BANDEAU — visible uniquement si un directeur des études visite une page partagée avec le chef */}
+        {estVisiteurDirecteur && (
+          <div className="bg-blue-50 border-b border-blue-200 px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-xs text-blue-800">
+              Vous consultez cette page en tant que <strong>Directeur des études</strong> — elle est partagée avec l'espace chef.
+            </p>
+            <Link
+              href="/directeur/dashboard"
+              className="text-xs font-medium text-blue-700 hover:text-blue-900 underline underline-offset-2 whitespace-nowrap"
+            >
+              ← Retour à mon espace
+            </Link>
+          </div>
+        )}
+
         <main className="flex-1">{children}</main>
       </div>
     </div>
   );
-       }
+}

@@ -58,9 +58,32 @@ export default async function PersonnelSupervision() {
 
   const etablissementId = chefProfil?.etablissement_id;
 
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 30);
-  const cutoffIso = cutoff.toISOString();
+  // Trimestre en cours : date_debut <= aujourd'hui <= date_fin
+  const today = new Date().toISOString().slice(0, 10);
+
+  const { data: trimestreActif } = await supabase
+    .from("trimestres")
+    .select("id, nom, annee_scolaire, date_debut, date_fin")
+    .eq("etablissement_id", etablissementId ?? "")
+    .lte("date_debut", today)
+    .gte("date_fin", today)
+    .maybeSingle();
+
+  // Si aucun trimestre actif trouvé (entre deux trimestres), on prend le plus récent comme repli
+  const { data: trimestreRepli } = trimestreActif
+    ? { data: null }
+    : await supabase
+        .from("trimestres")
+        .select("id, nom, annee_scolaire, date_debut, date_fin")
+        .eq("etablissement_id", etablissementId ?? "")
+        .order("date_debut", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+  const trimestre = trimestreActif ?? trimestreRepli;
+  const depuisIso = trimestre?.date_debut
+    ? new Date(trimestre.date_debut).toISOString()
+    : new Date(new Date().getFullYear(), 0, 1).toISOString();
 
   const { data: staff } = await supabase
     .from("profiles")
@@ -87,66 +110,39 @@ export default async function PersonnelSupervision() {
     { data: depensesValidees },
     { data: recettesCreees },
     { data: paiementsTraites },
+    { data: documentsGeneres },
   ] = await Promise.all([
     staffIds.length
-      ? supabase
-          .from("notes")
-          .select("enseignant_id")
-          .in("enseignant_id", staffIds)
-          .gte("created_at", cutoffIso)
+      ? supabase.from("notes").select("enseignant_id").in("enseignant_id", staffIds).gte("created_at", depuisIso)
       : Promise.resolve({ data: [] as { enseignant_id: string }[] }),
 
     staffIds.length
-      ? supabase
-          .from("absences")
-          .select("enseignant_id")
-          .in("enseignant_id", staffIds)
-          .gte("created_at", cutoffIso)
+      ? supabase.from("absences").select("enseignant_id").in("enseignant_id", staffIds).gte("created_at", depuisIso)
       : Promise.resolve({ data: [] as { enseignant_id: string }[] }),
 
     staffIds.length
-      ? supabase
-          .from("absences")
-          .select("valide_par")
-          .in("valide_par", staffIds)
-          .gte("created_at", cutoffIso)
+      ? supabase.from("absences").select("valide_par").in("valide_par", staffIds).gte("created_at", depuisIso)
       : Promise.resolve({ data: [] as { valide_par: string }[] }),
 
     staffIds.length
-      ? supabase
-          .from("depenses")
-          .select("cree_par")
-          .eq("etablissement_id", etablissementId ?? "")
-          .in("cree_par", staffIds)
-          .gte("created_at", cutoffIso)
+      ? supabase.from("depenses").select("cree_par").eq("etablissement_id", etablissementId ?? "").in("cree_par", staffIds).gte("created_at", depuisIso)
       : Promise.resolve({ data: [] as { cree_par: string }[] }),
 
     staffIds.length
-      ? supabase
-          .from("depenses")
-          .select("validee_par")
-          .eq("etablissement_id", etablissementId ?? "")
-          .in("validee_par", staffIds)
-          .gte("created_at", cutoffIso)
+      ? supabase.from("depenses").select("validee_par").eq("etablissement_id", etablissementId ?? "").in("validee_par", staffIds).gte("created_at", depuisIso)
       : Promise.resolve({ data: [] as { validee_par: string }[] }),
 
     staffIds.length
-      ? supabase
-          .from("recettes")
-          .select("cree_par")
-          .eq("etablissement_id", etablissementId ?? "")
-          .in("cree_par", staffIds)
-          .gte("created_at", cutoffIso)
+      ? supabase.from("recettes").select("cree_par").eq("etablissement_id", etablissementId ?? "").in("cree_par", staffIds).gte("created_at", depuisIso)
       : Promise.resolve({ data: [] as { cree_par: string }[] }),
 
     staffIds.length
-      ? supabase
-          .from("paiements")
-          .select("caissier_id")
-          .eq("etablissement_id", etablissementId ?? "")
-          .in("caissier_id", staffIds)
-          .gte("created_at", cutoffIso)
+      ? supabase.from("paiements").select("caissier_id").eq("etablissement_id", etablissementId ?? "").in("caissier_id", staffIds).gte("created_at", depuisIso)
       : Promise.resolve({ data: [] as { caissier_id: string }[] }),
+
+    staffIds.length
+      ? supabase.from("documents_administratifs").select("genere_par").in("genere_par", staffIds).gte("created_at", depuisIso)
+      : Promise.resolve({ data: [] as { genere_par: string }[] }),
   ]);
 
   const countBy = <T extends Record<string, string>>(
@@ -169,6 +165,7 @@ export default async function PersonnelSupervision() {
   const depensesValideesParUser = countBy(depensesValidees, "validee_par");
   const recettesCreeesParUser = countBy(recettesCreees, "cree_par");
   const paiementsParCaissier = countBy(paiementsTraites, "caissier_id");
+  const documentsGeneresParUser = countBy(documentsGeneres, "genere_par");
 
   function metriquesPourStaff(s: Staff): Metric[] {
     switch (s.role) {
@@ -189,6 +186,10 @@ export default async function PersonnelSupervision() {
         ];
       case "caissier":
         return [{ label: "Paiements traités", value: paiementsParCaissier.get(s.id) ?? 0 }];
+      case "secretaire":
+        return [{ label: "Documents générés", value: documentsGeneresParUser.get(s.id) ?? 0 }];
+      case "educateur":
+        return [{ label: "Absences validées", value: absencesValideesParUser.get(s.id) ?? 0 }];
       default:
         return [];
     }
@@ -210,7 +211,11 @@ export default async function PersonnelSupervision() {
               Supervision du personnel
             </h1>
             <p className="mt-2 text-sm text-neutral-500">
-              Activité des 30 derniers jours, par membre du personnel.
+              Activité du{" "}
+              {trimestre?.nom
+                ? `${trimestre.nom} (${trimestre.annee_scolaire})`
+                : "trimestre en cours"}
+              .
             </p>
           </div>
 
@@ -286,4 +291,4 @@ export default async function PersonnelSupervision() {
       </div>
     </div>
   );
-                        }
+    }

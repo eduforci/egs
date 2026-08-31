@@ -8,6 +8,7 @@ const ROLES = [
   { value: 'directeur_etudes', label: 'Directeur des études' },
   { value: 'comptable', label: 'Comptable' },
   { value: 'secretaire', label: 'Secrétaire' },
+  { value: 'caissier', label: 'Caissier' },
 ];
 
 type Resultat = {
@@ -129,4 +130,4 @@ export default function AjouterMembrePage() {
       )}
     </div>
   );
-          }
+    }

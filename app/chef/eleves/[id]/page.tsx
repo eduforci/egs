@@ -46,6 +46,7 @@ export default function FicheElevePage() {
   const [identite, setIdentite] = useState<{ nom: string; prenom: string; matricule: string; classe_nom: string } | null>(null);
   const [adresse, setAdresse] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [statut, setStatut] = useState("actif");
   const [etablissementId, setEtablissementId] = useState("");
 
@@ -153,6 +154,41 @@ export default function FicheElevePage() {
 
   useEffect(() => { charger(); }, [charger]);
 
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError("La photo ne doit pas dépasser 5 Mo.");
+      return;
+    }
+
+    setUploadingPhoto(true);
+    setError(null);
+
+    try {
+      const extension = file.name.split(".").pop();
+      const chemin = `${eleveId}/photo.${extension}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("photos-eleves")
+        .upload(chemin, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabase.storage
+        .from("photos-eleves")
+        .getPublicUrl(chemin);
+
+      setPhotoUrl(`${publicUrlData.publicUrl}?t=${Date.now()}`);
+    } catch (err: any) {
+      setError(err.message || "Erreur lors du téléversement de la photo.");
+    } finally {
+      setUploadingPhoto(false);
+      e.target.value = "";
+    }
+  }
+
   async function enregistrerFiche() {
     setError(null);
     setMessage(null);
@@ -231,14 +267,44 @@ export default function FicheElevePage() {
       {/* Fiche */}
       <section className="bg-white border rounded-xl p-5 space-y-3">
         <h2 className="font-semibold">Informations</h2>
+
         <div>
           <label className="block text-xs text-neutral-500 mb-1">Adresse</label>
           <input value={adresse} onChange={(e) => setAdresse(e.target.value)} className="w-full border rounded-lg p-2 text-sm" />
         </div>
+
         <div>
-          <label className="block text-xs text-neutral-500 mb-1">Photo (URL)</label>
-          <input value={photoUrl} onChange={(e) => setPhotoUrl(e.target.value)} className="w-full border rounded-lg p-2 text-sm" />
+          <label className="block text-xs text-neutral-500 mb-1">Photo</label>
+          <div className="flex items-center gap-3">
+            <div className="w-16 h-16 rounded-lg bg-neutral-100 border overflow-hidden flex items-center justify-center shrink-0">
+              {photoUrl ? (
+                <img src={photoUrl} alt="Photo élève" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-neutral-300 text-xs">Aucune</span>
+              )}
+            </div>
+            <div className="flex-1">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoChange}
+                disabled={uploadingPhoto}
+                className="text-xs w-full"
+              />
+              {uploadingPhoto && <p className="text-xs text-neutral-400 mt-1">Téléversement en cours...</p>}
+              {photoUrl && !uploadingPhoto && (
+                <button
+                  onClick={() => setPhotoUrl("")}
+                  className="text-red-600 text-xs hover:underline mt-1"
+                  type="button"
+                >
+                  Retirer la photo
+                </button>
+              )}
+            </div>
+          </div>
         </div>
+
         <div>
           <label className="block text-xs text-neutral-500 mb-1">Statut</label>
           <select value={statut} onChange={(e) => setStatut(e.target.value)} className="w-full border rounded-lg p-2 text-sm">
@@ -249,6 +315,7 @@ export default function FicheElevePage() {
             <option value="abandon">Abandon</option>
           </select>
         </div>
+
         <button onClick={enregistrerFiche} className="bg-black text-white rounded-lg px-4 py-2 text-sm font-medium">
           Enregistrer
         </button>
@@ -361,4 +428,4 @@ export default function FicheElevePage() {
       </section>
     </main>
   );
-                }
+                              }

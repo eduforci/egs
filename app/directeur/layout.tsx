@@ -13,15 +13,18 @@ const NAV_GROUPS: NavGroup[] = [
     titre: 'TABLEAU DE BORD',
     items: [{ label: 'Accueil', href: '/directeur/dashboard', icon: '🏠' }],
   },
-  {
+  
+    {
     titre: 'GESTION',
     items: [
       { label: 'Classes', href: '/chef/classes', icon: '🏫' },
       { label: 'Élèves', href: '/chef/eleves', icon: '🎓' },
+      { label: 'Personnel', href: '/chef/personnel', icon: '🧑‍💼' },
       { label: 'Examens', href: '/chef/examens', icon: '📝' },
       { label: 'Bulletins', href: '/chef/bulletins', icon: '📄' },
     ],
   },
+    
   {
     titre: 'COMMUNICATION SMS',
     items: [

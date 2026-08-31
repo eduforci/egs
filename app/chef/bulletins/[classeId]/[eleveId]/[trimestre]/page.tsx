@@ -160,7 +160,14 @@ export default function BulletinPage() {
 
       if (rpcError) throw new Error(`Erreur génération bulletin : ${rpcError.message}`);
 
-      const bulletinData = data as BulletinData;
+      const bulletinData = data as BulletinData | null;
+
+      if (!bulletinData) {
+        setBulletin(null);
+        setError("Aucune note n'a encore été saisie pour cet élève ce trimestre. Le bulletin ne peut pas encore être généré.");
+        return;
+      }
+
       setBulletin(bulletinData);
 
       setFormAbsJust(String(bulletinData.assiduite.heures_absence_justifiees ?? 0));

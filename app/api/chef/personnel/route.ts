@@ -8,9 +8,12 @@ const ROLES_AUTORISES = [
   "directeur_etudes",
   "comptable",
   "secretaire",
+  "caissier",
 ] as const;
 
 type RoleAutorise = (typeof ROLES_AUTORISES)[number];
+
+const ROLES_CREATEURS = ["chef", "directeur_etudes"] as const;
 
 // Préfixes distincts pour chaque rôle, afin d'éviter toute confusion :
 // "directeur_etudes" utilise "DE" (et non "DIR", réservé au chef d'établissement).
@@ -20,6 +23,7 @@ const PREFIXES: Record<RoleAutorise, string> = {
   directeur_etudes: "DE",
   comptable: "COM",
   secretaire: "SEC",
+  caissier: "CAI",
 };
 
 export async function POST(request: Request) {
@@ -31,17 +35,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Non authentifié." }, { status: 401 });
     }
 
-    const { data: chefProfile, error: chefError } = await supabase
+    const { data: createurProfile, error: createurError } = await supabase
       .from("profiles")
       .select("role, etablissement_id")
       .eq("id", user.id)
       .single();
 
-    if (chefError || !chefProfile || chefProfile.role !== "chef") {
-      return NextResponse.json({ error: "Accès réservé au chef d'établissement." }, { status: 403 });
+    if (
+      createurError ||
+      !createurProfile ||
+      !ROLES_CREATEURS.includes(createurProfile.role as (typeof ROLES_CREATEURS)[number])
+    ) {
+      return NextResponse.json(
+        { error: "Accès réservé au chef d'établissement ou au directeur des études." },
+        { status: 403 }
+      );
     }
 
-    if (!chefProfile.etablissement_id) {
+    if (!createurProfile.etablissement_id) {
       return NextResponse.json({ error: "Votre compte n'est associé à aucun établissement." }, { status: 400 });
     }
 
@@ -53,7 +64,7 @@ export async function POST(request: Request) {
     }
 
     if (!ROLES_AUTORISES.includes(role)) {
-      return NextResponse.json({ error: "Ce rôle ne peut pas être créé par le Chef d'établissement." }, { status: 400 });
+      return NextResponse.json({ error: "Ce rôle ne peut pas être créé depuis cette page." }, { status: 400 });
     }
 
     const admin = createAdminClient(
@@ -80,7 +91,7 @@ export async function POST(request: Request) {
 
     const numero = String(maxNumero + 1).padStart(4, "0");
     const identifiant = `${prefix}-${numero}`;
-    const emailTechnique = `${identifiant.toLowerCase()}@${chefProfile.etablissement_id}.egs.local`;
+    const emailTechnique = `${identifiant.toLowerCase()}@${createurProfile.etablissement_id}.egs.local`;
     const motDePasseProvisoire = Math.random().toString(36).slice(-8) + "A1!";
 
     const { data: nouvelUser, error: createError } = await admin.auth.admin.createUser({
@@ -96,7 +107,7 @@ export async function POST(request: Request) {
     const { error: profileError } = await admin.from("profiles").insert({
       id: nouvelUser.user.id,
       role,
-      etablissement_id: chefProfile.etablissement_id,
+      etablissement_id: createurProfile.etablissement_id,
       nom: nom.trim(),
       prenom: prenom.trim(),
       identifiant,
@@ -111,7 +122,7 @@ export async function POST(request: Request) {
     if (role === "enseignant") {
       await admin.from("enseignants").insert({
         id: nouvelUser.user.id,
-        etablissement_id: chefProfile.etablissement_id,
+        etablissement_id: createurProfile.etablissement_id,
         statut: "actif",
       });
     }
@@ -131,5 +142,4 @@ export async function POST(request: Request) {
     console.error("Erreur création personnel :", error);
     return NextResponse.json({ error: "Une erreur inattendue est survenue." }, { status: 500 });
   }
-        }
-  
+  }

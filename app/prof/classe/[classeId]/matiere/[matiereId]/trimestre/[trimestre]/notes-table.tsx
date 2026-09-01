@@ -100,8 +100,9 @@ export default function NotesTable({
   const [enregistrement, setEnregistrement] = useState(false);
   const [validationEnCours, setValidationEnCours] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [verrouille] = useState(estVerrouille);
-  const [validePar] = useState(validation?.valide_at ?? null);
+  const [verrouille, setVerrouille] = useState(estVerrouille);
+  const [validePar, setValidePar] = useState(validation?.valide_at ?? null);
+  const [valideParId, setValideParId] = useState(validation?.valide_par ?? null);
 
   const [formulaireOuvert, setFormulaireOuvert] = useState(false);
   const [nouvelleCategorie, setNouvelleCategorie] = useState<Evaluation["categorie"]>("sur10");
@@ -299,7 +300,39 @@ export default function NotesTable({
       return;
     }
 
+    setVerrouille(true);
+    setValidePar(new Date().toISOString());
+    setValideParId(enseignantId);
     setMessage("Notes validées et verrouillées.");
+    router.refresh();
+  }
+
+  async function handleDeverrouiller() {
+    const confirmation = window.confirm(
+      "Déverrouiller ces notes ? Vous pourrez à nouveau les modifier. Pensez à revalider une fois vos changements terminés."
+    );
+    if (!confirmation) return;
+
+    setValidationEnCours(true);
+    setMessage(null);
+
+    const { error } = await supabase
+      .from("validations_notes")
+      .update({ valide: false })
+      .eq("classe_id", classeId)
+      .eq("matiere_id", matiereId)
+      .eq("trimestre", Number(trimestre))
+      .eq("annee_scolaire", anneeScolaire);
+
+    setValidationEnCours(false);
+
+    if (error) {
+      setMessage("Erreur lors du déverrouillage : " + error.message);
+      return;
+    }
+
+    setVerrouille(false);
+    setMessage("Notes déverrouillées.");
     router.refresh();
   }
 
@@ -313,7 +346,10 @@ export default function NotesTable({
       {verrouille && (
         <div className="mb-4 p-3 rounded-lg bg-amber-50 text-amber-800 text-sm border border-amber-200">
           🔒 Notes validées {validePar ? `le ${new Date(validePar).toLocaleDateString("fr-FR")}` : ""}
-          — verrouillées. Seul le chef d'établissement ou une personne autorisée peut les déverrouiller.
+          — verrouillées.{" "}
+          {valideParId === enseignantId
+            ? "Vous pouvez les déverrouiller vous-même."
+            : "Verrouillées par la direction — seule la direction peut les déverrouiller."}
         </div>
       )}
 
@@ -504,30 +540,31 @@ export default function NotesTable({
             >
               {enregistrement ? "Enregistrement..." : "Enregistrer les notes"}
             </button>
-{!verrouille ? (
-          <button
-            onClick={handleValider}
-            disabled={validationEnCours}
-            className="bg-role-prof text-white rounded-lg px-6 py-3 font-medium disabled:opacity-50"
-          >
-            {validationEnCours ? "Validation..." : "Valider et verrouiller"}
-          </button>
-        ) : validation?.valide_par === enseignantId ? (
-          <button
-            onClick={handleDeverrouiller}
-            disabled={validationEnCours}
-            className="bg-amber-600 text-white rounded-lg px-6 py-3 font-medium disabled:opacity-50"
-          >
-            {validationEnCours ? "Déverrouillage..." : "🔓 Déverrouiller"}
-          </button>
-        ) : (
-          <p className="text-sm text-neutral-500 italic">
-            Verrouillé par la direction — seule la direction peut déverrouiller.
-          </p>
-        )}
+
+            {!verrouille ? (
+              <button
+                onClick={handleValider}
+                disabled={validationEnCours}
+                className="bg-role-prof text-white rounded-lg px-6 py-3 font-medium disabled:opacity-50"
+              >
+                {validationEnCours ? "Validation..." : "Valider et verrouiller"}
+              </button>
+            ) : valideParId === enseignantId ? (
+              <button
+                onClick={handleDeverrouiller}
+                disabled={validationEnCours}
+                className="bg-amber-600 text-white rounded-lg px-6 py-3 font-medium disabled:opacity-50"
+              >
+                {validationEnCours ? "Déverrouillage..." : "🔓 Déverrouiller"}
+              </button>
+            ) : (
+              <p className="text-sm text-neutral-500 italic self-center">
+                Verrouillé par la direction — seule la direction peut déverrouiller.
+         </p>
+            )}
           </div>
         </>
       )}
     </main>
   );
-}
+                                   }

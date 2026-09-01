@@ -51,12 +51,24 @@ export default async function TableauNotes({
     }));
   }
 
-  const { data: notes, error: notesError } = await supabase
-    .from("notes")
-    .select("*")
+  const { data: evaluations, error: evaluationsError } = await supabase
+    .from("evaluations")
+    .select("id, categorie, bareme_max, coefficient, type_note, libelle, date_evaluation")
     .eq("classe_id", classeId)
     .eq("matiere_id", matiereId)
-    .eq("trimestre", trimestre);
+    .eq("trimestre", trimestre)
+    .eq("annee_scolaire", classe?.annee_scolaire ?? "")
+    .order("date_evaluation", { ascending: true });
+
+  const evaluationIds = (evaluations ?? []).map((e) => e.id);
+
+  const { data: notes, error: notesError } =
+    evaluationIds.length > 0
+      ? await supabase
+          .from("notes")
+          .select("eleve_id, evaluation_id, valeur")
+          .in("evaluation_id", evaluationIds)
+      : { data: [] as { eleve_id: string; evaluation_id: string; valeur: number }[], error: null };
 
   const { data: observations } = await supabase
     .from("observations")
@@ -74,14 +86,6 @@ export default async function TableauNotes({
     .eq("annee_scolaire", classe?.annee_scolaire ?? "")
     .maybeSingle();
 
-  // Barèmes configurés pour l'établissement (plus de valeurs fixées dans le code)
-  const { data: baremes, error: baremesError } = await supabase
-    .from("baremes_evaluations")
-    .select("type_evaluation, bareme_max, poids, ordre")
-    .eq("etablissement_id", classe?.etablissement_id ?? "")
-    .order("ordre", { ascending: true });
-  
-// Seuils de mentions, pour l'appréciation automatique suggérée
   const { data: parametres } = await supabase
     .from("parametres_pedagogiques")
     .select("seuils_mentions")
@@ -89,7 +93,11 @@ export default async function TableauNotes({
     .maybeSingle();
 
   const erreurDiagnostic =
-    elevesError?.message || profilesError || notesError?.message || baremesError?.message || null;
+    elevesError?.message ||
+    profilesError ||
+    evaluationsError?.message ||
+    notesError?.message ||
+    null;
 
   return (
     <>
@@ -107,12 +115,12 @@ export default async function TableauNotes({
         anneeScolaire={classe?.annee_scolaire ?? ""}
         enseignantId={user?.id ?? ""}
         eleves={eleves as any}
+        evaluationsExistantes={evaluations ?? []}
         notesExistantes={notes ?? []}
         observationsExistantes={observations ?? []}
         validation={validation ?? null}
-        baremes={baremes ?? []}
         seuilsMentions={(parametres?.seuils_mentions as Record<string, number>) ?? {}}
       />
     </>
   );
-}
+    }

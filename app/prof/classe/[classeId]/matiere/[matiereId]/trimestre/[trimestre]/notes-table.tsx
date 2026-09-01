@@ -504,16 +504,27 @@ export default function NotesTable({
             >
               {enregistrement ? "Enregistrement..." : "Enregistrer les notes"}
             </button>
-
-            {!verrouille && (
-              <button
-                onClick={handleValider}
-                disabled={validationEnCours}
-                className="bg-role-prof text-white rounded-lg px-6 py-3 font-medium disabled:opacity-50"
-              >
-                {validationEnCours ? "Validation..." : "Valider et verrouiller"}
-              </button>
-            )}
+{!verrouille ? (
+          <button
+            onClick={handleValider}
+            disabled={validationEnCours}
+            className="bg-role-prof text-white rounded-lg px-6 py-3 font-medium disabled:opacity-50"
+          >
+            {validationEnCours ? "Validation..." : "Valider et verrouiller"}
+          </button>
+        ) : validation?.valide_par === enseignantId ? (
+          <button
+            onClick={handleDeverrouiller}
+            disabled={validationEnCours}
+            className="bg-amber-600 text-white rounded-lg px-6 py-3 font-medium disabled:opacity-50"
+          >
+            {validationEnCours ? "Déverrouillage..." : "🔓 Déverrouiller"}
+          </button>
+        ) : (
+          <p className="text-sm text-neutral-500 italic">
+            Verrouillé par la direction — seule la direction peut déverrouiller.
+          </p>
+        )}
           </div>
         </>
       )}

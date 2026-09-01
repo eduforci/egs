@@ -294,14 +294,17 @@ export default function ClassesPage() {
                   <td className="px-3 py-2 text-gray-600">{c.niveau}</td>
                   <td className="px-3 py-2 text-gray-500 text-xs">
                     {CYCLES.find((cy) => cy.value === c.cycle)?.label ?? '-'}
-                  </td>
                   <td className="px-3 py-2 flex gap-3 justify-end whitespace-nowrap">
+                    <Link href={`/chef/classes/${c.id}/eleves`} className="text-blue-600 text-xs">
+                      Élèves
+                    </Link>
                     <Link href={`/chef/classes/${c.id}/matieres`} className="text-blue-600 text-xs">
                       Matières
                     </Link>
                     <Link href={`/chef/classes/${c.id}/enseignants`} className="text-blue-600 text-xs">
                       Enseignants
                     </Link>
+          
                     <button
                       onClick={() => supprimerClasse(c.id, c.nom)}
                       className="text-red-600 text-xs"

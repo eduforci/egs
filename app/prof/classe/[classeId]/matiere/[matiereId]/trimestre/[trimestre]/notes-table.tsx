@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type Eleve = {
@@ -9,22 +10,25 @@ type Eleve = {
   profiles: { nom: string; prenom: string } | null;
 };
 
+type Evaluation = {
+  id: string;
+  categorie: "sur10" | "sur20_coef1" | "sur20_coef2";
+  bareme_max: number;
+  coefficient: number;
+  type_note: string;
+  libelle: string | null;
+  date_evaluation: string;
+};
+
 type Note = {
   eleve_id: string;
-  type: string;
+  evaluation_id: string;
   valeur: number;
 };
 
 type Observation = {
   eleve_id: string;
   texte: string;
-};
-
-type Bareme = {
-  type_evaluation: string;
-  bareme_max: number;
-  poids: number;
-  ordre: number;
 };
 
 type Validation = {
@@ -34,13 +38,17 @@ type Validation = {
   valide_at: string | null;
 } | null;
 
-const LABELS: Record<string, string> = {
-  interrogation: "Interrogation",
-  devoir: "Devoir",
-  composition: "Composition",
-  examen: "Examen",
-  essai: "Essai",
-};
+const CATEGORIES: { value: Evaluation["categorie"]; label: string; bareme_max: number; coefficient: number; type_note: string }[] = [
+  { value: "sur10", label: "Note sur 10", bareme_max: 10, coefficient: 1, type_note: "interrogation" },
+  { value: "sur20_coef1", label: "Note sur 20 (coefficient 1)", bareme_max: 20, coefficient: 1, type_note: "devoir" },
+  { value: "sur20_coef2", label: "Note sur 20 (coefficient 2 — devoir)", bareme_max: 20, coefficient: 2, type_note: "composition" },
+];
+
+function libelleColonne(ev: Evaluation) {
+  const cat = CATEGORIES.find((c) => c.value === ev.categorie);
+  const date = new Date(ev.date_evaluation).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+  return `${ev.libelle || cat?.label || ev.categorie} · /${ev.bareme_max} · ${date}`;
+}
 
 export default function NotesTable({
   classeId,
@@ -51,10 +59,10 @@ export default function NotesTable({
   anneeScolaire,
   enseignantId,
   eleves,
+  evaluationsExistantes,
   notesExistantes,
   observationsExistantes,
   validation,
-  baremes,
   seuilsMentions,
 }: {
   classeId: string;
@@ -65,23 +73,23 @@ export default function NotesTable({
   anneeScolaire: string;
   enseignantId: string;
   eleves: Eleve[];
+  evaluationsExistantes: Evaluation[];
   notesExistantes: Note[];
   observationsExistantes: Observation[];
   validation: Validation;
-  baremes: Bareme[];
   seuilsMentions: Record<string, number>;
 }) {
   const supabase = createClient();
+  const router = useRouter();
 
   const estVerrouille = validation?.valide === true;
-  const typesEvaluation = baremes.map((b) => b.type_evaluation);
 
   const initial: Record<string, Record<string, string>> = {};
   eleves.forEach((e) => {
     const ligne: Record<string, string> = { appreciation: "" };
-    typesEvaluation.forEach((type) => {
-      const note = notesExistantes.find((n) => n.eleve_id === e.id && n.type === type);
-      ligne[type] = note ? String(note.valeur) : "";
+    evaluationsExistantes.forEach((ev) => {
+      const note = notesExistantes.find((n) => n.eleve_id === e.id && n.evaluation_id === ev.id);
+      ligne[ev.id] = note ? String(note.valeur) : "";
     });
     const appreciation = observationsExistantes.find((o) => o.eleve_id === e.id);
     if (appreciation) ligne.appreciation = appreciation.texte;
@@ -92,18 +100,24 @@ export default function NotesTable({
   const [enregistrement, setEnregistrement] = useState(false);
   const [validationEnCours, setValidationEnCours] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [verrouille, setVerrouille] = useState(estVerrouille);
-  const [validePar, setValidePar] = useState(validation?.valide_at ?? null);
+  const [verrouille] = useState(estVerrouille);
+  const [validePar] = useState(validation?.valide_at ?? null);
+
+  const [formulaireOuvert, setFormulaireOuvert] = useState(false);
+  const [nouvelleCategorie, setNouvelleCategorie] = useState<Evaluation["categorie"]>("sur10");
+  const [nouvelleDate, setNouvelleDate] = useState(new Date().toISOString().slice(0, 10));
+  const [nouveauLibelle, setNouveauLibelle] = useState("");
+  const [creationEnCours, setCreationEnCours] = useState(false);
 
   function moyenne(eleveId: string) {
     const v = valeurs[eleveId];
     const termes: { val: number; poids: number }[] = [];
 
-    baremes.forEach((b) => {
-      const brut = parseFloat(v[b.type_evaluation]);
+    evaluationsExistantes.forEach((ev) => {
+      const brut = parseFloat(v[ev.id]);
       if (!isNaN(brut)) {
-        const surVingt = brut * (20 / b.bareme_max);
-        termes.push({ val: surVingt, poids: b.poids });
+        const surVingt = brut * (20 / ev.bareme_max);
+        termes.push({ val: surVingt, poids: ev.coefficient });
       }
     });
 
@@ -113,9 +127,6 @@ export default function NotesTable({
     return somme / poidsTotal;
   }
 
-  // Traduit une moyenne en appréciation suggérée, à partir des seuils
-  // de l'établissement (mêmes seuils que les mentions générales).
-  // Suggestion uniquement — n'écrase jamais le texte libre de l'enseignant.
   function appreciationSuggeree(m: number | null) {
     if (m === null) return null;
     const paliers = Object.entries(seuilsMentions).sort((a, b) => b[1] - a[1]);
@@ -143,25 +154,36 @@ export default function NotesTable({
     return idx === -1 ? "-" : idx + 1;
   }
 
-  async function enregistrerHistorique(
-    eleveId: string,
-    type: string,
-    ancienneValeurStr: string,
-    nouvelleValeurStr: string
-  ) {
-    if (ancienneValeurStr === nouvelleValeurStr) return;
+  async function creerEvaluation() {
+    setCreationEnCours(true);
+    setMessage(null);
 
-    await supabase.from("notes_historique").insert({
-      eleve_id: eleveId,
-      matiere_id: matiereId,
+    const cat = CATEGORIES.find((c) => c.value === nouvelleCategorie)!;
+
+    const { error } = await supabase.from("evaluations").insert({
       classe_id: classeId,
+      matiere_id: matiereId,
+      enseignant_id: enseignantId,
       trimestre: Number(trimestre),
       annee_scolaire: anneeScolaire,
-      type,
-      ancienne_valeur: ancienneValeurStr === "" ? null : parseFloat(ancienneValeurStr),
-      nouvelle_valeur: nouvelleValeurStr === "" ? null : parseFloat(nouvelleValeurStr),
-      modifie_par: enseignantId,
+      categorie: cat.value,
+      bareme_max: cat.bareme_max,
+      coefficient: cat.coefficient,
+      type_note: cat.type_note,
+      libelle: nouveauLibelle.trim() || null,
+      date_evaluation: nouvelleDate,
     });
+
+    setCreationEnCours(false);
+
+    if (error) {
+      setMessage("Erreur lors de la création de l'évaluation : " + error.message);
+      return;
+    }
+
+    setNouveauLibelle("");
+    setFormulaireOuvert(false);
+    router.refresh();
   }
 
   async function handleSave() {
@@ -172,39 +194,49 @@ export default function NotesTable({
       const v = valeurs[eleve.id];
       const avant = initial[eleve.id];
 
-      for (const type of typesEvaluation) {
-        await enregistrerHistorique(eleve.id, type, avant[type], v[type]);
-      }
+      for (const ev of evaluationsExistantes) {
+        const ancienneValeurStr = avant[ev.id];
+        const nouvelleValeurStr = v[ev.id];
 
-      await supabase
-        .from("notes")
-        .delete()
-        .eq("eleve_id", eleve.id)
-        .eq("matiere_id", matiereId)
-        .eq("classe_id", classeId)
-        .eq("trimestre", trimestre)
-        .in("type", typesEvaluation);
+        if (ancienneValeurStr === nouvelleValeurStr) continue;
 
-      const rows = baremes
-        .filter((b) => v[b.type_evaluation] !== "")
-        .map((b) => ({
+        await supabase.from("notes_historique").insert({
           eleve_id: eleve.id,
           matiere_id: matiereId,
           classe_id: classeId,
-          enseignant_id: enseignantId,
-          type: b.type_evaluation,
-          valeur: parseFloat(v[b.type_evaluation]),
-          coefficient: b.poids,
-          trimestre,
+          trimestre: Number(trimestre),
           annee_scolaire: anneeScolaire,
-        }));
+          type: ev.type_note,
+          ancienne_valeur: ancienneValeurStr === "" ? null : parseFloat(ancienneValeurStr),
+          nouvelle_valeur: nouvelleValeurStr === "" ? null : parseFloat(nouvelleValeurStr),
+          modifie_par: enseignantId,
+        });
 
-      if (rows.length > 0) {
-        const { error } = await supabase.from("notes").insert(rows);
-        if (error) {
-          setMessage("Erreur : " + error.message);
-          setEnregistrement(false);
-          return;
+        await supabase
+          .from("notes")
+          .delete()
+          .eq("eleve_id", eleve.id)
+          .eq("evaluation_id", ev.id);
+
+        if (nouvelleValeurStr !== "") {
+          const { error } = await supabase.from("notes").insert({
+            eleve_id: eleve.id,
+            matiere_id: matiereId,
+            classe_id: classeId,
+            enseignant_id: enseignantId,
+            evaluation_id: ev.id,
+            type: ev.type_note,
+            valeur: parseFloat(nouvelleValeurStr),
+            coefficient: ev.coefficient,
+            bareme_max: ev.bareme_max,
+            trimestre,
+            annee_scolaire: anneeScolaire,
+          });
+          if (error) {
+            setMessage("Erreur : " + error.message);
+            setEnregistrement(false);
+            return;
+          }
         }
       }
 
@@ -235,6 +267,7 @@ export default function NotesTable({
 
     setEnregistrement(false);
     setMessage("Notes enregistrées avec succès.");
+    router.refresh();
   }
 
   async function handleValider() {
@@ -266,29 +299,13 @@ export default function NotesTable({
       return;
     }
 
-    setVerrouille(true);
-    setValidePar(new Date().toISOString());
     setMessage("Notes validées et verrouillées.");
-  }
-
-  if (baremes.length === 0) {
-    return (
-      <main className="p-8">
-        <h1 className="font-display text-3xl font-semibold mb-1">
-          {classeNom} — {matiereNom} — Trimestre {trimestre}
-        </h1>
-        <div className="mt-4 p-4 rounded-lg bg-amber-50 text-amber-800 text-sm border border-amber-200">
-          Aucun barème d'évaluation n'est configuré pour cet établissement.
-          Contacte le Super Admin pour finaliser l'initialisation de
-          l'établissement (paramètres pédagogiques).
-        </div>
-      </main>
-    );
+    router.refresh();
   }
 
   return (
-    <main className="p-8">
-      <h1 className="font-display text-3xl font-semibold mb-1">
+    <main className="p-4 md:p-8">
+      <h1 className="font-display text-2xl md:text-3xl font-semibold mb-1">
         {classeNom} — {matiereNom} — Trimestre {trimestre}
       </h1>
       <p className="text-neutral-500 mb-6">{eleves.length} élève(s)</p>
@@ -306,124 +323,200 @@ export default function NotesTable({
         </div>
       )}
 
-      <div className="bg-white border rounded-xl overflow-x-auto mb-4">
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-left text-xs uppercase text-neutral-500">
-            <tr>
-              <th className="p-3">Élève</th>
-              {baremes.map((b) => (
-                <th key={b.type_evaluation} className="p-3 whitespace-nowrap">
-                  {LABELS[b.type_evaluation] ?? b.type_evaluation} (/{b.bareme_max})
-                </th>
-              ))}
-              <th className="p-3">Moyenne (/20)</th>
-              <th className="p-3">Rang</th>
-              <th className="p-3">Appréciation</th>
-            </tr>
-          </thead>
-          <tbody>
-            {eleves.map((e) => {
-              const m = moyenne(e.id);
-              const suggestion = appreciationSuggeree(m);
-              return (
-                <tr key={e.id} className="border-t align-top">
-                  <td className="p-3 whitespace-nowrap">
-                    {e.profiles?.nom} {e.profiles?.prenom}
-                  </td>
-                  {baremes.map((b) => (
-                    <td key={b.type_evaluation} className="p-3">
-                      <input
-                        type="number"
-                        min={0}
-                        max={b.bareme_max}
-                        step={0.25}
-                        disabled={verrouille}
-                        value={valeurs[e.id][b.type_evaluation]}
-                        onChange={(ev) =>
-                          setValeurs((prev) => ({
-                            ...prev,
-                            [e.id]: { ...prev[e.id], [b.type_evaluation]: ev.target.value },
-                          }))
-                        }
-                        className="w-20 border rounded p-1 disabled:bg-neutral-100 disabled:text-neutral-400"
-                      />
-                    </td>
+      {/* AJOUT D'UNE ÉVALUATION */}
+      {!verrouille && (
+        <div className="mb-4">
+          {!formulaireOuvert ? (
+            <button
+              onClick={() => setFormulaireOuvert(true)}
+              className="bg-white border rounded-lg px-4 py-2 text-sm font-medium hover:bg-neutral-50"
+            >
+              + Ajouter une évaluation
+            </button>
+          ) : (
+            <div className="bg-white border rounded-xl p-4 space-y-3 max-w-md">
+              <p className="font-semibold text-sm">Nouvelle évaluation</p>
+
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">Type de note</label>
+                <select
+                  value={nouvelleCategorie}
+                  onChange={(e) => setNouvelleCategorie(e.target.value as Evaluation["categorie"])}
+                  className="w-full border rounded-lg p-2 text-sm"
+                >
+                  {CATEGORIES.map((c) => (
+                    <option key={c.value} value={c.value}>{c.label}</option>
                   ))}
-                  <td className="p-3 font-medium">
-                    {m !== null ? m.toFixed(2) : "-"}
-                  </td>
-                  <td className="p-3">{rang(e.id)}</td>
-                  <td className="p-3">
-                    <textarea
-                      rows={2}
-                      disabled={verrouille}
-                      value={valeurs[e.id].appreciation}
-                      onChange={(ev) =>
-                        setValeurs((prev) => ({
-                          ...prev,
-                          [e.id]: { ...prev[e.id], appreciation: ev.target.value },
-                        }))
-                      }
-                      placeholder="Appréciation..."
-                      className="w-40 border rounded p-1 text-xs disabled:bg-neutral-100 disabled:text-neutral-400"
-                    />
-                    {suggestion && (
-                      <div className="mt-1 flex items-center gap-1 text-xs text-neutral-400">
-                        <span>Suggestion : {suggestion}</span>
-                        {!verrouille && (
-                          <button
-                            type="button"
-                            onClick={() =>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">Date</label>
+                <input
+                  type="date"
+                  value={nouvelleDate}
+                  onChange={(e) => setNouvelleDate(e.target.value)}
+                  className="w-full border rounded-lg p-2 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">Libellé (optionnel)</label>
+                <input
+                  type="text"
+                  value={nouveauLibelle}
+                  onChange={(e) => setNouveauLibelle(e.target.value)}
+                  placeholder="Ex: Interro chapitre 3"
+                  className="w-full border rounded-lg p-2 text-sm"
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={creerEvaluation}
+                  disabled={creationEnCours}
+                  className="bg-black text-white rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+                >
+                  {creationEnCours ? "Création..." : "Créer"}
+                </button>
+                <button
+                  onClick={() => setFormulaireOuvert(false)}
+                  className="border rounded-lg px-4 py-2 text-sm font-medium"
+                >
+                  Annuler
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {evaluationsExistantes.length === 0 ? (
+        <div className="p-4 rounded-lg bg-amber-50 text-amber-800 text-sm border border-amber-200">
+          Aucune évaluation créée pour ce trimestre. Ajoutez-en une pour commencer à saisir des notes.
+        </div>
+      ) : (
+        <>
+          <div className="bg-white border rounded-xl overflow-x-auto mb-4">
+            <table className="w-full text-sm">
+              <thead className="bg-neutral-50 text-left text-xs uppercase text-neutral-500">
+                <tr>
+                  <th className="p-3 sticky left-0 bg-neutral-50">Élève</th>
+                  {evaluationsExistantes.map((ev) => (
+                    <th key={ev.id} className="p-3 whitespace-nowrap">
+                      {libelleColonne(ev)}
+                    </th>
+                  ))}
+                  <th className="p-3">Moyenne (/20)</th>
+                  <th className="p-3">Rang</th>
+                  <th className="p-3">Appréciation</th>
+                </tr>
+              </thead>
+              <tbody>
+                {eleves.map((e) => {
+                  const m = moyenne(e.id);
+                  const suggestion = appreciationSuggeree(m);
+                  return (
+                    <tr key={e.id} className="border-t align-top">
+                      <td className="p-3 whitespace-nowrap sticky left-0 bg-white">
+                        {e.profiles?.nom} {e.profiles?.prenom}
+                      </td>
+                      {evaluationsExistantes.map((ev) => (
+                        <td key={ev.id} className="p-3">
+                          <input
+                            type="number"
+                            min={0}
+                            max={ev.bareme_max}
+                            step={0.25}
+                            disabled={verrouille}
+                            value={valeurs[e.id][ev.id]}
+                            onChange={(evt) =>
                               setValeurs((prev) => ({
                                 ...prev,
-                                [e.id]: { ...prev[e.id], appreciation: suggestion },
+                                [e.id]: { ...prev[e.id], [ev.id]: evt.target.value },
                               }))
                             }
-                            className="underline hover:text-neutral-600"
-                          >
-                            Utiliser
-                          </button>
+                            placeholder="—"
+                            className="w-20 border rounded p-1 disabled:bg-neutral-100 disabled:text-neutral-400"
+                          />
+                        </td>
+                      ))}
+                      <td className="p-3 font-medium">
+                        {m !== null ? m.toFixed(2) : "-"}
+                      </td>
+                      <td className="p-3">{rang(e.id)}</td>
+                      <td className="p-3">
+                        <textarea
+                          rows={2}
+                          disabled={verrouille}
+                          value={valeurs[e.id].appreciation}
+                          onChange={(ev) =>
+                            setValeurs((prev) => ({
+                              ...prev,
+                              [e.id]: { ...prev[e.id], appreciation: ev.target.value },
+                            }))
+                          }
+                          placeholder="Appréciation..."
+                          className="w-40 border rounded p-1 text-xs disabled:bg-neutral-100 disabled:text-neutral-400"
+                        />
+                        {suggestion && (
+                          <div className="mt-1 flex items-center gap-1 text-xs text-neutral-400">
+                            <span>Suggestion : {suggestion}</span>
+                            {!verrouille && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setValeurs((prev) => ({
+                                    ...prev,
+                                    [e.id]: { ...prev[e.id], appreciation: suggestion },
+                                  }))
+                                }
+                                className="underline hover:text-neutral-600"
+                              >
+                                Utiliser
+                              </button>
+                            )}
+                          </div>
                         )}
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
 
-        <div className="p-4 border-t bg-neutral-50 flex items-center justify-between text-sm">
-          <div>
-            <span className="font-medium">Moyenne de classe : </span>
-            {moyenneClasse !== null ? moyenneClasse.toFixed(2) + "/20" : "-"}
+            <div className="p-4 border-t bg-neutral-50 flex items-center justify-between text-sm">
+              <div>
+                <span className="font-medium">Moyenne de classe : </span>
+                {moyenneClasse !== null ? moyenneClasse.toFixed(2) + "/20" : "-"}
+              </div>
+              <div className="text-neutral-500">
+                {new Date().toLocaleDateString("fr-FR")} — EGS
+              </div>
+            </div>
           </div>
-          <div className="text-neutral-500">
-            {new Date().toLocaleDateString("fr-FR")} — EGS
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={handleSave}
+              disabled={enregistrement || verrouille}
+              className="bg-black text-white rounded-lg px-6 py-3 font-medium disabled:opacity-50"
+            >
+              {enregistrement ? "Enregistrement..." : "Enregistrer les notes"}
+            </button>
+
+            {!verrouille && (
+              <button
+                onClick={handleValider}
+                disabled={validationEnCours}
+                className="bg-role-prof text-white rounded-lg px-6 py-3 font-medium disabled:opacity-50"
+              >
+                {validationEnCours ? "Validation..." : "Valider et verrouiller"}
+              </button>
+            )}
           </div>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-3">
-        <button
-          onClick={handleSave}
-          disabled={enregistrement || verrouille}
-          className="bg-black text-white rounded-lg px-6 py-3 font-medium disabled:opacity-50"
-        >
-          {enregistrement ? "Enregistrement..." : "Enregistrer les notes"}
-        </button>
-
-        {!verrouille && (
-          <button
-            onClick={handleValider}
-            disabled={validationEnCours}
-            className="bg-role-prof text-white rounded-lg px-6 py-3 font-medium disabled:opacity-50"
-          >
-            {validationEnCours ? "Validation..." : "Valider et verrouiller"}
-          </button>
-        )}
-      </div>
+        </>
+      )}
     </main>
   );
-    }
-         
+}

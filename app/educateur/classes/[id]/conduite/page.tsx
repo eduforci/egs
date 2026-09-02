@@ -9,8 +9,9 @@ type EleveLigne = {
   nom: string;
   prenom: string;
   matricule: string;
-  valeur: string; // texte pour permettre un champ vide pendant la saisie
-  note_id: string | null; // id de la note existante, pour update au lieu d'insert
+  valeur: string;
+  valeurInitiale: string;
+  note_id: string | null;
 };
 
 export default function SaisieConduitePage() {
@@ -21,7 +22,9 @@ export default function SaisieConduitePage() {
   const [classeNom, setClasseNom] = useState('');
   const [matiereConduiteId, setMatiereConduiteId] = useState<string | null>(null);
   const [anneeScolaire, setAnneeScolaire] = useState('');
+  const [etablissementId, setEtablissementId] = useState<string | null>(null);
   const [eleves, setEleves] = useState<EleveLigne[]>([]);
+  const [deverrouillees, setDeverrouillees] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +37,7 @@ export default function SaisieConduitePage() {
     setLoading(true);
     setError(null);
     setSucces(null);
+    setDeverrouillees(new Set());
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -47,6 +51,7 @@ export default function SaisieConduitePage() {
 
       if (classeError) throw new Error(`Erreur classe : ${classeError.message}`);
       setClasseNom(classeData.nom);
+      setEtablissementId(classeData.etablissement_id);
 
       const { data: etabData, error: etabError } = await supabase
         .from('etablissements')
@@ -100,12 +105,14 @@ export default function SaisieConduitePage() {
       const lignes: EleveLigne[] = (elevesData ?? []).map((e) => {
         const profil = profilesMap.get(e.id);
         const noteExistante = notesMap.get(e.id);
+        const valeur = noteExistante ? String(noteExistante.valeur) : '';
         return {
           eleve_id: e.id,
           nom: profil?.nom ?? 'Inconnu',
           prenom: profil?.prenom ?? '',
           matricule: e.matricule,
-          valeur: noteExistante ? String(noteExistante.valeur) : '',
+          valeur,
+          valeurInitiale: valeur,
           note_id: noteExistante ? noteExistante.id : null,
         };
       });
@@ -129,6 +136,33 @@ export default function SaisieConduitePage() {
     );
   }
 
+  function deverrouillerLigne(eleveId: string) {
+    setDeverrouillees((prev) => {
+      const copie = new Set(prev);
+      copie.add(eleveId);
+      return copie;
+    });
+  }
+
+  function estModifiable(ligne: EleveLigne) {
+    // Éditable si : pas encore de note existante, ou explicitement déverrouillée
+    return ligne.note_id === null || deverrouillees.has(ligne.eleve_id);
+  }
+
+  async function notifierDirection(nom: string, prenom: string, avant: string, apres: string) {
+    if (!etablissementId) return;
+    const contenu = `Note de conduite modifiée pour ${prenom} ${nom} : ${avant || '—'}/20 → ${apres}/20`;
+
+    for (const role of ['chef', 'directeur_etudes'] as const) {
+      await supabase.from('notifications').insert({
+        etablissement_id: etablissementId,
+        destinataire_role: role,
+        titre: 'Modification de note',
+        contenu,
+      });
+    }
+  }
+
   async function enregistrerTout() {
     if (!matiereConduiteId) return;
     setSaving(true);
@@ -140,12 +174,16 @@ export default function SaisieConduitePage() {
       if (!user) throw new Error('Non authentifié.');
 
       for (const eleve of eleves) {
+        if (!estModifiable(eleve)) continue;
+        if (eleve.valeur === eleve.valeurInitiale) continue;
         if (eleve.valeur.trim() === '') continue;
 
         const valeurNum = parseFloat(eleve.valeur.replace(',', '.'));
         if (isNaN(valeurNum) || valeurNum < 0 || valeurNum > 20) {
           throw new Error(`Note invalide pour ${eleve.nom} ${eleve.prenom} : doit être entre 0 et 20.`);
         }
+
+        const estUneModification = eleve.note_id !== null;
 
         if (eleve.note_id) {
           const { error: updateError } = await supabase
@@ -162,10 +200,27 @@ export default function SaisieConduitePage() {
             type: 'devoir',
             valeur: valeurNum,
             coefficient: 1,
+            bareme_max: 20,
             trimestre,
             annee_scolaire: anneeScolaire,
           });
           if (insertError) throw new Error(`Erreur enregistrement ${eleve.nom} : ${insertError.message}`);
+        }
+
+        await supabase.from('notes_historique').insert({
+          eleve_id: eleve.eleve_id,
+          matiere_id: matiereConduiteId,
+          classe_id: classeId,
+          trimestre,
+          annee_scolaire: anneeScolaire,
+          type: 'devoir',
+          ancienne_valeur: eleve.valeurInitiale === '' ? null : parseFloat(eleve.valeurInitiale),
+          nouvelle_valeur: valeurNum,
+          modifie_par: user.id,
+        });
+
+        if (estUneModification) {
+          await notifierDirection(eleve.nom, eleve.prenom, eleve.valeurInitiale, eleve.valeur);
         }
       }
 
@@ -221,25 +276,43 @@ export default function SaisieConduitePage() {
               <thead className="bg-gray-100">
                 <tr>
                   <th className="text-left px-3 py-2">Élève</th>
-                  <th className="text-left px-3 py-2 w-24">Note /20</th>
+                  <th className="text-left px-3 py-2 w-28">Note /20</th>
                 </tr>
               </thead>
               <tbody>
-                {eleves.map((e) => (
-                  <tr key={e.eleve_id} className="border-t">
-                    <td className="px-3 py-2">{e.nom} {e.prenom}</td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={e.valeur}
-                        onChange={(ev) => modifierValeur(e.eleve_id, ev.target.value)}
-                        className="w-16 border rounded px-2 py-1 text-center"
-                        placeholder="-"
-                      />
-                    </td>
-                  </tr>
-                ))}
+                {eleves.map((e) => {
+                  const modifiable = estModifiable(e);
+                  return (
+                    <tr key={e.eleve_id} className="border-t">
+                      <td className="px-3 py-2">{e.nom} {e.prenom}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={e.valeur}
+                            disabled={!modifiable}
+                            onChange={(ev) => modifierValeur(e.eleve_id, ev.target.value)}
+                            className={`w-16 border rounded px-2 py-1 text-center ${
+                              !modifiable ? 'bg-gray-100 text-gray-400' : ''
+                            }`}
+                            placeholder="-"
+                          />
+                          {!modifiable && (
+                            <button
+                              type="button"
+                              onClick={() => deverrouillerLigne(e.eleve_id)}
+                              title="Modifier cette note"
+                              className="text-gray-400 hover:text-gray-700"
+                            >
+                              ✏️
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -255,5 +328,4 @@ export default function SaisieConduitePage() {
       )}
     </main>
   );
-            }
-        
+}

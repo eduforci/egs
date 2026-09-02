@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
@@ -98,7 +99,6 @@ export default function ClassesPage() {
       if (matieresError) throw new Error(`Erreur matières : ${matieresError.message}`);
       setMatieresEtablissement(matieresData ?? []);
 
-      // Sélection initiale : rien de coché, coefficient par défaut pré-rempli
       const selectionInitiale: Record<string, Selection> = {};
       (matieresData ?? []).forEach((m) => {
         selectionInitiale[m.id] = { checked: false, coefficient: m.coefficient_defaut ?? 1 };
@@ -115,7 +115,6 @@ export default function ClassesPage() {
     charger();
   }, [charger]);
 
-  // Pré-coche automatiquement "Conduite" dès que le cycle choisi est collège ou lycée
   useEffect(() => {
     if (cycle !== 'college' && cycle !== 'lycee') return;
     const conduite = matieresEtablissement.find((m) => m.nom === 'Conduite');
@@ -156,7 +155,6 @@ export default function ClassesPage() {
 
     setSelection((prev) => {
       const copie = { ...prev };
-      // On décoche tout d'abord, puis on coche seulement les matières du modèle
       Object.keys(copie).forEach((id) => {
         copie[id] = { ...copie[id], checked: false };
       });
@@ -294,6 +292,7 @@ export default function ClassesPage() {
                   <td className="px-3 py-2 text-gray-600">{c.niveau}</td>
                   <td className="px-3 py-2 text-gray-500 text-xs">
                     {CYCLES.find((cy) => cy.value === c.cycle)?.label ?? '-'}
+                  </td>
                   <td className="px-3 py-2 flex gap-3 justify-end whitespace-nowrap">
                     <Link href={`/chef/classes/${c.id}/eleves`} className="text-blue-600 text-xs">
                       Élèves
@@ -304,7 +303,6 @@ export default function ClassesPage() {
                     <Link href={`/chef/classes/${c.id}/enseignants`} className="text-blue-600 text-xs">
                       Enseignants
                     </Link>
-          
                     <button
                       onClick={() => supprimerClasse(c.id, c.nom)}
                       className="text-red-600 text-xs"
@@ -423,5 +421,4 @@ export default function ClassesPage() {
       </div>
     </main>
   );
-    }
-      
+              }

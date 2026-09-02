@@ -37,6 +37,7 @@ export default async function TableauNotes({
 
   if (elevesRaw && elevesRaw.length > 0) {
     const ids = elevesRaw.map((e) => e.id);
+
     const { data: profilesData, error: pErr } = await supabase
       .from("profiles")
       .select("id, nom, prenom")
@@ -53,7 +54,9 @@ export default async function TableauNotes({
 
   const { data: evaluations, error: evaluationsError } = await supabase
     .from("evaluations")
-    .select("id, categorie, bareme_max, coefficient, type_note, libelle, date_evaluation")
+    .select(
+      "id, categorie, bareme_max, coefficient, type_note, libelle, date_evaluation"
+    )
     .eq("classe_id", classeId)
     .eq("matiere_id", matiereId)
     .eq("trimestre", trimestre)
@@ -68,7 +71,14 @@ export default async function TableauNotes({
           .from("notes")
           .select("eleve_id, evaluation_id, valeur")
           .in("evaluation_id", evaluationIds)
-      : { data: [] as { eleve_id: string; evaluation_id: string; valeur: number }[], error: null };
+      : {
+          data: [] as {
+            eleve_id: string;
+            evaluation_id: string;
+            valeur: number;
+          }[],
+          error: null,
+        };
 
   const { data: observations } = await supabase
     .from("observations")
@@ -106,6 +116,7 @@ export default async function TableauNotes({
           Erreur technique lors du chargement : {erreurDiagnostic}
         </div>
       )}
+
       <NotesTable
         classeId={classeId}
         matiereId={matiereId}
@@ -113,14 +124,17 @@ export default async function TableauNotes({
         classeNom={classe?.nom ?? ""}
         matiereNom={matiere?.nom ?? ""}
         anneeScolaire={classe?.annee_scolaire ?? ""}
+        etablissementId={classe?.etablissement_id ?? ""}
         enseignantId={user?.id ?? ""}
         eleves={eleves as any}
         evaluationsExistantes={evaluations ?? []}
         notesExistantes={notes ?? []}
         observationsExistantes={observations ?? []}
         validation={validation ?? null}
-        seuilsMentions={(parametres?.seuils_mentions as Record<string, number>) ?? {}}
+        seuilsMentions={
+          (parametres?.seuils_mentions as Record<string, number>) ?? {}
+        }
       />
     </>
   );
-    }
+}

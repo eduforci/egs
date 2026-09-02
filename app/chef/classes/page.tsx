@@ -294,6 +294,9 @@ export default function ClassesPage() {
                     {CYCLES.find((cy) => cy.value === c.cycle)?.label ?? '-'}
                   </td>
                   <td className="px-3 py-2 flex gap-3 justify-end whitespace-nowrap">
+                    <Link href={`/chef/bulletins/classe/${c.id}`} className="text-blue-600 text-xs">
+                      Bulletins
+                    </Link>
                     <Link href={`/chef/classes/${c.id}/eleves`} className="text-blue-600 text-xs">
                       Élèves
                     </Link>

@@ -159,7 +159,6 @@ export default function NotesTable({
   }
 
   function celluleModifiable(eleveId: string, evaluationId: string) {
-    // Éditable si : aucune note encore saisie pour cette case, ou mode édition activé
     return initial[eleveId][evaluationId] === "" || modeEdition;
   }
 
@@ -213,8 +212,40 @@ export default function NotesTable({
   }
 
   async function handleSave() {
-    setEnregistrement(true);
     setMessage(null);
+
+    // Validation complète AVANT toute écriture : si une seule note dépasse
+    // son barème, on bloque tout l'enregistrement et on désigne précisément l'erreur.
+    const erreurs: string[] = [];
+    for (const eleve of eleves) {
+      const v = valeurs[eleve.id];
+      const nomComplet = `${eleve.profiles?.nom ?? ""} ${eleve.profiles?.prenom ?? ""}`.trim();
+
+      for (const ev of evaluationsExistantes) {
+        if (!celluleModifiable(eleve.id, ev.id)) continue;
+        const saisie = v[ev.id];
+        if (saisie === "") continue;
+
+        const nombre = parseFloat(saisie);
+        if (isNaN(nombre)) {
+          erreurs.push(`${nomComplet} — ${libelleColonne(ev)} : valeur invalide.`);
+        } else if (nombre < 0 || nombre > ev.bareme_max) {
+          erreurs.push(
+            `${nomComplet} — ${libelleColonne(ev)} : ${saisie} dépasse le barème autorisé (0 à ${ev.bareme_max}).`
+          );
+        }
+      }
+    }
+
+    if (erreurs.length > 0) {
+      setMessage(
+        "Enregistrement refusé — corrige les notes suivantes avant de réessayer :\n" +
+          erreurs.join("\n")
+      );
+      return;
+    }
+
+    setEnregistrement(true);
 
     for (const eleve of eleves) {
       const v = valeurs[eleve.id];
@@ -389,7 +420,13 @@ export default function NotesTable({
       )}
 
       {message && (
-        <div className="mb-4 p-3 rounded-lg bg-green-50 text-green-700 text-sm">
+        <div
+          className={`mb-4 p-3 rounded-lg text-sm whitespace-pre-line ${
+            message.startsWith("Enregistrement refusé") || message.startsWith("Erreur")
+              ? "bg-red-50 text-red-700"
+              : "bg-green-50 text-green-700"
+          }`}
+        >
           {message}
         </div>
       )}
@@ -519,6 +556,12 @@ export default function NotesTable({
                       </td>
                       {evaluationsExistantes.map((ev) => {
                         const modifiable = celluleModifiable(e.id, ev.id);
+                        const valeurActuelle = valeurs[e.id][ev.id];
+                        const nombre = parseFloat(valeurActuelle);
+                        const horsBareme =
+                          valeurActuelle !== "" &&
+                          !isNaN(nombre) &&
+                          (nombre < 0 || nombre > ev.bareme_max);
                         return (
                           <td key={ev.id} className="p-3">
                             <input
@@ -527,16 +570,22 @@ export default function NotesTable({
                               max={ev.bareme_max}
                               step={0.25}
                               disabled={verrouille || !modifiable}
-                              value={valeurs[e.id][ev.id]}
+                              value={valeurActuelle}
                               onChange={(evt) =>
                                 setValeurs((prev) => ({
                                   ...prev,
-                                  [e.id]: { ...prev[e.id], [ev.id]: evt.target.value },
-                                }))
-                              }
+                                  [e.id]: { ...prev[e.id], [ev.id]: evt.target.value }, }))
+                                 }
                               placeholder="—"
-                              className="w-20 border rounded p-1 disabled:bg-neutral-100 disabled:text-neutral-400"
+                              className={`w-20 border rounded p-1 disabled:bg-neutral-100 disabled:text-neutral-400 ${
+                                horsBareme ? "border-red-400 bg-red-50 text-red-700" : ""
+                              }`}
                             />
+                            {horsBareme && (
+                              <p className="text-[10px] text-red-600 mt-0.5">
+                                Max {ev.bareme_max}
+                              </p>
+                            )}
                           </td>
                         );
                       })}
@@ -563,7 +612,7 @@ export default function NotesTable({
                             <span>Suggestion : {suggestion}</span>
                             {!verrouille && (
                               <button
-                        type="button"
+                                type="button"
                                 onClick={() =>
                                   setValeurs((prev) => ({
                                     ...prev,
@@ -630,4 +679,4 @@ export default function NotesTable({
       )}
     </main>
   );
-          }
+}

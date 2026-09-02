@@ -57,6 +57,7 @@ export default function NotesTable({
   classeNom,
   matiereNom,
   anneeScolaire,
+  etablissementId,
   enseignantId,
   eleves,
   evaluationsExistantes,
@@ -71,6 +72,7 @@ export default function NotesTable({
   classeNom: string;
   matiereNom: string;
   anneeScolaire: string;
+  etablissementId: string;
   enseignantId: string;
   eleves: Eleve[];
   evaluationsExistantes: Evaluation[];
@@ -103,6 +105,7 @@ export default function NotesTable({
   const [verrouille, setVerrouille] = useState(estVerrouille);
   const [validePar, setValidePar] = useState(validation?.valide_at ?? null);
   const [valideParId, setValideParId] = useState(validation?.valide_par ?? null);
+  const [modeEdition, setModeEdition] = useState(false);
 
   const [formulaireOuvert, setFormulaireOuvert] = useState(false);
   const [nouvelleCategorie, setNouvelleCategorie] = useState<Evaluation["categorie"]>("sur10");
@@ -155,6 +158,28 @@ export default function NotesTable({
     return idx === -1 ? "-" : idx + 1;
   }
 
+  function celluleModifiable(eleveId: string, evaluationId: string) {
+    // Éditable si : aucune note encore saisie pour cette case, ou mode édition activé
+    return initial[eleveId][evaluationId] === "" || modeEdition;
+  }
+
+  const auMoinsUneNoteExistante = eleves.some((e) =>
+    evaluationsExistantes.some((ev) => initial[e.id][ev.id] !== "")
+  );
+
+  async function notifierDirection(nomComplet: string, evLabel: string, avant: string, apres: string) {
+    const contenu = `Note modifiée pour ${nomComplet} (${matiereNom} — ${evLabel}) : ${avant || "—"} → ${apres}`;
+
+    for (const role of ["chef", "directeur_etudes"] as const) {
+      await supabase.from("notifications").insert({
+        etablissement_id: etablissementId,
+        destinataire_role: role,
+        titre: "Modification de note",
+        contenu,
+      });
+    }
+  }
+
   async function creerEvaluation() {
     setCreationEnCours(true);
     setMessage(null);
@@ -194,12 +219,17 @@ export default function NotesTable({
     for (const eleve of eleves) {
       const v = valeurs[eleve.id];
       const avant = initial[eleve.id];
+      const nomComplet = `${eleve.profiles?.nom ?? ""} ${eleve.profiles?.prenom ?? ""}`.trim();
 
       for (const ev of evaluationsExistantes) {
+        if (!celluleModifiable(eleve.id, ev.id)) continue;
+
         const ancienneValeurStr = avant[ev.id];
         const nouvelleValeurStr = v[ev.id];
 
         if (ancienneValeurStr === nouvelleValeurStr) continue;
+
+        const estUneModification = ancienneValeurStr !== "";
 
         await supabase.from("notes_historique").insert({
           eleve_id: eleve.id,
@@ -239,6 +269,10 @@ export default function NotesTable({
             return;
           }
         }
+
+        if (estUneModification) {
+          await notifierDirection(nomComplet, libelleColonne(ev), ancienneValeurStr, nouvelleValeurStr);
+        }
       }
 
       await supabase
@@ -267,6 +301,7 @@ export default function NotesTable({
     }
 
     setEnregistrement(false);
+    setModeEdition(false);
     setMessage("Notes enregistrées avec succès.");
     router.refresh();
   }
@@ -433,6 +468,31 @@ export default function NotesTable({
         </div>
       ) : (
         <>
+          {!verrouille && auMoinsUneNoteExistante && !modeEdition && (
+            <div className="mb-3 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setModeEdition(true)}
+                className="flex items-center gap-1.5 text-sm border rounded-lg px-3 py-1.5 hover:bg-neutral-50"
+              >
+                ✏️ Modifier les notes
+              </button>
+            </div>
+          )}
+
+          {modeEdition && (
+            <div className="mb-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-lg p-2.5 flex items-center justify-between">
+              <span>Mode modification activé — le chef et le directeur des études seront notifiés des changements.</span>
+              <button
+                type="button"
+                onClick={() => setModeEdition(false)}
+                className="underline shrink-0 ml-2"
+              >
+                Annuler
+              </button>
+            </div>
+          )}
+
           <div className="bg-white border rounded-xl overflow-x-auto mb-4">
             <table className="w-full text-sm">
               <thead className="bg-neutral-50 text-left text-xs uppercase text-neutral-500">
@@ -457,26 +517,29 @@ export default function NotesTable({
                       <td className="p-3 whitespace-nowrap sticky left-0 bg-white">
                         {e.profiles?.nom} {e.profiles?.prenom}
                       </td>
-                      {evaluationsExistantes.map((ev) => (
-                        <td key={ev.id} className="p-3">
-                          <input
-                            type="number"
-                            min={0}
-                            max={ev.bareme_max}
-                            step={0.25}
-                            disabled={verrouille}
-                            value={valeurs[e.id][ev.id]}
-                            onChange={(evt) =>
-                              setValeurs((prev) => ({
-                                ...prev,
-                                [e.id]: { ...prev[e.id], [ev.id]: evt.target.value },
-                              }))
-                            }
-                            placeholder="—"
-                            className="w-20 border rounded p-1 disabled:bg-neutral-100 disabled:text-neutral-400"
-                          />
-                        </td>
-                      ))}
+                      {evaluationsExistantes.map((ev) => {
+                        const modifiable = celluleModifiable(e.id, ev.id);
+                        return (
+                          <td key={ev.id} className="p-3">
+                            <input
+                              type="number"
+                              min={0}
+                              max={ev.bareme_max}
+                              step={0.25}
+                              disabled={verrouille || !modifiable}
+                              value={valeurs[e.id][ev.id]}
+                              onChange={(evt) =>
+                                setValeurs((prev) => ({
+                                  ...prev,
+                                  [e.id]: { ...prev[e.id], [ev.id]: evt.target.value },
+                                }))
+                              }
+                              placeholder="—"
+                              className="w-20 border rounded p-1 disabled:bg-neutral-100 disabled:text-neutral-400"
+                            />
+                          </td>
+                        );
+                      })}
                       <td className="p-3 font-medium">
                         {m !== null ? m.toFixed(2) : "-"}
                       </td>
@@ -500,7 +563,7 @@ export default function NotesTable({
                             <span>Suggestion : {suggestion}</span>
                             {!verrouille && (
                               <button
-                                type="button"
+                        type="button"
                                 onClick={() =>
                                   setValeurs((prev) => ({
                                     ...prev,
@@ -560,11 +623,11 @@ export default function NotesTable({
             ) : (
               <p className="text-sm text-neutral-500 italic self-center">
                 Verrouillé par la direction — seule la direction peut déverrouiller.
-         </p>
+              </p>
             )}
           </div>
         </>
       )}
     </main>
   );
-                                   }
+          }

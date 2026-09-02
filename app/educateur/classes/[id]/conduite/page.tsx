@@ -24,7 +24,7 @@ export default function SaisieConduitePage() {
   const [anneeScolaire, setAnneeScolaire] = useState('');
   const [etablissementId, setEtablissementId] = useState<string | null>(null);
   const [eleves, setEleves] = useState<EleveLigne[]>([]);
-  const [deverrouillees, setDeverrouillees] = useState<Set<string>>(new Set());
+  const [modeEdition, setModeEdition] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +37,7 @@ export default function SaisieConduitePage() {
     setLoading(true);
     setError(null);
     setSucces(null);
-    setDeverrouillees(new Set());
+    setModeEdition(false);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -136,17 +136,9 @@ export default function SaisieConduitePage() {
     );
   }
 
-  function deverrouillerLigne(eleveId: string) {
-    setDeverrouillees((prev) => {
-      const copie = new Set(prev);
-      copie.add(eleveId);
-      return copie;
-    });
-  }
-
   function estModifiable(ligne: EleveLigne) {
-    // Éditable si : pas encore de note existante, ou explicitement déverrouillée
-    return ligne.note_id === null || deverrouillees.has(ligne.eleve_id);
+    // Éditable si : pas encore de note existante, ou mode édition global activé
+    return ligne.note_id === null || modeEdition;
   }
 
   async function notifierDirection(nom: string, prenom: string, avant: string, apres: string) {
@@ -233,6 +225,8 @@ export default function SaisieConduitePage() {
     }
   }
 
+  const auMoinsUneNoteExistante = eleves.some((e) => e.note_id !== null);
+
   return (
     <main className="p-4 md:p-6 max-w-2xl mx-auto">
       <h1 className="text-xl font-bold mb-1">Conduite — {classeNom}</h1>
@@ -271,12 +265,37 @@ export default function SaisieConduitePage() {
 
       {!loading && eleves.length > 0 && (
         <>
+          {auMoinsUneNoteExistante && !modeEdition && (
+            <div className="mb-3 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setModeEdition(true)}
+                className="flex items-center gap-1.5 text-sm border rounded-md px-3 py-1.5 hover:bg-gray-50"
+              >
+                ✏️ Modifier les notes
+              </button>
+            </div>
+          )}
+
+          {modeEdition && (
+            <div className="mb-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-md p-2.5 flex items-center justify-between">
+              <span>Mode modification activé — le chef et le directeur des études seront notifiés des changements.</span>
+              <button
+                type="button"
+                onClick={() => setModeEdition(false)}
+                className="underline shrink-0 ml-2"
+              >
+                Annuler
+              </button>
+            </div>
+          )}
+
           <div className="border rounded-lg overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-gray-100">
                 <tr>
                   <th className="text-left px-3 py-2">Élève</th>
-                  <th className="text-left px-3 py-2 w-28">Note /20</th>
+                  <th className="text-left px-3 py-2 w-24">Note /20</th>
                 </tr>
               </thead>
               <tbody>
@@ -286,29 +305,17 @@ export default function SaisieConduitePage() {
                     <tr key={e.eleve_id} className="border-t">
                       <td className="px-3 py-2">{e.nom} {e.prenom}</td>
                       <td className="px-3 py-2">
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            value={e.valeur}
-                            disabled={!modifiable}
-                            onChange={(ev) => modifierValeur(e.eleve_id, ev.target.value)}
-                            className={`w-16 border rounded px-2 py-1 text-center ${
-                              !modifiable ? 'bg-gray-100 text-gray-400' : ''
-                            }`}
-                            placeholder="-"
-                          />
-                          {!modifiable && (
-                            <button
-                              type="button"
-                              onClick={() => deverrouillerLigne(e.eleve_id)}
-                              title="Modifier cette note"
-                              className="text-gray-400 hover:text-gray-700"
-                            >
-                              ✏️
-                            </button>
-                          )}
-                        </div>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={e.valeur}
+                          disabled={!modifiable}
+                          onChange={(ev) => modifierValeur(e.eleve_id, ev.target.value)}
+                          className={`w-16 border rounded px-2 py-1 text-center ${
+                            !modifiable ? 'bg-gray-100 text-gray-400' : ''
+                          }`}
+                          placeholder="-"
+                        />
                       </td>
                     </tr>
                   );
@@ -328,4 +335,4 @@ export default function SaisieConduitePage() {
       )}
     </main>
   );
-}
+                     }

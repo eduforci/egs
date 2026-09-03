@@ -10,6 +10,7 @@ type LigneParsee = {
   niveau: string;
   sexe: string;
   date_naissance: string;
+  lieu_naissance: string;
   valide: boolean;
   erreurLocale: string | null;
 };
@@ -26,7 +27,10 @@ type ResultatLigne = {
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
-const ENTETES_CONNUES = ['matricule', 'nom', 'prénom', 'prenom', 'niveau', 'sexe', 'date de naissance'];
+const ENTETES_CONNUES = [
+  'matricule', 'nom', 'prénom', 'prenom', 'niveau', 'sexe',
+  'date de naissance', 'lieu de naissance',
+];
 
 function normaliserDate(valeur: string): string {
   const v = valeur.trim();
@@ -37,14 +41,11 @@ function normaliserDate(valeur: string): string {
   return '';
 }
 
-// Transforme un tableau de lignes brutes (chaînes de caractères par colonne)
-// en lignes validées, en repérant les en-têtes si elles sont reconnaissables,
-// sinon en supposant l'ordre du modèle : Matricule, Nom, Prénom, Niveau, Sexe, Date de naissance.
 function construireLignes(rangees: string[][]): LigneParsee[] {
   if (rangees.length === 0) return [];
 
   let indexDepart = 0;
-  let ordre = ['matricule', 'nom', 'prenom', 'niveau', 'sexe', 'date de naissance'];
+  let ordre = ['matricule', 'nom', 'prenom', 'niveau', 'sexe', 'date de naissance', 'lieu de naissance'];
 
   const premiereLigne = rangees[0].map((c) => c.trim().toLowerCase().replace('é', 'e'));
   const ressembleEntete = premiereLigne.some((c) => ENTETES_CONNUES.some((e) => e.replace('é', 'e') === c));
@@ -59,7 +60,7 @@ function construireLignes(rangees: string[][]): LigneParsee[] {
 
   for (let i = indexDepart; i < rangees.length; i++) {
     const rangee = rangees[i];
-    if (rangee.every((c) => !c.trim())) continue; // ligne vide ignorée
+    if (rangee.every((c) => !c.trim())) continue;
 
     const valeurs: Record<string, string> = {};
     ordre.forEach((cle, idx) => {
@@ -73,6 +74,7 @@ function construireLignes(rangees: string[][]): LigneParsee[] {
     const sexeRaw = (valeurs['sexe'] ?? '').toUpperCase();
     const sexe = sexeRaw === 'M' || sexeRaw === 'F' ? sexeRaw : '';
     const dateNaissance = normaliserDate(valeurs['date de naissance'] ?? '');
+    const lieuNaissance = (valeurs['lieu de naissance'] ?? '').trim();
 
     let erreurLocale: string | null = null;
     if (!nom || !prenom || !matricule || !niveau) {
@@ -89,6 +91,7 @@ function construireLignes(rangees: string[][]): LigneParsee[] {
       niveau,
       sexe,
       date_naissance: dateNaissance,
+      lieu_naissance: lieuNaissance,
       valide: erreurLocale === null,
       erreurLocale,
     });
@@ -118,6 +121,7 @@ export default function ImportElevesPage() {
         Niveau: '6ème',
         Sexe: 'F',
         'Date de naissance': '2013-04-12',
+        'Lieu de naissance': 'Abidjan',
       },
       {
         Matricule: '23607403P',
@@ -126,6 +130,7 @@ export default function ImportElevesPage() {
         Niveau: '6ème',
         Sexe: 'M',
         'Date de naissance': '',
+        'Lieu de naissance': '',
       },
     ];
     const feuille = XLSX.utils.json_to_sheet(exemple);
@@ -167,7 +172,11 @@ export default function ImportElevesPage() {
         const data = evt.target?.result;
         const classeur = XLSX.read(data, { type: 'binary' });
         const feuille = classeur.Sheets[classeur.SheetNames[0]];
-        const rangees: string[][] = XLSX.utils.sheet_to_json(feuille, { header: 1, defval: '' });
+        const rangees: string[][] = XLSX.utils.sheet_to_json(feuille, {
+          header: 1,
+          defval: '',
+          raw: false,
+        });
 
         if (rangees.length === 0) {
           setErreurFichier('Le fichier ne contient aucune ligne exploitable.');
@@ -191,8 +200,6 @@ export default function ImportElevesPage() {
     setNomFichier('');
     if (inputRef.current) inputRef.current.value = '';
 
-    // Les données copiées depuis Excel/Google Sheets utilisent des tabulations ;
-    // à défaut, on retombe sur la virgule ou le point-virgule.
     const lignesTexte = texteCollé.split(/\r?\n/).filter((l) => l.trim() !== '');
     const separateur = lignesTexte[0]?.includes('\t')
       ? '\t'
@@ -231,6 +238,7 @@ export default function ImportElevesPage() {
             niveau: l.niveau,
             sexe: l.sexe || null,
             date_naissance: l.date_naissance || null,
+            lieu_naissance: l.lieu_naissance || null,
           })),
         }),
       });
@@ -287,14 +295,13 @@ export default function ImportElevesPage() {
         dans des sous-classes ou classes d'excellence.
       </p>
 
-      {/* Modèle */}
       <div className="border rounded-lg p-4 mb-6">
         <p className="font-semibold text-sm mb-2">1. Télécharger le modèle (optionnel)</p>
         <p className="text-xs text-gray-500 mb-3">
           Colonnes attendues, dans cet ordre : <strong>Matricule</strong> (officiel, ministère),{' '}
           <strong>Nom</strong>, <strong>Prénom</strong>, <strong>Niveau</strong>{' '}
           (toutes obligatoires), <strong>Sexe</strong> (M/F), <strong>Date de naissance</strong>{' '}
-          (AAAA-MM-JJ) — ces deux dernières sont optionnelles.
+          (AAAA-MM-JJ), <strong>Lieu de naissance</strong> — ces trois dernières sont optionnelles.
         </p>
         <div className="flex gap-2">
           <button
@@ -312,7 +319,6 @@ export default function ImportElevesPage() {
         </div>
       </div>
 
-      {/* Upload fichier */}
       <div className="border rounded-lg p-4 mb-4">
         <p className="font-semibold text-sm mb-2">2a. Importer un fichier</p>
         <input
@@ -325,7 +331,6 @@ export default function ImportElevesPage() {
         {nomFichier && <p className="text-xs text-gray-500 mt-2">Fichier chargé : {nomFichier}</p>}
       </div>
 
-      {/* Coller directement */}
       <div className="border rounded-lg p-4 mb-6">
         <p className="font-semibold text-sm mb-2">2b. Ou coller les données directement</p>
         <p className="text-xs text-gray-500 mb-2">
@@ -336,7 +341,7 @@ export default function ImportElevesPage() {
           value={texteCollé}
           onChange={(e) => setTexteCollé(e.target.value)}
           rows={6}
-          placeholder="21427141U	Kouassi	Awa	6ème	F	2013-04-12"
+          placeholder="21427141U	Kouassi	Awa	6ème	F	2013-04-12	Abidjan"
           className="w-full border rounded-md px-3 py-2 text-xs font-mono"
         />
         <button
@@ -354,7 +359,6 @@ export default function ImportElevesPage() {
         </div>
       )}
 
-      {/* Aperçu */}
       {lignes.length > 0 && (
         <div className="border rounded-lg p-4 mb-6">
           <p className="font-semibold text-sm mb-2">
@@ -374,6 +378,7 @@ export default function ImportElevesPage() {
                   <th className="text-left px-2 py-2">Niveau</th>
                   <th className="text-left px-2 py-2">Sexe</th>
                   <th className="text-left px-2 py-2">Naissance</th>
+                  <th className="text-left px-2 py-2">Lieu</th>
                   <th className="text-left px-2 py-2">Statut</th>
                 </tr>
               </thead>
@@ -386,6 +391,7 @@ export default function ImportElevesPage() {
                     <td className="px-2 py-1.5">{l.niveau || '—'}</td>
                     <td className="px-2 py-1.5">{l.sexe || '-'}</td>
                     <td className="px-2 py-1.5">{l.date_naissance || '-'}</td>
+                    <td className="px-2 py-1.5">{l.lieu_naissance || '-'}</td>
                     <td className="px-2 py-1.5">
                       {l.valide ? (
                         <span className="text-green-600">OK</span>
@@ -409,7 +415,6 @@ export default function ImportElevesPage() {
         </div>
       )}
 
-      {/* Résultats */}
       {resume && (
         <div className="border rounded-lg p-4">
           <p className="font-semibold text-sm mb-2">
@@ -456,4 +461,4 @@ export default function ImportElevesPage() {
       )}
     </main>
   );
-  }
+      }

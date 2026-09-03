@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
@@ -12,7 +12,7 @@ type LigneMatiere = {
 };
 
 type EnseignantOption = {
-  id: string; // = profiles.id = enseignants.id
+  id: string;
   nom: string;
   prenom: string;
   specialite: string | null;
@@ -27,7 +27,7 @@ export default function AffectationsEnseignantsPage() {
   const [enseignants, setEnseignants] = useState<EnseignantOption[]>([]);
 
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState<string | null>(null); // matiere_id en cours d'enregistrement
+  const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [succes, setSucces] = useState<string | null>(null);
 
@@ -48,7 +48,6 @@ export default function AffectationsEnseignantsPage() {
       if (classeError) throw new Error(`Erreur classe : ${classeError.message}`);
       setClasseNom(classeData.nom);
 
-      // Matières de la classe
       const { data: matieresClasse, error: matieresError } = await supabase
         .from('classes_matieres')
         .select('matiere_id, matieres(nom)')
@@ -63,7 +62,6 @@ export default function AffectationsEnseignantsPage() {
       });
       matieres.sort((a, b) => a.matiere_nom.localeCompare(b.matiere_nom));
 
-      // Affectations déjà existantes pour cette classe
       const { data: affectationsData, error: affectationsError } = await supabase
         .from('affectations_enseignant')
         .select('id, matiere_id, enseignant_id')
@@ -87,33 +85,31 @@ export default function AffectationsEnseignantsPage() {
         })
       );
 
-      // Liste des enseignants de l'établissement
-      const { data: enseignantsData, error: enseignantsError } = await supabase
-        .from('enseignants')
-        .select('id, specialite')
-        .eq('etablissement_id', classeData.etablissement_id);
-
-      if (enseignantsError) throw new Error(`Erreur enseignants : ${enseignantsError.message}`);
-
-      const idsEnseignants = (enseignantsData ?? []).map((e) => e.id);
-      const { data: profilesData, error: profilesError } = await supabase
+      // Personnel pouvant être affecté à une matière : enseignants ET éducateurs
+      // (l'éducateur note "Conduite" mais n'était jamais listé, car il n'existe
+      // pas dans la table "enseignants", réservée aux comptes créés avec ce rôle).
+      const { data: personnelProfiles, error: personnelError } = await supabase
         .from('profiles')
-        .select('id, nom, prenom')
-        .in('id', idsEnseignants.length > 0 ? idsEnseignants : ['00000000-0000-0000-0000-000000000000']);
+        .select('id, nom, prenom, role')
+        .eq('etablissement_id', classeData.etablissement_id)
+        .in('role', ['enseignant', 'educateur']);
 
-      if (profilesError) throw new Error(`Erreur profils enseignants : ${profilesError.message}`);
+      if (personnelError) throw new Error(`Erreur enseignants : ${personnelError.message}`);
 
-      const profilesMap = new Map((profilesData ?? []).map((p) => [p.id, p]));
+      const idsPersonnel = (personnelProfiles ?? []).map((p) => p.id);
+      const { data: specialitesData } =
+        idsPersonnel.length > 0
+          ? await supabase.from('enseignants').select('id, specialite').in('id', idsPersonnel)
+          : { data: [] as { id: string; specialite: string | null }[] };
 
-      const optionsEnseignants: EnseignantOption[] = (enseignantsData ?? []).map((e) => {
-        const p = profilesMap.get(e.id);
-        return {
-          id: e.id,
-          nom: p?.nom ?? 'Inconnu',
-          prenom: p?.prenom ?? '',
-          specialite: e.specialite,
-        };
-      });
+      const specialiteMap = new Map((specialitesData ?? []).map((s) => [s.id, s.specialite]));
+
+      const optionsEnseignants: EnseignantOption[] = (personnelProfiles ?? []).map((p) => ({
+        id: p.id,
+        nom: p.nom,
+        prenom: p.prenom,
+        specialite: specialiteMap.get(p.id) ?? (p.role === 'educateur' ? 'Éducateur' : null),
+      }));
       optionsEnseignants.sort((a, b) => a.nom.localeCompare(b.nom));
       setEnseignants(optionsEnseignants);
     } catch (err) {
@@ -136,7 +132,6 @@ export default function AffectationsEnseignantsPage() {
 
     try {
       if (!enseignantId) {
-        // Retirer l'affectation
         if (ligne?.affectation_id) {
           const { error: deleteError } = await supabase
             .from('affectations_enseignant')
@@ -145,14 +140,12 @@ export default function AffectationsEnseignantsPage() {
           if (deleteError) throw new Error(deleteError.message);
         }
       } else if (ligne?.affectation_id) {
-        // Mettre à jour l'affectation existante
         const { error: updateError } = await supabase
           .from('affectations_enseignant')
           .update({ enseignant_id: enseignantId })
           .eq('id', ligne.affectation_id);
         if (updateError) throw new Error(updateError.message);
       } else {
-        // Créer une nouvelle affectation
         const { error: insertError } = await supabase.from('affectations_enseignant').insert({
           enseignant_id: enseignantId,
           matiere_id: matiereId,
@@ -176,7 +169,7 @@ export default function AffectationsEnseignantsPage() {
     <main className="p-4 md:p-6 max-w-2xl mx-auto">
       <h1 className="text-xl font-bold mb-1">Enseignants — {classeNom}</h1>
       <p className="text-sm text-gray-500 mb-4">
-        Affecte un enseignant à chaque matière de cette classe.
+        Affecte un enseignant (ou un éducateur pour la Conduite) à chaque matière de cette classe.
       </p>
 
       {error && (
@@ -233,4 +226,3 @@ export default function AffectationsEnseignantsPage() {
     </main>
   );
         }
-          

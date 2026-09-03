@@ -186,7 +186,7 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
 
         {/* BANDEAU — visible uniquement si un directeur des études visite une page partagée avec le chef */}
         {estVisiteurDirecteur && (
-          <div className="bg-blue-50 border-b border-blue-200 px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap">
+          <div className="bg-blue-50 border-b border-blue-200 px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap print:hidden">
             <p className="text-xs text-blue-800">
               Vous consultez cette page en tant que <strong>Directeur des études</strong> — elle est partagée avec l'espace chef.
             </p>

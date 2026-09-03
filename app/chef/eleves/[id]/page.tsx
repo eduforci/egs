@@ -48,6 +48,8 @@ export default function FicheElevePage() {
   const [photoUrl, setPhotoUrl] = useState("");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [statut, setStatut] = useState("actif");
+  const [dateNaissance, setDateNaissance] = useState("");
+  const [lieuNaissance, setLieuNaissance] = useState("");
   const [etablissementId, setEtablissementId] = useState("");
 
   const [inscriptions, setInscriptions] = useState<Inscription[]>([]);
@@ -66,7 +68,7 @@ export default function FicheElevePage() {
     try {
       const { data: eleve, error: eleveError } = await supabase
         .from("eleves")
-        .select("id, matricule, adresse, photo_url, statut, etablissement_id, classe_id, classes(nom)")
+        .select("id, matricule, adresse, photo_url, statut, date_naissance, lieu_naissance, etablissement_id, classe_id, classes(nom)")
         .eq("id", eleveId)
         .single();
 
@@ -89,6 +91,8 @@ export default function FicheElevePage() {
       setAdresse(eleve.adresse ?? "");
       setPhotoUrl(eleve.photo_url ?? "");
       setStatut(eleve.statut ?? "actif");
+      setDateNaissance(eleve.date_naissance ?? "");
+      setLieuNaissance(eleve.lieu_naissance ?? "");
       setEtablissementId(eleve.etablissement_id);
 
       const { data: inscrData } = await supabase
@@ -195,7 +199,14 @@ export default function FicheElevePage() {
     const res = await fetch("/api/chef/modifier-eleve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ eleveId, adresse, photoUrl, statut }),
+      body: JSON.stringify({
+        eleveId,
+        adresse,
+        photoUrl,
+        statut,
+        dateNaissance,
+        lieuNaissance,
+      }),
     });
     const data = await res.json();
     if (!res.ok) { setError(data.error || "Erreur lors de la mise à jour."); return; }
@@ -267,6 +278,28 @@ export default function FicheElevePage() {
       {/* Fiche */}
       <section className="bg-white border rounded-xl p-5 space-y-3">
         <h2 className="font-semibold">Informations</h2>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-neutral-500 mb-1">Date de naissance</label>
+            <input
+              type="date"
+              value={dateNaissance}
+              onChange={(e) => setDateNaissance(e.target.value)}
+              className="w-full border rounded-lg p-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-neutral-500 mb-1">Lieu de naissance</label>
+            <input
+              type="text"
+              value={lieuNaissance}
+              onChange={(e) => setLieuNaissance(e.target.value)}
+              placeholder="Ex: Abidjan"
+              className="w-full border rounded-lg p-2 text-sm"
+            />
+          </div>
+        </div>
 
         <div>
           <label className="block text-xs text-neutral-500 mb-1">Adresse</label>
@@ -428,4 +461,4 @@ export default function FicheElevePage() {
       </section>
     </main>
   );
-                              }
+        }

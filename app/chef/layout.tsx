@@ -171,7 +171,8 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
 
       {/* CONTENU PRINCIPAL */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="bg-white border-b sticky top-0 z-20 px-4 py-3 flex items-center gap-3">
+        {/* CONTENU PRINCIPAL */}
+        <header className="bg-white border-b sticky top-0 z-20 px-4 py-3 flex items-center gap-3 print:hidden">
           <button
             onClick={() => setMenuOuvert(true)}
             className="md:hidden text-2xl leading-none"

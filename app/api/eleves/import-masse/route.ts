@@ -18,6 +18,7 @@ type LigneImport = {
   niveau: string;
   sexe?: string | null;
   date_naissance?: string | null;
+  lieu_naissance?: string | null;
 };
 
 type ResultatLigne = {
@@ -71,9 +72,6 @@ export async function POST(request: NextRequest) {
   const admin = createAdminClient();
   const etablissementId = profile.etablissement_id;
 
-  // Vérifie en une seule requête tous les matricules déjà utilisés dans EGS,
-  // pour éviter une collision avec un compte existant (élève déjà importé,
-  // doublon dans le fichier, etc.).
   const matriculesFichier = lignes
     .map((l) => (l.matricule ?? "").toString().trim())
     .filter(Boolean);
@@ -87,8 +85,6 @@ export async function POST(request: NextRequest) {
     (profilsExistants ?? []).map((p) => p.identifiant)
   );
 
-  // Cache des classes par niveau : évite une requête par ligne, et crée
-  // automatiquement une classe par défaut "<Niveau> A" si aucune n'existe.
   const classeParNiveau = new Map<string, string>();
 
   async function obtenirClasseId(niveau: string): Promise<string> {
@@ -138,7 +134,7 @@ export async function POST(request: NextRequest) {
 
   for (let i = 0; i < lignes.length; i++) {
     const ligne = lignes[i];
-    const numeroLigne = i + 2; // +2 : ligne 1 = en-têtes dans le fichier source
+    const numeroLigne = i + 2;
 
     const nom = (ligne.nom ?? "").toString().trim();
     const prenom = (ligne.prenom ?? "").toString().trim();
@@ -215,6 +211,7 @@ export async function POST(request: NextRequest) {
       }
 
       const dateNaissance = ligne.date_naissance ? ligne.date_naissance.toString().trim() : null;
+      const lieuNaissance = ligne.lieu_naissance ? ligne.lieu_naissance.toString().trim() : null;
       const sexe = ligne.sexe ? ligne.sexe.toString().trim().toUpperCase() : null;
 
       const { error: eleveError } = await admin.from("eleves").insert({
@@ -223,6 +220,7 @@ export async function POST(request: NextRequest) {
         classe_id: classeId,
         matricule,
         date_naissance: dateNaissance || null,
+        lieu_naissance: lieuNaissance || null,
         sexe: sexe === "M" || sexe === "F" ? sexe : null,
         statut: "actif",
       });
@@ -258,4 +256,4 @@ export async function POST(request: NextRequest) {
   const nbEchecs = resultats.length - nbSucces;
 
   return NextResponse.json({ resultats, nbSucces, nbEchecs });
-        }
+    }

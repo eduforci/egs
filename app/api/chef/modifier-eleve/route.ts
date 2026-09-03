@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Accès réservé au personnel administratif." }, { status: 403 });
   }
 
-  const { eleveId, adresse, photoUrl, statut } = await request.json();
+  const { eleveId, adresse, photoUrl, statut, dateNaissance, lieuNaissance } = await request.json();
 
   if (!eleveId) {
     return NextResponse.json({ error: "Identifiant élève manquant." }, { status: 400 });
@@ -37,7 +37,6 @@ export async function POST(request: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // Vérifie que l'élève appartient bien au même établissement avant de modifier
   const { data: eleve, error: eleveError } = await admin
     .from("eleves")
     .select("id, etablissement_id")
@@ -58,6 +57,8 @@ export async function POST(request: Request) {
       adresse: adresse || null,
       photo_url: photoUrl || null,
       statut: statut || "actif",
+      date_naissance: dateNaissance || null,
+      lieu_naissance: lieuNaissance || null,
     })
     .eq("id", eleveId);
 

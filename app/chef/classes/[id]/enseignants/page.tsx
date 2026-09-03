@@ -16,6 +16,7 @@ type EnseignantOption = {
   nom: string;
   prenom: string;
   specialite: string | null;
+  role: 'enseignant' | 'educateur';
 };
 
 export default function AffectationsEnseignantsPage() {
@@ -85,9 +86,6 @@ export default function AffectationsEnseignantsPage() {
         })
       );
 
-      // Personnel pouvant être affecté à une matière : enseignants ET éducateurs
-      // (l'éducateur note "Conduite" mais n'était jamais listé, car il n'existe
-      // pas dans la table "enseignants", réservée aux comptes créés avec ce rôle).
       const { data: personnelProfiles, error: personnelError } = await supabase
         .from('profiles')
         .select('id, nom, prenom, role')
@@ -104,14 +102,15 @@ export default function AffectationsEnseignantsPage() {
 
       const specialiteMap = new Map((specialitesData ?? []).map((s) => [s.id, s.specialite]));
 
-      const optionsEnseignants: EnseignantOption[] = (personnelProfiles ?? []).map((p) => ({
+      const optionsPersonnel: EnseignantOption[] = (personnelProfiles ?? []).map((p) => ({
         id: p.id,
         nom: p.nom,
         prenom: p.prenom,
-        specialite: specialiteMap.get(p.id) ?? (p.role === 'educateur' ? 'Éducateur' : null),
+        specialite: specialiteMap.get(p.id) ?? null,
+        role: p.role as 'enseignant' | 'educateur',
       }));
-      optionsEnseignants.sort((a, b) => a.nom.localeCompare(b.nom));
-      setEnseignants(optionsEnseignants);
+      optionsPersonnel.sort((a, b) => a.nom.localeCompare(b.nom));
+      setEnseignants(optionsPersonnel);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur inconnue');
     } finally {
@@ -122,6 +121,14 @@ export default function AffectationsEnseignantsPage() {
   useEffect(() => {
     charger();
   }, [charger]);
+
+  // "Conduite" est réservée aux comptes Éducateur ; toutes les autres matières
+  // sont réservées aux comptes Enseignant. Un mélange fausse les moyennes du
+  // bulletin (l'éducateur n'a pas de moyennes/coefficients calculés comme un prof).
+  function optionsPourMatiere(matiereNom: string): EnseignantOption[] {
+    const roleAttendu = matiereNom.trim().toLowerCase() === 'conduite' ? 'educateur' : 'enseignant';
+    return enseignants.filter((ens) => ens.role === roleAttendu);
+  }
 
   async function affecterEnseignant(matiereId: string, enseignantId: string) {
     setSaving(matiereId);
@@ -169,7 +176,7 @@ export default function AffectationsEnseignantsPage() {
     <main className="p-4 md:p-6 max-w-2xl mx-auto">
       <h1 className="text-xl font-bold mb-1">Enseignants — {classeNom}</h1>
       <p className="text-sm text-gray-500 mb-4">
-        Affecte un enseignant (ou un éducateur pour la Conduite) à chaque matière de cette classe.
+        Affecte un enseignant à chaque matière (la Conduite est réservée aux comptes Éducateur).
       </p>
 
       {error && (
@@ -198,31 +205,49 @@ export default function AffectationsEnseignantsPage() {
               </tr>
             </thead>
             <tbody>
-              {lignes.map((l) => (
-                <tr key={l.matiere_id} className="border-t">
-                  <td className="px-3 py-2 font-medium">{l.matiere_nom}</td>
-                  <td className="px-3 py-2">
-                    <select
-                      value={l.enseignant_id ?? ''}
-                      onChange={(e) => affecterEnseignant(l.matiere_id, e.target.value)}
-                      disabled={saving === l.matiere_id}
-                      className="w-full border rounded-md px-2 py-1.5 text-sm"
-                    >
-                      <option value="">Non affecté</option>
-                      {enseignants.map((ens) => (
-                        <option key={ens.id} value={ens.id}>
-                          {ens.nom} {ens.prenom}
-                          {ens.specialite ? ` — ${ens.specialite}` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                </tr>
-              ))}
+              {lignes.map((l) => {
+                const options = optionsPourMatiere(l.matiere_nom);
+                const estConduite = l.matiere_nom.trim().toLowerCase() === 'conduite';
+                return (
+                  <tr key={l.matiere_id} className="border-t">
+                    <td className="px-3 py-2 font-medium">
+                      {l.matiere_nom}
+                      {estConduite && (
+                        <span className="block text-[10px] text-neutral-400 font-normal">
+                          Réservé aux éducateurs
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      <select
+                        value={l.enseignant_id ?? ''}
+                        onChange={(e) => affecterEnseignant(l.matiere_id, e.target.value)}
+                        disabled={saving === l.matiere_id}
+                        className="w-full border rounded-md px-2 py-1.5 text-sm"
+                      >
+                        <option value="">Non affecté</option>
+                        {options.map((ens) => (
+                          <option key={ens.id} value={ens.id}>
+                            {ens.nom} {ens.prenom}
+                            {ens.specialite ? ` — ${ens.specialite}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      {options.length === 0 && (
+                        <p className="text-[10px] text-amber-600 mt-1">
+                          {estConduite
+                            ? "Aucun compte Éducateur trouvé pour cet établissement."
+                            : "Aucun compte Enseignant trouvé pour cet établissement."}
+                        </p>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
     </main>
   );
-        }
+          }

@@ -153,9 +153,25 @@ export default function NotesTable({
     .filter((x) => x.m !== null)
     .sort((a, b) => (b.m as number) - (a.m as number));
 
+  const rangsMap = new Map<string, { position: number; exAequo: boolean }>();
+  {
+    let i = 0;
+    while (i < classement.length) {
+      let j = i;
+      while (j < classement.length && classement[j].m === classement[i].m) j++;
+      const position = i + 1;
+      const exAequo = j - i > 1;
+      for (let k = i; k < j; k++) {
+        rangsMap.set(classement[k].id, { position, exAequo });
+      }
+      i = j;
+    }
+  }
+
   function rang(eleveId: string) {
-    const idx = classement.findIndex((c) => c.id === eleveId);
-    return idx === -1 ? "-" : idx + 1;
+    const info = rangsMap.get(eleveId);
+    if (!info) return "-";
+    return `${info.position}e${info.exAequo ? " ex" : ""}`;
   }
 
   function celluleModifiable(eleveId: string, evaluationId: string) {

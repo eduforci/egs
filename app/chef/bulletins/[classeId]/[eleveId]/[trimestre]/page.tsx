@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Fragment } from 'react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
@@ -13,6 +13,7 @@ type MatiereLigne = {
   groupe_bilan: string | null;
   appreciation: string | null;
   professeur: string | null;
+  details: { libelle: string; note: number }[] | null;
 };
 
 type BilanGroupe = {
@@ -92,7 +93,6 @@ const MENTIONS_DISTINCTION = [
 
 function fmt(n: number | null | undefined) {
   if (n === null || n === undefined) return '-';
-  // Si c'est un entier, on l'affiche sans décimales
   if (Number.isInteger(n)) {
     return n.toString();
   }
@@ -195,7 +195,6 @@ export default function BulletinPage() {
     chargerBulletin();
   }, [chargerBulletin]);
 
-  // ✅ FONCTION CORRIGÉE - Version simple avec bulletins_infos
   async function enregistrerInfosManuelles() {
     if (!etablissementId || !classeId) return;
     setSaving(true);
@@ -252,28 +251,46 @@ export default function BulletinPage() {
 
   const matieresLettres = matieres.filter((m) => m.groupe_bilan === 'Lettres');
   const matieresSciences = matieres.filter((m) => m.groupe_bilan === 'Sciences');
-  const matieresAutres = matieres.filter((m) => !m.groupe_bilan);
+  const matieresAutres = matieres.filter((m) => m.groupe_bilan === 'Autres');
 
   const bilanLettres = bilans.find((b) => b.groupe === 'Lettres');
   const bilanSciences = bilans.find((b) => b.groupe === 'Sciences');
-const bilanAutres = bilans.find((b) => b.groupe === 'Autres');
-  const renderLigneMatiere = (m: MatiereLigne, i: number) => (
-    <tr key={i} className="border-t">
-      <td className="px-1.5 py-1">{m.matiere}</td>
-      <td className="px-1.5 py-1 text-center">{fmt(m.moyenne)}</td>
-      <td className="px-1.5 py-1 text-center">{fmt(m.coefficient)}</td>
-      <td className="px-1.5 py-1 text-center">{fmt(m.total)}</td>
-      <td className="px-1.5 py-1 text-center">{m.rang ? `${m.rang}e` : '-'}</td>
-      <td className="px-1.5 py-1">{m.appreciation ?? '-'}</td>
-      <td className="px-1.5 py-1 text-[9px]">{m.professeur ?? '-'}</td>
-      <td className="px-1.5 py-1 border-l"></td>
-    </tr>
-  );
+  const bilanAutres = bilans.find((b) => b.groupe === 'Autres');
+
+  const renderLigneMatiere = (m: MatiereLigne, i: number) => {
+    const ligneEntete = (
+      <tr key={i} className="border-t">
+        <td className="px-1.5 py-1">{m.matiere}</td>
+        <td className="px-1.5 py-1 text-center">{fmt(m.moyenne)}</td>
+        <td className="px-1.5 py-1 text-center">{fmt(m.coefficient)}</td>
+        <td className="px-1.5 py-1 text-center">{fmt(m.total)}</td>
+        <td className="px-1.5 py-1 text-center">{m.rang ? `${m.rang}e` : '-'}</td>
+        <td className="px-1.5 py-1">{m.appreciation ?? '-'}</td>
+        <td className="px-1.5 py-1 text-[9px]">{m.professeur ?? '-'}</td>
+        <td className="px-1.5 py-1 border-l"></td>
+      </tr>
+    );
+
+    if (!m.details || m.details.length === 0) return ligneEntete;
+
+    return (
+      <Fragment key={i}>
+        {ligneEntete}
+        {m.details.map((d, j) => (
+          <tr key={`${i}-${j}`} className="border-t text-gray-500 text-[9px]">
+            <td className="px-1.5 py-1 pl-4">{d.libelle}</td>
+            <td className="px-1.5 py-1 text-center">{fmt(d.note)}</td>
+            <td colSpan={6}></td>
+          </tr>
+        ))}
+      </Fragment>
+    );
+  };
 
   const renderLigneBilan = (label: string, bilan: BilanGroupe | undefined) => (
     <tr className="bg-gray-100 font-semibold border-t border-b">
       <td className="px-1.5 py-1" colSpan={2}>{label}</td>
-      <td className="px-1.5 py-1 text-center">{bilan ? `${bilan.moyenne}/20` : '-'}</td>
+      <td className="px-1.5 py-1 text-center">{bilan ? `${fmt(bilan.moyenne)}/20` : '-'}</td>
       <td className="px-1.5 py-1 text-center">{bilan ? bilan.total : '-'}</td>
       <td className="px-1.5 py-1 text-center" colSpan={4}>
         RANG : {bilan ? `${bilan.rang}e` : '-'}
@@ -505,6 +522,7 @@ const bilanAutres = bilans.find((b) => b.groupe === 'Autres');
             {matieresSciences.length > 0 && renderLigneBilan('BILAN SCIENCES', bilanSciences)}
 
             {matieresAutres.map(renderLigneMatiere)}
+            {matieresAutres.length > 0 && renderLigneBilan('BILAN AUTRES', bilanAutres)}
           </tbody>
           <tfoot>
             <tr className="bg-gray-800 text-white font-bold">
@@ -515,26 +533,27 @@ const bilanAutres = bilans.find((b) => b.groupe === 'Autres');
             </tr>
           </tfoot>
         </table>
-          </div>
-                {/* Résultats */}
+        </div>
+
+        {/* Résultats */}
         <div className="grid grid-cols-2 gap-2 mt-2">
           <div className="border rounded p-1.5">
             <p className="font-semibold">Moyenne trimestrielle</p>
             {bulletin.totaux ? (
-              <>
+     <>
                 <p className="text-sm font-bold">{fmt(bulletin.totaux.moyenne_generale)}/20</p>
                 <p>Rang : {bulletin.totaux.rang}e sur {bulletin.eleve.effectif}</p>
                 {bulletin.trimestre === 3 && bulletin.totaux?.mention && (
-  <p>Mention : {bulletin.totaux.mention}</p>
-)}
-{bulletin.trimestre === 3 && bulletin.totaux?.decision && (
-  <p className="font-semibold">
-    Décision :{' '}
-    <span className={bulletin.totaux.decision === 'Admis(e)' ? 'text-green-600' : 'text-red-600'}>
-      {bulletin.totaux.decision}
-    </span>
-  </p>
-)}
+                  <p>Mention : {bulletin.totaux.mention}</p>
+                )}
+                {bulletin.trimestre === 3 && bulletin.totaux?.decision && (
+                  <p className="font-semibold">
+                    Décision :{' '}
+                    <span className={bulletin.totaux.decision === 'Admis(e)' ? 'text-green-600' : 'text-red-600'}>
+                      {bulletin.totaux.decision}
+                    </span>
+                  </p>
+                )}
               </>
             ) : (
               <p className="text-gray-400">Aucune note saisie ce trimestre.</p>
@@ -622,4 +641,4 @@ const bilanAutres = bilans.find((b) => b.groupe === 'Autres');
       </div>
     </div>
   );
-      }
+        }

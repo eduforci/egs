@@ -522,13 +522,17 @@ export default function BulletinPage() {
               <>
                 <p className="text-sm font-bold">{fmt(bulletin.totaux.moyenne_generale)}/20</p>
                 <p>Rang : {bulletin.totaux.rang}e sur {bulletin.eleve.effectif}</p>
-                <p>Mention : {bulletin.totaux.mention}</p>
-                <p className="font-semibold">
-                  Décision :{' '}
-                  <span className={bulletin.totaux.decision === 'Admis(e)' ? 'text-green-600' : 'text-red-600'}>
-                    {bulletin.totaux.decision}
-                  </span>
-                </p>
+                {bulletin.trimestre === 3 && bulletin.totaux?.mention && (
+  <p>Mention : {bulletin.totaux.mention}</p>
+)}
+{bulletin.trimestre === 3 && bulletin.totaux?.decision && (
+  <p className="font-semibold">
+    Décision :{' '}
+    <span className={bulletin.totaux.decision === 'Admis(e)' ? 'text-green-600' : 'text-red-600'}>
+      {bulletin.totaux.decision}
+    </span>
+  </p>
+)}
               </>
             ) : (
               <p className="text-gray-400">Aucune note saisie ce trimestre.</p>

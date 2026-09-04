@@ -51,8 +51,8 @@ type BulletinData = {
     photo_url: string | null;
   };
   assiduite: {
-    heures_absence_justifiees: number;
-    heures_absence_non_justifiees: number;
+    absences_justifiees: number;      // ✅ CORRIGÉ
+    absences_non_justifiees: number;   // ✅ CORRIGÉ
   };
   conseil: {
     appreciation: string | null;
@@ -175,8 +175,9 @@ export default function BulletinPage() {
 
       setBulletin(bulletinData);
 
-      setFormAbsJust(String(bulletinData.assiduite.heures_absence_justifiees ?? 0));
-      setFormAbsNonJust(String(bulletinData.assiduite.heures_absence_non_justifiees ?? 0));
+      // ✅ CORRIGÉ
+      setFormAbsJust(String(bulletinData.assiduite.absences_justifiees ?? 0));
+      setFormAbsNonJust(String(bulletinData.assiduite.absences_non_justifiees ?? 0));
       setFormAppreciation(bulletinData.conseil.appreciation ?? '');
       setFormMention(bulletinData.conseil.mention_distinction ?? '');
       setFormRedoublant(bulletinData.eleve.redoublant ?? false);
@@ -203,8 +204,8 @@ export default function BulletinPage() {
         trimestre,
         annee_scolaire: anneeScolaire,
         etablissement_id: etablissementId,
-        heures_absence_justifiees: parseFloat(formAbsJust) || 0,
-        heures_absence_non_justifiees: parseFloat(formAbsNonJust) || 0,
+        absences_justifiees: parseFloat(formAbsJust) || 0,           // ✅ CORRIGÉ
+        absences_non_justifiees: parseFloat(formAbsNonJust) || 0,     // ✅ CORRIGÉ
         appreciation_conseil: formAppreciation.trim() || null,
         mention_distinction: formMention || null,
         professeur_principal_id: formProfPrincipalId || null,
@@ -532,59 +533,85 @@ export default function BulletinPage() {
           </div>
           <div className="border rounded p-1.5">
             <p className="font-semibold">Résultats de classe</p>
-            <p>Moyenne classe : {fmt(bulletin.classe_stats.moyenne_classe)}/20</p>
+            
+      <p>Moyenne classe : {fmt(bulletin.classe_stats.moyenne_classe)}/20</p>
             <p>Moyenne mini : {fmt(bulletin.classe_stats.moyenne_mini)}/20</p>
             <p>Moyenne maxi : {fmt(bulletin.classe_stats.moyenne_maxi)}/20</p>
           </div>
         </div>
 
         {/* Assiduité */}
-        <div className="border rounded p-1.5 mt-2">
+        <div className="mt-2 border rounded p-1.5">
           <p className="font-semibold">Assiduité</p>
-          <p>
-            Absences justifiées : {bulletin.assiduite.heures_absence_justifiees}h · Non justifiées :{" "}
-            {bulletin.assiduite.heures_absence_non_justifiees}h
-          </p>
-        </div>
-
-        {/* Mentions du conseil */}
-        <div className="border rounded p-1.5 mt-2">
-          <p className="font-semibold mb-1">Mentions du conseil de classe</p>
-          <div className="grid grid-cols-2 gap-0.5">
-            {MENTIONS_DISTINCTION.map((m) => (
-              <label key={m.value} className="flex items-center gap-1">
-                <input
-                  type="checkbox"
-                  checked={bulletin.conseil.mention_distinction === m.value}
-                  readOnly
-                  className="h-2.5 w-2.5"
-                />
-                {m.label}
-              </label>
-            ))}
+          <div className="flex gap-4 text-[9px]">
+            <p>Absences justifiées : {bulletin.assiduite.absences_justifiees}h</p>
+            <p>Absences non justifiées : {bulletin.assiduite.absences_non_justifiees}h</p>
           </div>
         </div>
 
-        {/* Appréciation du conseil */}
-        <div className="border rounded p-1.5 mt-2">
-          <p className="font-semibold">Appréciation du conseil de classe</p>
-          <p>{bulletin.conseil.appreciation ?? "-"}</p>
-          <p className="text-gray-500">
-            Professeur principal : {bulletin.conseil.professeur_principal ?? "-"}
-          </p>
+        {/* Mentions du conseil */}
+        <div className="mt-2 border rounded p-1.5">
+          <p className="font-semibold">Mentions du conseil de classe</p>
+          <div className="grid grid-cols-2 gap-x-4 text-[9px]">
+            <div>
+              <p className="font-medium">Distinctions</p>
+              <div className="space-y-0.5">
+                <label className="flex items-center gap-1">
+                  <input type="checkbox" checked={formMention === 'tableau_honneur_felicitations'} readOnly />
+                  Tabl. Honneur + Félicitations
+                </label>
+                <label className="flex items-center gap-1">
+                  <input type="checkbox" checked={formMention === 'tableau_honneur_encouragements'} readOnly />
+                  Tabl. Honneur + Encouragements
+                </label>
+                <label className="flex items-center gap-1">
+                  <input type="checkbox" checked={formMention === 'tableau_honneur'} readOnly />
+                  Tableau d'Honneur
+                </label>
+              </div>
+            </div>
+            <div>
+              <p className="font-medium">Sanctions</p>
+              <div className="space-y-0.5">
+                <label className="flex items-center gap-1">
+                  <input type="checkbox" checked={formMention === 'avertissement_travail'} readOnly />
+                  Avertissement travail
+                </label>
+                <label className="flex items-center gap-1">
+                  <input type="checkbox" checked={formMention === 'avertissement_conduite'} readOnly />
+                  Avertissement conduite
+                </label>
+                <label className="flex items-center gap-1">
+                  <input type="checkbox" checked={formMention === 'blame_travail'} readOnly />
+                  Blâme travail
+                </label>
+                <label className="flex items-center gap-1">
+                  <input type="checkbox" checked={formMention === 'blame_conduite'} readOnly />
+                  Blâme conduite
+                </label>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Signatures */}
-        <div className="flex justify-between mt-3">
-          <p>Fait le {bulletin.date_edition}</p>
-          <div className="text-center">
-            <p className="font-semibold">
-              {bulletin.etablissement.titre_responsable}
-            </p>
-            <p className="mt-4">{bulletin.chef_etablissement ?? ""}</p>
+        {/* Appréciation */}
+        <div className="mt-2 border rounded p-1.5">
+          <p className="font-semibold">Appréciation du conseil de classe</p>
+          <p>{bulletin.conseil.appreciation || '-'}</p>
+        </div>
+
+        {/* Pied de page */}
+        <div className="mt-2 flex justify-between text-[8px] border-t pt-1.5">
+          <div>
+            <p>Professeur principal : {bulletin.conseil.professeur_principal || '-'}</p>
+          </div>
+          <div className="text-right">
+            <p>Fait le {fmtDate(bulletin.date_edition)}</p>
+            <p className="font-semibold">{bulletin.chef_etablissement || '-'}</p>
+            <p>Chef d'établissement</p>
           </div>
         </div>
       </div>
     </div>
   );
-}
+                  }

@@ -51,8 +51,8 @@ type BulletinData = {
     photo_url: string | null;
   };
   assiduite: {
-    absences_justifiées: number;      // ✅ CORRIGÉ
-    absences_non_justifiées: number;   // ✅ CORRIGÉ
+    absences_justifiees: number;
+    absences_non_justifiees: number;
   };
   conseil: {
     appreciation: string | null;
@@ -175,9 +175,8 @@ export default function BulletinPage() {
 
       setBulletin(bulletinData);
 
-      // ✅ CORRIGÉ
-      setFormAbsJust(String(bulletinData.assiduite.absences_justifiées ?? 0));
-      setFormAbsNonJust(String(bulletinData.assiduite.absences_non_justifiées ?? 0));
+      setFormAbsJust(String(bulletinData.assiduite.absences_justifiees ?? 0));
+      setFormAbsNonJust(String(bulletinData.assiduite.absences_non_justifiees ?? 0));
       setFormAppreciation(bulletinData.conseil.appreciation ?? '');
       setFormMention(bulletinData.conseil.mention_distinction ?? '');
       setFormRedoublant(bulletinData.eleve.redoublant ?? false);
@@ -204,8 +203,8 @@ export default function BulletinPage() {
         trimestre,
         annee_scolaire: anneeScolaire,
         etablissement_id: etablissementId,
-        absences_justifiees: parseFloat(formAbsJust) || 0,           // ✅ CORRIGÉ
-        absences_non_justifiees: parseFloat(formAbsNonJust) || 0,     // ✅ CORRIGÉ
+        heures_absence_justifiees: parseFloat(formAbsJust) || 0,
+        heures_absence_non_justifiees: parseFloat(formAbsNonJust) || 0,
         appreciation_conseil: formAppreciation.trim() || null,
         mention_distinction: formMention || null,
         professeur_principal_id: formProfPrincipalId || null,
@@ -510,8 +509,7 @@ export default function BulletinPage() {
             </tr>
           </tfoot>
         </table>
-
-        {/* Résultats */}
+                {/* Résultats */}
         <div className="grid grid-cols-2 gap-2 mt-2">
           <div className="border rounded p-1.5">
             <p className="font-semibold">Moyenne trimestrielle</p>
@@ -533,8 +531,7 @@ export default function BulletinPage() {
           </div>
           <div className="border rounded p-1.5">
             <p className="font-semibold">Résultats de classe</p>
-            
-      <p>Moyenne classe : {fmt(bulletin.classe_stats.moyenne_classe)}/20</p>
+            <p>Moyenne classe : {fmt(bulletin.classe_stats.moyenne_classe)}/20</p>
             <p>Moyenne mini : {fmt(bulletin.classe_stats.moyenne_mini)}/20</p>
             <p>Moyenne maxi : {fmt(bulletin.classe_stats.moyenne_maxi)}/20</p>
           </div>
@@ -614,4 +611,4 @@ export default function BulletinPage() {
       </div>
     </div>
   );
-                  }
+          }

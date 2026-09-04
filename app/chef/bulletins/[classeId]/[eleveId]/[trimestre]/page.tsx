@@ -483,6 +483,7 @@ export default function BulletinPage() {
         </div>
 
         {/* Tableau des matières */}
+        <div className="overflow-x-auto">
         <table className="w-full border">
           <thead className="bg-gray-50">
             <tr>
@@ -514,6 +515,7 @@ export default function BulletinPage() {
             </tr>
           </tfoot>
         </table>
+          </div>
                 {/* Résultats */}
         <div className="grid grid-cols-2 gap-2 mt-2">
           <div className="border rounded p-1.5">

@@ -256,7 +256,7 @@ export default function BulletinPage() {
 
   const bilanLettres = bilans.find((b) => b.groupe === 'Lettres');
   const bilanSciences = bilans.find((b) => b.groupe === 'Sciences');
-
+const bilanAutres = bilans.find((b) => b.groupe === 'Autres');
   const renderLigneMatiere = (m: MatiereLigne, i: number) => (
     <tr key={i} className="border-t">
       <td className="px-1.5 py-1">{m.matiere}</td>

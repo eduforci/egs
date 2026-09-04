@@ -51,8 +51,8 @@ type BulletinData = {
     photo_url: string | null;
   };
   assiduite: {
-    absences_justifiees: number;      // ✅ CORRIGÉ
-    absences_non_justifiees: number;   // ✅ CORRIGÉ
+    absences_justifiées: number;      // ✅ CORRIGÉ
+    absences_non_justifiées: number;   // ✅ CORRIGÉ
   };
   conseil: {
     appreciation: string | null;
@@ -176,8 +176,8 @@ export default function BulletinPage() {
       setBulletin(bulletinData);
 
       // ✅ CORRIGÉ
-      setFormAbsJust(String(bulletinData.assiduite.absences_justifiees ?? 0));
-      setFormAbsNonJust(String(bulletinData.assiduite.absences_non_justifiees ?? 0));
+      setFormAbsJust(String(bulletinData.assiduite.absences_justifiées ?? 0));
+      setFormAbsNonJust(String(bulletinData.assiduite.absences_non_justifiées ?? 0));
       setFormAppreciation(bulletinData.conseil.appreciation ?? '');
       setFormMention(bulletinData.conseil.mention_distinction ?? '');
       setFormRedoublant(bulletinData.eleve.redoublant ?? false);

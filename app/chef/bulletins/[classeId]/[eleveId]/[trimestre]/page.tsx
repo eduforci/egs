@@ -191,38 +191,99 @@ export default function BulletinPage() {
     chargerBulletin();
   }, [chargerBulletin]);
 
-  async function enregistrerInfosManuelles() {
-    if (!etablissementId || !classeId) return;
-    setSaving(true);
-    setSaveError(null);
+async function enregistrerInfosManuelles() {
+  if (!etablissementId || !classeId) return;
+  setSaving(true);
+  setSaveError(null);
 
-    const { error: upsertError } = await supabase.from('bulletins_infos').upsert(
-      {
-        eleve_id: eleveId,
-        classe_id: classeId,
-        trimestre,
-        annee_scolaire: anneeScolaire,
-        etablissement_id: etablissementId,
-        heures_absence_justifiees: parseFloat(formAbsJust) || 0,
-        heures_absence_non_justifiees: parseFloat(formAbsNonJust) || 0,
-        appreciation_conseil: formAppreciation.trim() || null,
-        mention_distinction: formMention || null,
-        professeur_principal_id: formProfPrincipalId || null,
-        redoublant: formRedoublant,
-      },
-      { onConflict: 'eleve_id,trimestre,annee_scolaire' }
-    );
+  try {
+    // 1. Enregistrer l'assiduité
+    const { error: assiduiteError } = await supabase
+      .from('assiduite_eleves')
+      .upsert(
+        {
+          eleve_id: eleveId,
+          trimestre: trimestre,
+          annee_scolaire: anneeScolaire,
+          total_absences: (parseFloat(formAbsJust) || 0) + (parseFloat(formAbsNonJust) || 0),
+          absences_justifiees: parseFloat(formAbsJust) || 0,
+          absences_non_justifiees: parseFloat(formAbsNonJust) || 0,
+        },
+        { onConflict: 'eleve_id,trimestre,annee_scolaire' }
+      );
 
-    setSaving(false);
+    if (assiduiteError) throw new Error(`Erreur assiduité : ${assiduiteError.message}`);
 
-    if (upsertError) {
-      setSaveError(`Erreur enregistrement : ${upsertError.message}`);
-      return;
+    // 2. Enregistrer les mentions et l'appréciation
+    const { error: mentionsError } = await supabase
+      .from('mentions_eleves')
+      .upsert(
+        {
+          eleve_id: eleveId,
+          trimestre: trimestre,
+          annee_scolaire: anneeScolaire,
+          felicitation: formMention === 'tableau_honneur_felicitations',
+          encouragement: formMention === 'tableau_honneur_encouragements',
+          tableau_honneur: formMention === 'tableau_honneur',
+          avertissement_travail: formMention === 'avertissement_travail',
+          avertissement_conduite: formMention === 'avertissement_conduite',
+          blame_travail: formMention === 'blame_travail',
+          blame_conduite: formMention === 'blame_conduite',
+          appreciation: formAppreciation.trim() || null,
+        },
+        { onConflict: 'eleve_id,trimestre,annee_scolaire' }
+      );
+
+    if (mentionsError) throw new Error(`Erreur mentions : ${mentionsError.message}`);
+
+    // 3. Enregistrer le professeur principal
+    if (formProfPrincipalId) {
+      const { data: profData } = await supabase
+        .from('profiles')
+        .select('nom, prenom')
+        .eq('id', formProfPrincipalId)
+        .single();
+
+      const nomComplet = profData ? `${profData.prenom} ${profData.nom}` : '';
+
+      const { error: profError } = await supabase
+        .from('professeurs_principaux')
+        .upsert(
+          {
+            classe_id: classeId,
+            trimestre: trimestre,
+            annee_scolaire: anneeScolaire,
+            professeur_principal: nomComplet,
+          },
+          { onConflict: 'classe_id,trimestre,annee_scolaire' }
+        );
+
+      if (profError) throw new Error(`Erreur professeur : ${profError.message}`);
     }
 
+    // 4. Enregistrer le redoublement
+    const { error: redoublementError } = await supabase
+      .from('redoublements')
+      .upsert(
+        {
+          eleve_id: eleveId,
+          annee_scolaire: anneeScolaire,
+          redoublant: formRedoublant,
+        },
+        { onConflict: 'eleve_id,annee_scolaire' }
+      );
+
+    if (redoublementError) throw new Error(`Erreur redoublement : ${redoublementError.message}`);
+
     setModeEdition(false);
-    chargerBulletin();
+    await chargerBulletin();
+
+  } catch (err) {
+    setSaveError(err instanceof Error ? err.message : 'Erreur inconnue');
+  } finally {
+    setSaving(false);
   }
+}
 
   if (loading) {
     return <p className="p-6 text-sm text-gray-500">Génération du bulletin en cours...</p>;

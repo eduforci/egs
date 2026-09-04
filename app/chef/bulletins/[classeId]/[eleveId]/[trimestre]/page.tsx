@@ -92,7 +92,7 @@ const MENTIONS_DISTINCTION = [
 
 function fmt(n: number | null | undefined) {
   if (n === null || n === undefined) return '-';
-  return n.toString();
+  return n.toFixed(2);
 }
 function fmtDate(d: string | null | undefined) {
   if (!d) return '-';
@@ -504,7 +504,7 @@ export default function BulletinPage() {
             <tr className="bg-gray-800 text-white font-bold">
               <td className="px-1.5 py-1" colSpan={2}>TOTAUX</td>
               <td className="px-1.5 py-1 text-center">{bulletin.totaux?.coef_total ?? '-'}</td>
-              <td className="px-1.5 py-1 text-center">{bulletin.totaux?.total_general ?? '-'}</td>
+              <td className="px-1.5 py-1 text-center">{fmt(bulletin.totaux?.total_general ?? null)}</td>
               <td className="px-1.5 py-1 text-center" colSpan={4}></td>
             </tr>
           </tfoot>
@@ -516,7 +516,7 @@ export default function BulletinPage() {
             <p className="font-semibold">Moyenne trimestrielle</p>
             {bulletin.totaux ? (
               <>
-                <p className="text-sm font-bold">{bulletin.totaux.moyenne_generale}/20</p>
+                <p className="text-sm font-bold">{fmt(bulletin.totaux.moyenne_generale)}/20</p>
                 <p>Rang : {bulletin.totaux.rang}e sur {bulletin.eleve.effectif}</p>
                 <p>Mention : {bulletin.totaux.mention}</p>
                 <p className="font-semibold">

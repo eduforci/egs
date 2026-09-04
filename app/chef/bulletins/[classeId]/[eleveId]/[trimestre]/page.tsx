@@ -92,6 +92,10 @@ const MENTIONS_DISTINCTION = [
 
 function fmt(n: number | null | undefined) {
   if (n === null || n === undefined) return '-';
+  // Si c'est un entier, on l'affiche sans décimales
+  if (Number.isInteger(n)) {
+    return n.toString();
+  }
   return n.toFixed(2);
 }
 function fmtDate(d: string | null | undefined) {

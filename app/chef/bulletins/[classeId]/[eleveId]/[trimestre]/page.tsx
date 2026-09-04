@@ -94,7 +94,12 @@ function fmt(n: number | null | undefined) {
   if (n === null || n === undefined) return '-';
   return n.toString();
 }
-
+function fmtDate(d: string | null | undefined) {
+  if (!d) return '-';
+  const [annee, mois, jour] = d.split('-');
+  if (!annee || !mois || !jour) return d;
+  return `${jour}/${mois}/${annee}`;
+}
 export default function BulletinPage() {
   const params = useParams();
   const classeId = params?.classeId as string;
@@ -442,7 +447,7 @@ export default function BulletinPage() {
               <p>Sexe : {bulletin.eleve.sexe ?? '-'}</p>
               <p>Classe : {bulletin.eleve.classe}</p>
               <p>Effectif : {bulletin.eleve.effectif}</p>
-              <p>Né(e) le : {bulletin.eleve.date_naissance ?? '-'} à {bulletin.eleve.lieu_naissance ?? '-'}</p>
+              <p>Né(e) le : {fmtDate(bulletin.eleve.date_naissance)} à {bulletin.eleve.lieu_naissance ?? '-'}</p>
               <p>Nationalité : {bulletin.eleve.nationalite ?? '-'}</p>
               <p>Régime : {bulletin.eleve.regime ?? '-'}</p>
               <p>Redoublant(e) : {bulletin.eleve.redoublant ? 'Oui' : 'Non'}</p>
@@ -462,7 +467,7 @@ export default function BulletinPage() {
               <img
                 src={bulletin.eleve.photo_url}
                 alt="Photo élève"
-                className="h-16 w-14 print:h-14 print:w-12 object-cover border flex-shrink-0"
+                className="h-16 w-14 print:h-14 print:w-12 object-cover border flex-shrink-0 grayscale"
               />
             ) : (
               <div className="h-16 w-14 print:h-14 print:w-12 border flex items-center justify-center text-[8px] text-gray-400 flex-shrink-0">

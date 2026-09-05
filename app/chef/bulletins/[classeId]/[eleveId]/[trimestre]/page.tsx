@@ -260,7 +260,7 @@ export default function BulletinPage() {
   const renderLigneMatiere = (m: MatiereLigne, i: number) => {
     const aDesDetails = !!(m.details && m.details.length > 0);
     return (
-      <tr key={i} className={`border-t ${aDesDetails ? 'font-semibold' : ''}`}>
+      <tr key={i} className="border-t font-semibold">
         <td className={`px-1.5 ${aDesDetails ? 'py-2' : 'py-1'}`}>
           <div className="flex items-center gap-2">
             <span>{m.matiere}</span>
@@ -539,7 +539,7 @@ export default function BulletinPage() {
         {bulletin.totaux ? (
               <>
                 <p className="text-sm font-bold">{fmt(bulletin.totaux.moyenne_generale)}/20</p>
-                <p>Rang : {bulletin.totaux.rang}e sur {bulletin.eleve.effectif}</p>
+                <p>Rang : <span className="font-bold">{bulletin.totaux.rang}e</span> sur {bulletin.eleve.effectif}</p>
                 {bulletin.trimestre === 3 && bulletin.totaux?.mention && (
                   <p>Mention : {bulletin.totaux.mention}</p>
                 )}
@@ -558,9 +558,9 @@ export default function BulletinPage() {
           </div>
           <div className="border rounded p-1.5">
             <p className="font-semibold">Résultats de classe</p>
-            <p>Moyenne classe : {fmt(bulletin.classe_stats.moyenne_classe)}/20</p>
-            <p>Moyenne mini : {fmt(bulletin.classe_stats.moyenne_mini)}/20</p>
-            <p>Moyenne maxi : {fmt(bulletin.classe_stats.moyenne_maxi)}/20</p>
+            <p>Moyenne classe : <span className="font-bold">{fmt(bulletin.classe_stats.moyenne_classe)}/20</span></p>
+            <p>Moyenne mini : <span className="font-bold">{fmt(bulletin.classe_stats.moyenne_mini)}/20</span></p>
+            <p>Moyenne maxi : <span className="font-bold">{fmt(bulletin.classe_stats.moyenne_maxi)}/20</span></p>
           </div>
         </div>
 

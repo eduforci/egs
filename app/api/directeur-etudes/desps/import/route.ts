@@ -32,19 +32,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: statsError.message }, { status: 500 });
   }
 
-  
-const actuelsMap = new Map<string, any>(
-  (statsActuelles.niveaux || []).map((n: any) => [n.niveau, n])
-);
-const importesMap = new Map<string, any>(
-  fichier_importe.niveaux.map((n: any) => [n.niveau, n])
-);
+  const actuelsMap = new Map<string, any>(
+    (statsActuelles.niveaux || []).map((n: any) => [n.niveau, n])
+  );
+  const importesMap = new Map<string, any>(
+    fichier_importe.niveaux.map((n: any) => [n.niveau, n])
+  );
+
   const tousNiveaux = new Set([...actuelsMap.keys(), ...importesMap.keys()]);
   const differences: any[] = [];
 
   for (const niveau of tousNiveaux) {
-    const actuel = actuelsMap.get(niveau);
-    const importe = importesMap.get(niveau);
+    const actuel: any = actuelsMap.get(niveau);
+    const importe: any = importesMap.get(niveau);
 
     if (!actuel || !importe) {
       differences.push({ niveau, type: 'niveau_absent', actuel, importe });
@@ -65,4 +65,4 @@ const importesMap = new Map<string, any>(
     statsActuelles,
     fichierImporte: fichier_importe,
   });
-                              }
+}

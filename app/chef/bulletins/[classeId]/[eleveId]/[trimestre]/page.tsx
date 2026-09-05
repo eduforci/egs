@@ -256,11 +256,23 @@ export default function BulletinPage() {
   const bilanLettres = bilans.find((b) => b.groupe === 'Lettres');
   const bilanSciences = bilans.find((b) => b.groupe === 'Sciences');
   const bilanAutres = bilans.find((b) => b.groupe === 'Autres');
+
 const renderLigneMatiere = (m: MatiereLigne, i: number) => {
     const aDesDetails = !!(m.details && m.details.length > 0);
-    const ligneEntete = (
+    return (
       <tr key={i} className={`border-t ${aDesDetails ? 'font-semibold' : ''}`}>
-        <td className={`px-1.5 ${aDesDetails ? 'py-2' : 'py-1'}`}>{m.matiere}</td>
+        <td className={`px-1.5 ${aDesDetails ? 'py-2' : 'py-1'}`}>
+          <div className="flex items-center gap-2">
+            <span>{m.matiere}</span>
+            {aDesDetails && (
+              <div className="font-normal text-gray-500 text-[8px] leading-tight">
+                {m.details!.map((d, j) => (
+                  <div key={j}>{d.libelle} : {fmt(d.note)}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        </td>
         <td className="px-1.5 py-1 text-center">{fmt(m.moyenne)}</td>
         <td className="px-1.5 py-1 text-center">{fmt(m.coefficient)}</td>
         <td className="px-1.5 py-1 text-center">{fmt(m.total)}</td>
@@ -270,7 +282,7 @@ const renderLigneMatiere = (m: MatiereLigne, i: number) => {
         <td className="px-1.5 py-1 border-l"></td>
       </tr>
     );
-
+  };
     if (!m.details || m.details.length === 0) return ligneEntete;
 
     return (

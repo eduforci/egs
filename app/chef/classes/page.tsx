@@ -265,7 +265,7 @@ export default function ClassesPage() {
       )}
 
       {/* Liste des classes */}
-      <div className="border rounded-lg overflow-hidden mb-6">
+      <div className="border rounded-lg overflow-x-auto mb-6">
         <table className="w-full text-sm">
           <thead className="bg-gray-100">
             <tr>

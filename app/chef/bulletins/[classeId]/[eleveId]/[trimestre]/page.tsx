@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, Fragment } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
@@ -257,7 +257,7 @@ export default function BulletinPage() {
   const bilanSciences = bilans.find((b) => b.groupe === 'Sciences');
   const bilanAutres = bilans.find((b) => b.groupe === 'Autres');
 
-const renderLigneMatiere = (m: MatiereLigne, i: number) => {
+  const renderLigneMatiere = (m: MatiereLigne, i: number) => {
     const aDesDetails = !!(m.details && m.details.length > 0);
     return (
       <tr key={i} className={`border-t ${aDesDetails ? 'font-semibold' : ''}`}>
@@ -281,21 +281,6 @@ const renderLigneMatiere = (m: MatiereLigne, i: number) => {
         <td className="px-1.5 py-1 text-[9px]">{m.professeur ?? '-'}</td>
         <td className="px-1.5 py-1 border-l"></td>
       </tr>
-    );
-  };
-    if (!m.details || m.details.length === 0) return ligneEntete;
-
-    return (
-      <Fragment key={i}>
-        {ligneEntete}
-        {m.details.map((d, j) => (
-          <tr key={`${i}-${j}`} className="border-t text-gray-500 text-[9px]">
-            <td className="px-1.5 py-1 pl-4">{d.libelle}</td>
-            <td className="px-1.5 py-1 text-center">{fmt(d.note)}</td>
-            <td colSpan={6}></td>
-          </tr>
-        ))}
-      </Fragment>
     );
   };
 
@@ -551,8 +536,8 @@ const renderLigneMatiere = (m: MatiereLigne, i: number) => {
         <div className="grid grid-cols-2 gap-2 mt-2">
           <div className="border rounded p-1.5">
             <p className="font-semibold">Moyenne trimestrielle</p>
-            {bulletin.totaux ? (
-     <>
+        {bulletin.totaux ? (
+              <>
                 <p className="text-sm font-bold">{fmt(bulletin.totaux.moyenne_generale)}/20</p>
                 <p>Rang : {bulletin.totaux.rang}e sur {bulletin.eleve.effectif}</p>
                 {bulletin.trimestre === 3 && bulletin.totaux?.mention && (
@@ -654,3 +639,4 @@ const renderLigneMatiere = (m: MatiereLigne, i: number) => {
     </div>
   );
         }
+      

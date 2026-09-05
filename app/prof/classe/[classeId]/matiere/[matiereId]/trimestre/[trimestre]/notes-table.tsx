@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -43,6 +43,8 @@ const CATEGORIES: { value: Evaluation["categorie"]; label: string; bareme_max: n
   { value: "sur20_coef1", label: "Note sur 20 (coefficient 1)", bareme_max: 20, coefficient: 1, type_note: "devoir" },
   { value: "sur20_coef2", label: "Note sur 20 (coefficient 2 — devoir)", bareme_max: 20, coefficient: 2, type_note: "composition" },
 ];
+
+const LIBELLES_FRANCAIS_COLLEGE = ["CF", "Orth.", "EO"];
 
 function libelleColonne(ev: Evaluation) {
   const cat = CATEGORIES.find((c) => c.value === ev.categorie);
@@ -112,6 +114,18 @@ export default function NotesTable({
   const [nouvelleDate, setNouvelleDate] = useState(new Date().toISOString().slice(0, 10));
   const [nouveauLibelle, setNouveauLibelle] = useState("");
   const [creationEnCours, setCreationEnCours] = useState(false);
+  const [classeCycle, setClasseCycle] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase
+      .from("classes")
+      .select("cycle")
+      .eq("id", classeId)
+      .single()
+      .then(({ data }) => setClasseCycle(data?.cycle ?? null));
+  }, [classeId, supabase]);
+
+  const estFrancaisCollege = matiereNom === "Français" && classeCycle === "college";
 
   function moyenne(eleveId: string) {
     const v = valeurs[eleveId];
@@ -196,6 +210,11 @@ export default function NotesTable({
   }
 
   async function creerEvaluation() {
+    if (estFrancaisCollege && !nouveauLibelle) {
+      setMessage("Choisis un type de note (CF, Orth. ou EO) avant de créer l'évaluation.");
+      return;
+    }
+
     setCreationEnCours(true);
     setMessage(null);
 
@@ -230,8 +249,6 @@ export default function NotesTable({
   async function handleSave() {
     setMessage(null);
 
-    // Validation complète AVANT toute écriture : si une seule note dépasse
-    // son barème, on bloque tout l'enregistrement et on désigne précisément l'erreur.
     const erreurs: string[] = [];
     for (const eleve of eleves) {
       const v = valeurs[eleve.id];
@@ -484,16 +501,32 @@ export default function NotesTable({
                 />
               </div>
 
-              <div>
-                <label className="block text-xs text-neutral-500 mb-1">Libellé (optionnel)</label>
-                <input
-                  type="text"
-                  value={nouveauLibelle}
-                  onChange={(e) => setNouveauLibelle(e.target.value)}
-                  placeholder="Ex: Interro chapitre 3"
-                  className="w-full border rounded-lg p-2 text-sm"
-                />
-              </div>
+              {estFrancaisCollege ? (
+                <div>
+                  <label className="block text-xs text-neutral-500 mb-1">Type de note</label>
+                  <select
+                    value={nouveauLibelle}
+                    onChange={(e) => setNouveauLibelle(e.target.value)}
+                    className="w-full border rounded-lg p-2 text-sm"
+                  >
+                    <option value="">Choisir...</option>
+                    {LIBELLES_FRANCAIS_COLLEGE.map((l) => (
+                      <option key={l} value={l}>{l}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs text-neutral-500 mb-1">Libellé (optionnel)</label>
+                  <input
+                    type="text"
+                    value={nouveauLibelle}
+                    onChange={(e) => setNouveauLibelle(e.target.value)}
+                    placeholder="Ex: Interro chapitre 3"
+                    className="w-full border rounded-lg p-2 text-sm"
+                  />
+                </div>
+              )}
 
               <div className="flex gap-2">
                 <button
@@ -695,4 +728,4 @@ export default function NotesTable({
       )}
     </main>
   );
-}
+                                                        }

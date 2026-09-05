@@ -32,13 +32,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: statsError.message }, { status: 500 });
   }
 
-  const actuelsMap = new Map(
-    (statsActuelles.niveaux || []).map((n: any) => [n.niveau, n])
-  );
-  const importesMap = new Map(
-    fichier_importe.niveaux.map((n: any) => [n.niveau, n])
-  );
-
+  
+const actuelsMap = new Map<string, any>(
+  (statsActuelles.niveaux || []).map((n: any) => [n.niveau, n])
+);
+const importesMap = new Map<string, any>(
+  fichier_importe.niveaux.map((n: any) => [n.niveau, n])
+);
   const tousNiveaux = new Set([...actuelsMap.keys(), ...importesMap.keys()]);
   const differences: any[] = [];
 

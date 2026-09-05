@@ -208,7 +208,37 @@ export default function NotesTable({
       });
     }
   }
+async function supprimerEvaluation(evaluationId: string) {
+    const confirmation = window.confirm(
+      "Supprimer cette évaluation ? Toutes les notes saisies pour cette évaluation seront perdues définitivement."
+    );
+    if (!confirmation) return;
 
+    setMessage(null);
+
+    const { error: notesError } = await supabase
+      .from("notes")
+      .delete()
+      .eq("evaluation_id", evaluationId);
+
+    if (notesError) {
+      setMessage("Erreur lors de la suppression des notes : " + notesError.message);
+      return;
+    }
+
+    const { error } = await supabase
+      .from("evaluations")
+      .delete()
+      .eq("id", evaluationId);
+
+    if (error) {
+      setMessage("Erreur lors de la suppression de l'évaluation : " + error.message);
+      return;
+    }
+
+    setMessage("Évaluation supprimée.");
+    router.refresh();
+    }
   async function creerEvaluation() {
     if (estFrancaisCollege && !nouveauLibelle) {
       setMessage("Choisis un type de note (CF, Orth. ou EO) avant de créer l'évaluation.");
@@ -586,7 +616,19 @@ export default function NotesTable({
                   <th className="p-3 sticky left-0 bg-neutral-50">Élève</th>
                   {evaluationsExistantes.map((ev) => (
                     <th key={ev.id} className="p-3 whitespace-nowrap">
-                      {libelleColonne(ev)}
+                      <div className="flex items-center gap-1.5">
+                        <span>{libelleColonne(ev)}</span>
+                        {!verrouille && (
+                          <button
+                            type="button"
+                            onClick={() => supprimerEvaluation(ev.id)}
+                            title="Supprimer cette évaluation"
+                            className="text-red-500 hover:text-red-700 text-xs normal-case font-normal"
+                          >
+                            🗑️
+                          </button>
+                        )}
+                      </div>
                     </th>
                   ))}
                   <th className="p-3">Moyenne (/20)</th>

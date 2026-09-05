@@ -6,7 +6,6 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// GET : Récupérer les statistiques
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
@@ -21,7 +20,6 @@ export async function GET(req: Request) {
       );
     }
 
-    // Récupérer les élèves
     const { data: eleves, error } = await supabase
       .from('eleves')
       .select('*')
@@ -29,7 +27,6 @@ export async function GET(req: Request) {
 
     if (error) throw error;
 
-    // Calculer les effectifs
     const niveaux = ['6e', '5e', '4e', '3e'];
     const effectifs = niveaux.map(niveau => {
       const list = eleves?.filter(e => e.niveau === niveau) || [];

@@ -256,11 +256,11 @@ export default function BulletinPage() {
   const bilanLettres = bilans.find((b) => b.groupe === 'Lettres');
   const bilanSciences = bilans.find((b) => b.groupe === 'Sciences');
   const bilanAutres = bilans.find((b) => b.groupe === 'Autres');
-
-  const renderLigneMatiere = (m: MatiereLigne, i: number) => {
+const renderLigneMatiere = (m: MatiereLigne, i: number) => {
+    const aDesDetails = !!(m.details && m.details.length > 0);
     const ligneEntete = (
-      <tr key={i} className="border-t">
-        <td className="px-1.5 py-1">{m.matiere}</td>
+      <tr key={i} className={`border-t ${aDesDetails ? 'font-semibold' : ''}`}>
+        <td className={`px-1.5 ${aDesDetails ? 'py-2' : 'py-1'}`}>{m.matiere}</td>
         <td className="px-1.5 py-1 text-center">{fmt(m.moyenne)}</td>
         <td className="px-1.5 py-1 text-center">{fmt(m.coefficient)}</td>
         <td className="px-1.5 py-1 text-center">{fmt(m.total)}</td>

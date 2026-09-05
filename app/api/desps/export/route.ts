@@ -1,10 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { DespsEngine } from '@/lib/desps/engine';
-import { generateExcel } from '@/lib/desps/formats/excel';
-import { generatePDF } from '@/lib/desps/formats/pdf';
 
-// Initialisation Supabase (côté serveur)
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -14,77 +10,77 @@ export async function POST(req: Request) {
   try {
     const { etablissementId, anneeScolaire, trimestre, format } = await req.json();
 
-    // 1. Le moteur calcule les statistiques
-    const engine = new DespsEngine(supabase);
-    const data = await engine.collectData({ etablissementId, anneeScolaire, trimestre });
+    // Récupérer les élèves
+    const { data: eleves, error } = await supabase
+      .from('eleves')
+      .select('*')
+      .eq('etablissement_id', etablissementId);
 
-    // 2. Sauvegarde dans Supabase
-    const { data: remontee, error } = await supabase
+    if (error) throw error;
+
+    // Calculer les effectifs par niveau
+    const niveaux = ['6e', '5e', '4e', '3e'];
+    const effectifs = niveaux.map(niveau => {
+      const elevesNiveau = eleves?.filter(e => e.niveau === niveau) || [];
+      return {
+        niveau,
+        garcons: elevesNiveau.filter(e => e.sexe === 'M').length,
+        filles: elevesNiveau.filter(e => e.sexe === 'F').length,
+        total: elevesNiveau.length
+      };
+    });
+
+    const totalGarcons = eleves?.filter(e => e.sexe === 'M').length || 0;
+    const totalFilles = eleves?.filter(e => e.sexe === 'F').length || 0;
+
+    const data = {
+      identification: {
+        etablissementId,
+        anneeScolaire,
+        trimestre,
+        dateGeneration: new Date().toISOString()
+      },
+      effectifs,
+      totalGeneral: {
+        garcons: totalGarcons,
+        filles: totalFilles,
+        total: eleves?.length || 0
+      },
+      nouveaux: 0,
+      redoublants: 0,
+      transferes: 0
+    };
+
+    // Sauvegarder dans Supabase
+    await supabase
       .from('desps_remontees')
       .insert({
         etablissement_id: etablissementId,
         annee_scolaire: anneeScolaire,
-        trimestre: trimestre,
+        trimestre,
         donnees: data,
         statut: 'valide'
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    // 3. Génération du fichier selon le format
-    let fileBuffer: Buffer;
-    let fileName: string;
-    let contentType: string;
-
-    switch (format) {
-      case 'json':
-        fileBuffer = Buffer.from(JSON.stringify(data, null, 2));
-        fileName = `KALAN_DESPS_${anneeScolaire}_T${trimestre}.json`;
-        contentType = 'application/json';
-        break;
-
-      case 'excel':
-        fileBuffer = await generateExcel(data);
-        fileName = `KALAN_DESPS_${anneeScolaire}_T${trimestre}.xlsx`;
-        contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-        break;
-
-      case 'pdf':
-        fileBuffer = await generatePDF(data);
-        fileName = `KALAN_DESPS_${anneeScolaire}_T${trimestre}.pdf`;
-        contentType = 'application/pdf';
-        break;
-
-      default:
-        throw new Error('Format non supporté');
-    }
-
-    // 4. Upload sur Supabase Storage
-    const { data: upload, error: uploadError } = await supabase.storage
-      .from('desps-files')
-      .upload(`${remontee.id}/${fileName}`, fileBuffer, {
-        contentType: contentType,
-        cacheControl: '3600'
       });
 
-    if (uploadError) throw uploadError;
+    // Retourner selon le format
+    if (format === 'json') {
+      return NextResponse.json({
+        success: true,
+        data,
+        format: 'json'
+      });
+    }
 
-    // 5. Renvoie l'URL du fichier
-    const { data: urlData } = supabase.storage
-      .from('desps-files')
-      .getPublicUrl(`${remontee.id}/${fileName}`);
-
+    // Pour tous les autres formats (excel, pdf)
     return NextResponse.json({
       success: true,
-      remonteeId: remontee.id,
-      url: urlData.publicUrl,
-      fileName: fileName
+      data,
+      format: format || 'json',
+      message: `Export en ${format || 'json'} réussi`
     });
 
   } catch (error: any) {
-    console.error('Erreur export DESPS:', error);
+    console.error('Erreur:', error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }

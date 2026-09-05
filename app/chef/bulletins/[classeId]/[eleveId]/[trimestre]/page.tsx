@@ -96,7 +96,8 @@ function fmt(n: number | null | undefined) {
   if (Number.isInteger(n)) {
     return n.toString();
   }
-  return n.toFixed(2);
+  const tronque = Math.floor(n * 100) / 100;
+  return tronque.toFixed(2);
 }
 function fmtDate(d: string | null | undefined) {
   if (!d) return '-';

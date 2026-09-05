@@ -35,16 +35,13 @@ export default function StatistiquesPage() {
   };
 
   useEffect(() => {
-    // Charger automatiquement si l'ID est dans l'URL
     const params = new URLSearchParams(window.location.search);
     const id = params.get('etablissementId');
     if (id) {
       setEtablissementId(id);
-      // On attend que l'état soit mis à jour
     }
   }, []);
 
-  // Exécuter quand etablissementId change
   useEffect(() => {
     if (etablissementId) {
       fetchData();
@@ -55,7 +52,6 @@ export default function StatistiquesPage() {
     <div className="p-4 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-4">📊 Statistiques DESPS</h1>
 
-      {/* Formulaire ID */}
       <div className="bg-gray-50 p-4 rounded-lg mb-6">
         <label className="block text-sm font-medium mb-2">
           ID de l'établissement
@@ -80,7 +76,6 @@ export default function StatistiquesPage() {
         </p>
       </div>
 
-      {/* Chargement */}
       {loading && (
         <div className="text-center py-8">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent"></div>
@@ -88,14 +83,12 @@ export default function StatistiquesPage() {
         </div>
       )}
 
-      {/* Erreur */}
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg">
           ❌ Erreur : {error}
         </div>
       )}
 
-      {/* Données */}
       {data && (
         <>
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
@@ -165,17 +158,13 @@ export default function StatistiquesPage() {
               📥 Exporter JSON
             </button>
             <button
-              onClick={() => {
-                alert('Fonctionnalité Excel à venir');
-              }}
+              onClick={() => alert('Fonctionnalité Excel à venir')}
               className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
             >
               📊 Exporter Excel
             </button>
             <button
-              onClick={() => {
-                alert('Fonctionnalité PDF à venir');
-              }}
+              onClick={() => alert('Fonctionnalité PDF à venir')}
               className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
             >
               📄 Exporter PDF
@@ -185,4 +174,4 @@ export default function StatistiquesPage() {
       )}
     </div>
   );
-          }
+                }

@@ -245,6 +245,33 @@ export default function DespsPage() {
               </tr>
             </tbody>
           </table>
+{fichier.classes && (
+            <details className="mb-4">
+              <summary className="text-sm cursor-pointer" style={{ color: '#0B3D2E' }}>
+                Voir le détail par classe (contrôle interne)
+              </summary>
+              <table className="w-full text-sm border mt-2">
+                <thead>
+                  <tr style={{ backgroundColor: '#C9962B33' }}>
+                    <th className="border p-1 text-left">Classe</th>
+                    <th className="border p-1">G</th>
+                    <th className="border p-1">F</th>
+                    <th className="border p-1">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fichier.classes.map((c) => (
+                    <tr key={c.nom}>
+                      <td className="border p-1">{c.nom}</td>
+                      <td className="border p-1 text-center">{c.garcons}</td>
+                      <td className="border p-1 text-center">{c.filles}</td>
+                      <td className="border p-1 text-center">{c.total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </details>
+          )}
 
           <div className="flex gap-2">
             <button onClick={telechargerJSON} className="flex-1 py-2 border rounded text-sm">JSON</button>

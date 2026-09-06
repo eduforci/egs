@@ -11,20 +11,38 @@ function genererMotDePasseTemporaire() {
   return out;
 }
 
+function genererIdentifiantProvisoire() {
+  const chiffres = "0123456789";
+  let suffixe = "";
+  for (let i = 0; i < 6; i++) {
+    suffixe += chiffres[Math.floor(Math.random() * chiffres.length)];
+  }
+  return `PROV-${suffixe}`;
+}
+
+function genererJetonEmail() {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let out = "";
+  for (let i = 0; i < 16; i++) {
+    out += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return out;
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.json();
   const { nom, prenom, matricule, classe_id, date_naissance } = body ?? {};
 
-  if (!nom || !prenom || !matricule || !classe_id) {
+  if (!nom || !prenom || !classe_id) {
     return NextResponse.json(
-      { error: "Nom, prénom, matricule et classe sont obligatoires." },
+      { error: "Nom, prénom et classe sont obligatoires." },
       { status: 400 }
     );
   }
 
-  const matriculeNettoye = matricule.toString().trim();
+  const matriculeNettoye = matricule ? matricule.toString().trim() : "";
+  const aUnMatricule = matriculeNettoye.length > 0;
 
-  // 1. Vérifier que l'appelant est bien connecté et autorisé
   const supabase = await createClient();
   const {
     data: { user },
@@ -55,7 +73,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 2. Vérifier que la classe appartient bien au même établissement
   const { data: classe } = await supabase
     .from("classes")
     .select("id, etablissement_id")
@@ -71,23 +88,40 @@ export async function POST(request: NextRequest) {
 
   const admin = createAdminClient();
 
-  // 3. Le matricule est délivré par le ministère : on vérifie juste qu'il
-  // n'est pas déjà utilisé dans EGS, sans jamais en générer un nous-mêmes.
-  const { data: matriculeExistant } = await admin
-    .from("profiles")
-    .select("id")
-    .eq("identifiant", matriculeNettoye)
-    .maybeSingle();
+  // Identifiant de connexion : le matricule officiel s'il existe, sinon un
+  // identifiant provisoire (à mettre à jour plus tard via le suivi d'immatriculation)
+  let identifiant = aUnMatricule ? matriculeNettoye : genererIdentifiantProvisoire();
 
-  if (matriculeExistant) {
-    return NextResponse.json(
-      { error: `Le matricule "${matriculeNettoye}" est déjà utilisé par un autre compte.` },
-      { status: 409 }
-    );
+  if (aUnMatricule) {
+    const { data: matriculeExistant } = await admin
+      .from("profiles")
+      .select("id")
+      .eq("identifiant", matriculeNettoye)
+      .maybeSingle();
+
+    if (matriculeExistant) {
+      return NextResponse.json(
+        { error: `Le matricule "${matriculeNettoye}" est déjà utilisé par un autre compte.` },
+        { status: 409 }
+      );
+    }
+  } else {
+    // Boucle de sécurité si jamais deux identifiants provisoires générés coïncident
+    for (let tentative = 0; tentative < 5; tentative++) {
+      const { data: collision } = await admin
+        .from("profiles")
+        .select("id")
+        .eq("identifiant", identifiant)
+        .maybeSingle();
+      if (!collision) break;
+      identifiant = genererIdentifiantProvisoire();
+    }
   }
 
   const motDePasse = genererMotDePasseTemporaire();
-  const emailSynthetique = `${matriculeNettoye.toLowerCase()}@eleves.egs.local`;
+  // L'email est basé sur un jeton aléatoire indépendant du matricule, pour ne
+  // jamais avoir à le modifier quand le vrai matricule arrivera plus tard.
+  const emailSynthetique = `eleve-${genererJetonEmail()}@eleves.egs.local`;
 
   const { data: created, error: createError } = await admin.auth.admin.createUser({
     email: emailSynthetique,
@@ -104,14 +138,13 @@ export async function POST(request: NextRequest) {
 
   const userId = created.user.id;
 
-  // 4. Profil + fiche élève
   const { error: profileError } = await admin.from("profiles").insert({
     id: userId,
     role: "eleve",
     etablissement_id: profile.etablissement_id,
     nom,
     prenom,
-    identifiant: matriculeNettoye,
+    identifiant,
     must_change_password: true,
   });
 
@@ -124,7 +157,7 @@ export async function POST(request: NextRequest) {
     id: userId,
     etablissement_id: profile.etablissement_id,
     classe_id,
-    matricule: matriculeNettoye,
+    matricule: aUnMatricule ? matriculeNettoye : null,
     date_naissance: date_naissance || null,
     statut: "actif",
   });
@@ -134,5 +167,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: eleveError.message }, { status: 500 });
   }
 
-  return NextResponse.json({ matricule: matriculeNettoye, motDePasse });
-}
+  return NextResponse.json({ matricule: identifiant, motDePasse, provisoire: !aUnMatricule });
+      }

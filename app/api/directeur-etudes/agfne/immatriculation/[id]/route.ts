@@ -18,7 +18,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const { data: demandeExistante } = await supabase
     .from('demandes_immatriculation')
-    .select('etablissement_id')
+    .select('etablissement_id, eleve_id')
     .eq('id', params.id)
     .single();
 
@@ -51,13 +51,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Si un matricule est attribué, on le reporte directement sur la fiche élève
+  // Si un matricule est attribué, on le reporte sur la fiche élève ET sur
+  // l'identifiant de connexion (qui portait un identifiant provisoire jusque-là)
   if (body.matricule_obtenu && body.statut === 'matricule_attribue') {
     await supabase
       .from('eleves')
       .update({ matricule: body.matricule_obtenu })
       .eq('id', data.eleve_id);
+
+    await supabase
+      .from('profiles')
+      .update({ identifiant: body.matricule_obtenu })
+      .eq('id', data.eleve_id);
   }
 
   return NextResponse.json({ demande: data });
-}
+                            }

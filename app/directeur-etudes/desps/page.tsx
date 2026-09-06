@@ -171,7 +171,13 @@ export default function DespsPage() {
       <h1 className="text-xl font-bold mb-4" style={{ color: '#0B3D2E' }}>
         Statistiques DESPS
       </h1>
-
+<a
+        href="/directeur-etudes/desps/historique"
+        className="inline-block text-sm mb-4 underline"
+        style={{ color: '#0B3D2E' }}
+      >
+        Voir l'historique des remontées →
+      </a>
       <div className="flex gap-2 mb-4">
         <select
           value={anneeScolaire}

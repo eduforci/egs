@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 export default function EtablissementPage() {
   const [nom, setNom] = useState('');
   const [codeEtablissement, setCodeEtablissement] = useState('');
+  const [codeDrena, setCodeDrena] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -17,6 +18,7 @@ export default function EtablissementPage() {
         if (json.error) throw new Error(json.error);
         setNom(json.etablissement.nom);
         setCodeEtablissement(json.etablissement.code_etablissement ?? '');
+        setCodeDrena(json.etablissement.code_drena ?? '');
       })
       .catch((e) => setErreur(e.message))
       .finally(() => setLoading(false));
@@ -30,7 +32,7 @@ export default function EtablissementPage() {
       const res = await fetch('/api/directeur-etudes/etablissement', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code_etablissement: codeEtablissement }),
+        body: JSON.stringify({ code_etablissement: codeEtablissement, code_drena: codeDrena }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Erreur lors de la sauvegarde');
@@ -73,6 +75,19 @@ export default function EtablissementPage() {
         />
       </div>
 
+      <div className="mb-4">
+        <label className="block text-sm font-medium mb-1">
+          Code DRENA <span className="text-gray-500 font-normal">(direction régionale de rattachement)</span>
+        </label>
+        <input
+          type="text"
+          value={codeDrena}
+          onChange={(e) => setCodeDrena(e.target.value)}
+          placeholder="Ex : DR12"
+          className="w-full border rounded px-3 py-2"
+        />
+      </div>
+
       {erreur && <p className="text-red-600 text-sm mb-3">{erreur}</p>}
       {succes && <p className="text-green-700 text-sm mb-3">✓ Enregistré</p>}
 
@@ -86,4 +101,4 @@ export default function EtablissementPage() {
       </button>
     </div>
   );
-                }
+          }

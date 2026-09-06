@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabase
     .from('etablissements')
-    .select('id, nom, code_etablissement')
+    .select('id, nom, code_etablissement, code_drena')
     .eq('id', profile.etablissement_id)
     .single();
 
@@ -42,11 +42,11 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
   }
 
-  const { code_etablissement } = await req.json();
+  const { code_etablissement, code_drena } = await req.json();
 
   const { data, error } = await supabase
     .from('etablissements')
-    .update({ code_etablissement })
+    .update({ code_etablissement, code_drena })
     .eq('id', profile.etablissement_id)
     .select()
     .single();

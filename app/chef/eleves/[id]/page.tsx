@@ -52,6 +52,11 @@ export default function FicheElevePage() {
   const [lieuNaissance, setLieuNaissance] = useState("");
   const [etablissementId, setEtablissementId] = useState("");
 
+  // --- Champs AGFNE ---
+  const [statutAffecte, setStatutAffecte] = useState<string>("");
+  const [lv2, setLv2] = useState("");
+  const [disciplineArtistique, setDisciplineArtistique] = useState("");
+
   const [inscriptions, setInscriptions] = useState<Inscription[]>([]);
   const [parentsLies, setParentsLies] = useState<ParentLie[]>([]);
   const [contacts, setContacts] = useState<ContactUrgence[]>([]);
@@ -68,7 +73,7 @@ export default function FicheElevePage() {
     try {
       const { data: eleve, error: eleveError } = await supabase
         .from("eleves")
-        .select("id, matricule, adresse, photo_url, statut, date_naissance, lieu_naissance, etablissement_id, classe_id, classes(nom)")
+        .select("id, matricule, adresse, photo_url, statut, date_naissance, lieu_naissance, etablissement_id, classe_id, statut_affecte, lv2, discipline_artistique, classes(nom)")
         .eq("id", eleveId)
         .single();
 
@@ -94,6 +99,11 @@ export default function FicheElevePage() {
       setDateNaissance(eleve.date_naissance ?? "");
       setLieuNaissance(eleve.lieu_naissance ?? "");
       setEtablissementId(eleve.etablissement_id);
+      setStatutAffecte(
+        eleve.statut_affecte === true ? "affecte" : eleve.statut_affecte === false ? "non_affecte" : ""
+      );
+      setLv2(eleve.lv2 ?? "");
+      setDisciplineArtistique(eleve.discipline_artistique ?? "");
 
       const { data: inscrData } = await supabase
         .from("inscriptions")
@@ -206,6 +216,9 @@ export default function FicheElevePage() {
         statut,
         dateNaissance,
         lieuNaissance,
+        statutAffecte: statutAffecte === "" ? undefined : statutAffecte === "affecte",
+        lv2: lv2 || undefined,
+        disciplineArtistique: disciplineArtistique || undefined,
       }),
     });
     const data = await res.json();
@@ -354,6 +367,51 @@ export default function FicheElevePage() {
         </button>
       </section>
 
+      {/* Champs AGFNE */}
+      <section className="bg-white border rounded-xl p-5 space-y-3">
+        <h2 className="font-semibold">AGFNE</h2>
+
+        <div>
+          <label className="block text-xs text-neutral-500 mb-1">Statut d'affectation</label>
+          <select
+            value={statutAffecte}
+            onChange={(e) => setStatutAffecte(e.target.value)}
+            className="w-full border rounded-lg p-2 text-sm"
+          >
+            <option value="">Non renseigné</option>
+            <option value="affecte">Affecté</option>
+            <option value="non_affecte">Non affecté</option>
+          </select>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-neutral-500 mb-1">LV2</label>
+            <select value={lv2} onChange={(e) => setLv2(e.target.value)} className="w-full border rounded-lg p-2 text-sm">
+              <option value="">—</option>
+              <option value="Allemand">Allemand</option>
+              <option value="Espagnol">Espagnol</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-neutral-500 mb-1">Discipline artistique</label>
+            <select
+              value={disciplineArtistique}
+              onChange={(e) => setDisciplineArtistique(e.target.value)}
+              className="w-full border rounded-lg p-2 text-sm"
+            >
+              <option value="">—</option>
+              <option value="Dessin">Dessin</option>
+              <option value="Musique">Musique</option>
+            </select>
+          </div>
+        </div>
+
+        <button onClick={enregistrerFiche} className="bg-black text-white rounded-lg px-4 py-2 text-sm font-medium">
+          Enregistrer
+        </button>
+      </section>
+
       {/* Historique inscriptions */}
       <section className="bg-white border rounded-xl p-5">
         <h2 className="font-semibold mb-3">Historique du parcours scolaire</h2>
@@ -461,4 +519,4 @@ export default function FicheElevePage() {
       </section>
     </main>
   );
-        }
+}

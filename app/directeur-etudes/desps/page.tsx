@@ -13,6 +13,13 @@ interface NiveauStats {
   nouveaux: number;
   redoublants: number;
 }
+interface ClasseStats {
+  nom: string;
+  niveau: string;
+  garcons: number;
+  filles: number;
+  total: number;
+}
 
 interface FichierDesps {
   etablissement?: string;
@@ -20,6 +27,7 @@ interface FichierDesps {
   annee_scolaire: string;
   trimestre: number;
   niveaux: NiveauStats[];
+  classes?: ClasseStats[];
   genere_le?: string;
 }
 

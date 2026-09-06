@@ -56,6 +56,7 @@ export default function FicheElevePage() {
   const [statutAffecte, setStatutAffecte] = useState<string>("");
   const [lv2, setLv2] = useState("");
   const [disciplineArtistique, setDisciplineArtistique] = useState("");
+  const [regime, setRegime] = useState("Non-boursier");
 
   const [inscriptions, setInscriptions] = useState<Inscription[]>([]);
   const [parentsLies, setParentsLies] = useState<ParentLie[]>([]);
@@ -73,7 +74,7 @@ export default function FicheElevePage() {
     try {
       const { data: eleve, error: eleveError } = await supabase
         .from("eleves")
-        .select("id, matricule, adresse, photo_url, statut, date_naissance, lieu_naissance, etablissement_id, classe_id, statut_affecte, lv2, discipline_artistique, classes(nom)")
+        .select("id, matricule, adresse, photo_url, statut, date_naissance, lieu_naissance, etablissement_id, classe_id, statut_affecte, lv2, discipline_artistique, regime, classes(nom)")
         .eq("id", eleveId)
         .single();
 
@@ -104,6 +105,7 @@ export default function FicheElevePage() {
       );
       setLv2(eleve.lv2 ?? "");
       setDisciplineArtistique(eleve.discipline_artistique ?? "");
+      setRegime(eleve.regime ?? "Non-boursier");
 
       const { data: inscrData } = await supabase
         .from("inscriptions")
@@ -219,6 +221,7 @@ export default function FicheElevePage() {
         statutAffecte: statutAffecte === "" ? undefined : statutAffecte === "affecte",
         lv2: lv2 || undefined,
         disciplineArtistique: disciplineArtistique || undefined,
+        regime,
       }),
     });
     const data = await res.json();
@@ -407,6 +410,15 @@ export default function FicheElevePage() {
           </div>
         </div>
 
+        <div>
+          <label className="block text-xs text-neutral-500 mb-1">Régime</label>
+          <select value={regime} onChange={(e) => setRegime(e.target.value)} className="w-full border rounded-lg p-2 text-sm">
+            <option value="Non-boursier">Non-boursier</option>
+            <option value="Boursier">Boursier</option>
+            <option value="Demi-boursier">Demi-boursier</option>
+          </select>
+        </div>
+
         <button onClick={enregistrerFiche} className="bg-black text-white rounded-lg px-4 py-2 text-sm font-medium">
           Enregistrer
         </button>
@@ -494,7 +506,7 @@ export default function FicheElevePage() {
         ) : (
           <ul className="space-y-2 mb-3">
             {contacts.map((c) => (
-              <li key={c.id} className="flex justify-between items-center bg-neutral-50 rounded-lg px-3 py-2 text-sm">
+            <li key={c.id} className="flex justify-between items-center bg-neutral-50 rounded-lg px-3 py-2 text-sm">
                 <div>
                   <p className="font-medium">{c.prenom} {c.nom} ({c.lien})</p>
                   <p className="text-xs text-neutral-400">{c.telephone}{c.adresse && ` · ${c.adresse}`}</p>

@@ -21,7 +21,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Accès réservé au personnel administratif." }, { status: 403 });
   }
 
-  const { eleveId, adresse, photoUrl, statut, dateNaissance, lieuNaissance } = await request.json();
+  const {
+    eleveId,
+    adresse,
+    photoUrl,
+    statut,
+    dateNaissance,
+    lieuNaissance,
+    statutAffecte,
+    lv2,
+    disciplineArtistique,
+  } = await request.json();
 
   if (!eleveId) {
     return NextResponse.json({ error: "Identifiant élève manquant." }, { status: 400 });
@@ -30,6 +40,16 @@ export async function POST(request: Request) {
   const statutsValides = ["actif", "inactif", "transfere", "diplome", "abandon"];
   if (statut && !statutsValides.includes(statut)) {
     return NextResponse.json({ error: "Statut invalide." }, { status: 400 });
+  }
+
+  const lv2Valides = ["Allemand", "Espagnol"];
+  if (lv2 && !lv2Valides.includes(lv2)) {
+    return NextResponse.json({ error: "LV2 invalide." }, { status: 400 });
+  }
+
+  const disciplinesValides = ["Dessin", "Musique"];
+  if (disciplineArtistique && !disciplinesValides.includes(disciplineArtistique)) {
+    return NextResponse.json({ error: "Discipline artistique invalide." }, { status: 400 });
   }
 
   const admin = createAdminClient(
@@ -59,6 +79,9 @@ export async function POST(request: Request) {
       statut: statut || "actif",
       date_naissance: dateNaissance || null,
       lieu_naissance: lieuNaissance || null,
+      statut_affecte: statutAffecte === undefined ? null : statutAffecte,
+      lv2: lv2 || null,
+      discipline_artistique: disciplineArtistique || null,
     })
     .eq("id", eleveId);
 

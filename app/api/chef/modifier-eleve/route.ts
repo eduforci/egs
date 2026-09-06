@@ -31,6 +31,7 @@ export async function POST(request: Request) {
     statutAffecte,
     lv2,
     disciplineArtistique,
+    regime,
   } = await request.json();
 
   if (!eleveId) {
@@ -50,6 +51,11 @@ export async function POST(request: Request) {
   const disciplinesValides = ["Dessin", "Musique"];
   if (disciplineArtistique && !disciplinesValides.includes(disciplineArtistique)) {
     return NextResponse.json({ error: "Discipline artistique invalide." }, { status: 400 });
+  }
+
+  const regimesValides = ["Boursier", "Non-boursier", "Demi-boursier"];
+  if (regime && !regimesValides.includes(regime)) {
+    return NextResponse.json({ error: "Régime invalide." }, { status: 400 });
   }
 
   const admin = createAdminClient(
@@ -82,6 +88,7 @@ export async function POST(request: Request) {
       statut_affecte: statutAffecte === undefined ? null : statutAffecte,
       lv2: lv2 || null,
       discipline_artistique: disciplineArtistique || null,
+      regime: regime || "Non-boursier",
     })
     .eq("id", eleveId);
 

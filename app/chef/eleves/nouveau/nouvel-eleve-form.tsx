@@ -17,7 +17,7 @@ export default function NouvelEleveForm({ classes }: { classes: Classe[] }) {
   const [dateNaissance, setDateNaissance] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [resultat, setResultat] = useState<{ matricule: string; motDePasse: string } | null>(
+  const [resultat, setResultat] = useState<{ matricule: string; motDePasse: string; provisoire: boolean } | null>(
     null
   );
   const [copie, setCopie] = useState(false);
@@ -26,8 +26,8 @@ export default function NouvelEleveForm({ classes }: { classes: Classe[] }) {
     e.preventDefault();
     setError(null);
 
-    if (!nom.trim() || !prenom.trim() || !matricule.trim() || !classeId) {
-      setError("Nom, prénom, matricule et classe sont obligatoires.");
+    if (!nom.trim() || !prenom.trim() || !classeId) {
+      setError("Nom, prénom et classe sont obligatoires.");
       return;
     }
 
@@ -39,7 +39,7 @@ export default function NouvelEleveForm({ classes }: { classes: Classe[] }) {
         body: JSON.stringify({
           nom: nom.trim(),
           prenom: prenom.trim(),
-          matricule: matricule.trim(),
+          matricule: matricule.trim() || undefined,
           classe_id: classeId,
           date_naissance: dateNaissance || null,
         }),
@@ -52,7 +52,7 @@ export default function NouvelEleveForm({ classes }: { classes: Classe[] }) {
         return;
       }
 
-      setResultat({ matricule: data.matricule, motDePasse: data.motDePasse });
+      setResultat({ matricule: data.matricule, motDePasse: data.motDePasse, provisoire: data.provisoire });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur réseau.");
     } finally {
@@ -91,9 +91,23 @@ export default function NouvelEleveForm({ classes }: { classes: Classe[] }) {
           maintenant à l'élève ou à ses parents.
         </p>
 
+        {resultat.provisoire && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 text-sm">
+            <p className="font-medium text-amber-800 mb-1">Identifiant provisoire</p>
+            <p className="text-amber-700">
+              Cet élève n'a pas encore de matricule officiel. Un identifiant provisoire
+              a été généré pour lui permettre de se connecter dès maintenant. Pense à
+              lancer une demande d'immatriculation (AGFNE → Immatriculation) — une fois
+              le vrai matricule attribué, l'identifiant sera automatiquement mis à jour.
+            </p>
+          </div>
+        )}
+
         <div className="bg-white border rounded-xl p-5 space-y-3 mb-4">
           <div>
-            <span className="text-xs uppercase text-neutral-500">Identifiant (matricule)</span>
+            <span className="text-xs uppercase text-neutral-500">
+              Identifiant {resultat.provisoire && "(provisoire)"}
+            </span>
             <p className="font-mono text-lg font-semibold">{resultat.matricule}</p>
           </div>
           <div>
@@ -129,22 +143,23 @@ export default function NouvelEleveForm({ classes }: { classes: Classe[] }) {
         Créer un compte élève
       </h1>
       <p className="text-neutral-500 mb-6 text-sm">
-        Renseigne le matricule officiel délivré par le ministère. Un mot de passe
+        Renseigne le matricule officiel délivré par le ministère si l'élève en a déjà
+        un. Sinon, laisse le champ vide : un identifiant provisoire sera généré, à
+        remplacer plus tard via le suivi d'immatriculation. Un mot de passe
         temporaire sera généré automatiquement.
       </p>
 
       <form onSubmit={handleSubmit} className="bg-white border rounded-xl p-5 space-y-4">
         <div>
           <label className="block text-sm font-medium mb-1">
-            Matricule <span className="text-neutral-400">(ministère)</span>
+            Matricule <span className="text-neutral-400">(ministère, optionnel)</span>
           </label>
           <input
             type="text"
             value={matricule}
             onChange={(e) => setMatricule(e.target.value)}
             className="w-full border rounded-lg p-2.5 font-mono"
-            placeholder="ex: 21427141U"
-            required
+            placeholder="ex: 21427141U — laisser vide si pas encore attribué"
           />
         </div>
 
@@ -217,3 +232,4 @@ export default function NouvelEleveForm({ classes }: { classes: Classe[] }) {
     </main>
   );
       }
+          

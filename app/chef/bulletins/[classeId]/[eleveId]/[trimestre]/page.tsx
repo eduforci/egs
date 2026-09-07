@@ -112,6 +112,7 @@ export default function BulletinPage() {
   const trimestre = Number(params?.trimestre);
 
   const [bulletin, setBulletin] = useState<BulletinData | null>(null);
+  const [bulletinAnnuel, setBulletinAnnuel] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -179,6 +180,19 @@ export default function BulletinPage() {
       }
 
       setBulletin(bulletinData);
+
+      // 🔽 Récupérer les données annuelles si c'est le 3ème trimestre
+      if (trimestre === 3) {
+        const { data: annuelData, error: annuelError } = await supabase.rpc('generer_bulletin_annuel', {
+          p_eleve_id: eleveId,
+          p_annee_scolaire: etabRow.annee_scolaire_active,
+        });
+        if (!annuelError && annuelData) {
+          setBulletinAnnuel(annuelData);
+        } else {
+          console.warn('Aucune donnée annuelle trouvée', annuelError);
+        }
+      }
 
       setFormAbsJust(String(bulletinData.assiduite.absences_justifiees ?? 0));
       setFormAbsNonJust(String(bulletinData.assiduite.absences_non_justifiees ?? 0));
@@ -536,10 +550,10 @@ export default function BulletinPage() {
         {/* Résultats */}
         <div className="grid grid-cols-2 gap-2 mt-2">
           <div className="border rounded p-1.5">
-            <p className="font-semibold">Moyenne trimestrielle</p>
+            <p className="font-semibold">Moyenne trimestrielle (T{trimestre})</p>
             {bulletin.totaux ? (
               <>
-              <p className="text-sm font-bold">{fmt(bulletin.totaux.moyenne_generale)}/20</p>
+                <p className="text-sm font-bold">{fmt(bulletin.totaux.moyenne_generale)}/20</p>
                 <p>Rang : <span className="font-bold">{bulletin.totaux.rang}e</span> sur {bulletin.eleve.effectif}</p>
                 {bulletin.trimestre === 3 && bulletin.totaux?.mention && (
                   <p>Mention : {bulletin.totaux.mention}</p>
@@ -556,6 +570,44 @@ export default function BulletinPage() {
             <p>Moyenne maxi : <span className="font-bold">{fmt(bulletin.classe_stats.moyenne_maxi)}/20</span></p>
           </div>
         </div>
+
+        {/* Résultats annuels - uniquement pour le 3ème trimestre */}
+        {trimestre === 3 && bulletinAnnuel && (
+          <div className="mt-2 border rounded p-1.5">
+            <p className="font-semibold text-center">Résultats annuels</p>
+            <div className="grid grid-cols-4 gap-2 mt-1 text-center">
+              <div>
+                <p className="font-medium text-[8px]">T1</p>
+                <p className="font-bold text-sm">{fmt(bulletinAnnuel.trimestre1?.moyenne)}/20</p>
+                <p className="text-[9px]">Rang {bulletinAnnuel.trimestre1?.rang || '-'}</p>
+              </div>
+              <div>
+                <p className="font-medium text-[8px]">T2</p>
+                <p className="font-bold text-sm">{fmt(bulletinAnnuel.trimestre2?.moyenne)}/20</p>
+                <p className="text-[9px]">Rang {bulletinAnnuel.trimestre2?.rang || '-'}</p>
+              </div>
+              <div>
+                <p className="font-medium text-[8px]">T3</p>
+                <p className="font-bold text-sm">{fmt(bulletinAnnuel.trimestre3?.moyenne)}/20</p>
+                <p className="text-[9px]">Rang {bulletinAnnuel.trimestre3?.rang || '-'}</p>
+              </div>
+              <div className="border-l pl-2">
+                <p className="font-bold text-[8px]">Annuel</p>
+                <p className="font-bold text-sm">{fmt(bulletinAnnuel.annuel?.moyenne)}/20</p>
+                <p className="text-[9px]">Rang {bulletinAnnuel.annuel?.rang || '-'}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Décision de fin d'année - 3ème trimestre uniquement */}
+        {trimestre === 3 && (
+          <div className="mt-2 border rounded p-1.5">
+            <p className="font-semibold">Décision de fin d’année :</p>
+            <div className="border-b-2 border-black w-full h-12 mt-1" />
+            <p className="text-[8px] text-gray-500 mt-0.5">(À remplir par le conseil de classe)</p>
+          </div>
+        )}
 
         {/* Assiduité */}
         <div className="mt-2 border rounded p-1.5">
@@ -617,15 +669,6 @@ export default function BulletinPage() {
           <p>{bulletin.conseil.appreciation || '-'}</p>
         </div>
 
-        {/* Décision de fin d'année - 3ème trimestre uniquement */}
-        {trimestre === 3 && (
-          <div className="mt-2 border rounded p-1.5">
-            <p className="font-semibold">Décision de fin d’année :</p>
-            <div className="border-b-2 border-black w-full h-12 mt-1" />
-            <p className="text-[8px] text-gray-500 mt-0.5">(À remplir par le conseil de classe)</p>
-          </div>
-        )}
-
         {/* Pied de page */}
         <div className="mt-2 flex justify-between text-[8px] border-t pt-1.5">
           <div>
@@ -640,4 +683,4 @@ export default function BulletinPage() {
       </div>
     </div>
   );
-                  }
+        }

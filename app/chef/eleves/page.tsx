@@ -77,9 +77,9 @@ export default function ListeElevesPage() {
   const filtres = eleves.filter((e) => {
     const q = recherche.toLowerCase();
     return (
-      e.nom.toLowerCase().includes(q) ||
-      e.prenom.toLowerCase().includes(q) ||
-      e.matricule.toLowerCase().includes(q)
+      (e.nom || "").toLowerCase().includes(q) ||
+      (e.prenom || "").toLowerCase().includes(q) ||
+      (e.matricule || "").toLowerCase().includes(q)
     );
   });
 

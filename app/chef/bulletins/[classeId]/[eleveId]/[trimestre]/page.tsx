@@ -184,7 +184,7 @@ const { data: classeRow, error: classeError } = await supabase
       if (trimestre === 3) {
         const { data: annuelData, error: annuelError } = await supabase.rpc('generer_bulletin_annuel', {
           p_eleve_id: eleveId,
-          p_annee_scolaire: etabRow.annee_scolaire_active,
+          p_annee_scolaire: classeRow.annee_scolaire,
         });
         if (!annuelError && annuelData) {
           setBulletinAnnuel(annuelData);

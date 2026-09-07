@@ -338,6 +338,14 @@ export default function BulletinPage() {
 
           <div className="grid grid-cols-2 gap-2">
             <div>
+              {/* Décision de fin d'année - uniquement pour le 3ème trimestre */}
+{trimestre === 3 && (
+  <div className="mt-4 border-t pt-2">
+    <p className="font-bold text-sm">Décision de fin d’année :</p>
+    <div className="border-b-2 border-black w-full h-10 mt-1" />
+    <p className="text-[8px] text-gray-500 mt-0.5">(À remplir par le conseil de classe)</p>
+  </div>
+)}
               <label className="block text-xs text-gray-600 mb-1">Absences justifiées (h)</label>
               <input
                 type="number"

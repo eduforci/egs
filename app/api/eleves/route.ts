@@ -160,6 +160,8 @@ export async function POST(request: NextRequest) {
     matricule: aUnMatricule ? matriculeNettoye : null,
     date_naissance: date_naissance || null,
     statut: "actif",
+    nom,
+    prenom,
   });
 
   if (eleveError) {
@@ -168,4 +170,4 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ matricule: identifiant, motDePasse, provisoire: !aUnMatricule });
-      }
+}

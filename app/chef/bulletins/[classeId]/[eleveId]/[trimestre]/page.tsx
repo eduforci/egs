@@ -338,14 +338,6 @@ export default function BulletinPage() {
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              {/* Décision de fin d'année - uniquement pour le 3ème trimestre */}
-{trimestre === 3 && (
-  <div className="mt-4 border-t pt-2">
-    <p className="font-bold text-sm">Décision de fin d’année :</p>
-    <div className="border-b-2 border-black w-full h-10 mt-1" />
-    <p className="text-[8px] text-gray-500 mt-0.5">(À remplir par le conseil de classe)</p>
-  </div>
-)}
               <label className="block text-xs text-gray-600 mb-1">Absences justifiées (h)</label>
               <input
                 type="number"
@@ -545,20 +537,12 @@ export default function BulletinPage() {
         <div className="grid grid-cols-2 gap-2 mt-2">
           <div className="border rounded p-1.5">
             <p className="font-semibold">Moyenne trimestrielle</p>
-        {bulletin.totaux ? (
+            {bulletin.totaux ? (
               <>
-                <p className="text-sm font-bold">{fmt(bulletin.totaux.moyenne_generale)}/20</p>
+              <p className="text-sm font-bold">{fmt(bulletin.totaux.moyenne_generale)}/20</p>
                 <p>Rang : <span className="font-bold">{bulletin.totaux.rang}e</span> sur {bulletin.eleve.effectif}</p>
                 {bulletin.trimestre === 3 && bulletin.totaux?.mention && (
                   <p>Mention : {bulletin.totaux.mention}</p>
-                )}
-                {bulletin.trimestre === 3 && bulletin.totaux?.decision && (
-                  <p className="font-semibold">
-                    Décision :{' '}
-                    <span className={bulletin.totaux.decision === 'Admis(e)' ? 'text-green-600' : 'text-red-600'}>
-                      {bulletin.totaux.decision}
-                    </span>
-                  </p>
                 )}
               </>
             ) : (
@@ -633,6 +617,15 @@ export default function BulletinPage() {
           <p>{bulletin.conseil.appreciation || '-'}</p>
         </div>
 
+        {/* Décision de fin d'année - 3ème trimestre uniquement */}
+        {trimestre === 3 && (
+          <div className="mt-2 border rounded p-1.5">
+            <p className="font-semibold">Décision de fin d’année :</p>
+            <div className="border-b-2 border-black w-full h-12 mt-1" />
+            <p className="text-[8px] text-gray-500 mt-0.5">(À remplir par le conseil de classe)</p>
+          </div>
+        )}
+
         {/* Pied de page */}
         <div className="mt-2 flex justify-between text-[8px] border-t pt-1.5">
           <div>
@@ -647,5 +640,4 @@ export default function BulletinPage() {
       </div>
     </div>
   );
-        }
-      
+                  }

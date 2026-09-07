@@ -115,7 +115,7 @@ export default function ImmatriculationPage() {
   return (
     <div className="p-4 max-w-2xl mx-auto">
       <h1 className="text-xl font-bold mb-1" style={{ color: '#0B3D2E' }}>
-        Immatriculation AGFNE
+        Suivi immatriculation AGFNE
       </h1>
       <p className="text-sm text-gray-600 mb-4">
         Suivi des dossiers — la saisie officielle reste sur le portail AGFNE, cet écran aide

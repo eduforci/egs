@@ -15,10 +15,18 @@ export default async function NouvelElevePage() {
     .eq("id", user?.id)
     .single();
 
+  const { data: anneeScolaire } = await supabase
+    .from("annees_scolaires")
+    .select("libelle")
+    .eq("etablissement_id", profile?.etablissement_id ?? "")
+    .eq("active", true)
+    .single();
+
   const { data: classes } = await supabase
     .from("classes")
     .select("id, nom, niveau, annee_scolaire")
     .eq("etablissement_id", profile?.etablissement_id ?? "")
+    .eq("annee_scolaire", anneeScolaire?.libelle ?? "")
     .order("nom", { ascending: true });
 
   return <NouvelEleveForm classes={classes ?? []} />;

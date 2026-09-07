@@ -538,7 +538,7 @@ export default function BulletinPage() {
           </tbody>
           <tfoot>
             <tr className="bg-gray-800 text-white font-bold">
-              <td className="px-1.5 py-1" colSpan={2}>TOTAUX</td>
+               <td className="px-1.5 py-1" colSpan={2}>TOTAUX</td>
               <td className="px-1.5 py-1 text-center">{bulletin.totaux?.coef_total ?? '-'}</td>
               <td className="px-1.5 py-1 text-center">{fmt(bulletin.totaux?.total_general ?? null)}</td>
               <td className="px-1.5 py-1 text-center" colSpan={4}></td>
@@ -547,140 +547,178 @@ export default function BulletinPage() {
         </table>
         </div>
 
-        {/* Résultats */}
-        <div className="grid grid-cols-2 gap-2 mt-2">
-          <div className="border rounded p-1.5">
-            <p className="font-semibold">Moyenne trimestrielle (T{trimestre})</p>
-            {bulletin.totaux ? (
-              <>
-                <p className="text-sm font-bold">{fmt(bulletin.totaux.moyenne_generale)}/20</p>
-                <p>Rang : <span className="font-bold">{bulletin.totaux.rang}e</span> sur {bulletin.eleve.effectif}</p>
-                {bulletin.trimestre === 3 && bulletin.totaux?.mention && (
-                  <p>Mention : {bulletin.totaux.mention}</p>
+        {/* Résultats : Moyenne trimestrielle + Résultats de classe, en tableau à deux colonnes */}
+        <table className="w-full border mt-2">
+          <tbody>
+            <tr>
+              <td className="border-r px-1.5 py-1 align-top w-1/2">
+                <p className="font-semibold">Moyenne trimestrielle (T{trimestre})</p>
+                {bulletin.totaux ? (
+                  <>
+                    <p className="text-sm font-bold">{fmt(bulletin.totaux.moyenne_generale)}/20</p>
+                    <p>Rang : <span className="font-bold">{bulletin.totaux.rang}e</span> sur {bulletin.eleve.effectif}</p>
+                    {bulletin.trimestre === 3 && bulletin.totaux?.mention && (
+                      <p>Mention : {bulletin.totaux.mention}</p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-gray-400">Aucune note saisie ce trimestre.</p>
                 )}
-              </>
-            ) : (
-              <p className="text-gray-400">Aucune note saisie ce trimestre.</p>
-            )}
-          </div>
-          <div className="border rounded p-1.5">
-            <p className="font-semibold">Résultats de classe</p>
-            <p>Moyenne classe : <span className="font-bold">{fmt(bulletin.classe_stats.moyenne_classe)}/20</span></p>
-            <p>Moyenne mini : <span className="font-bold">{fmt(bulletin.classe_stats.moyenne_mini)}/20</span></p>
-            <p>Moyenne maxi : <span className="font-bold">{fmt(bulletin.classe_stats.moyenne_maxi)}/20</span></p>
-          </div>
-        </div>
+              </td>
+              <td className="px-1.5 py-1 align-top w-1/2">
+                <p className="font-semibold">Résultats de classe</p>
+                <p>Moyenne classe : <span className="font-bold">{fmt(bulletin.classe_stats.moyenne_classe)}/20</span></p>
+                <p>Moyenne mini : <span className="font-bold">{fmt(bulletin.classe_stats.moyenne_mini)}/20</span></p>
+                <p>Moyenne maxi : <span className="font-bold">{fmt(bulletin.classe_stats.moyenne_maxi)}/20</span></p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
 
         {/* Résultats annuels - uniquement pour le 3ème trimestre */}
         {trimestre === 3 && bulletinAnnuel && (
-          <div className="mt-2 border rounded p-1.5">
-            <p className="font-semibold text-center">Résultats annuels</p>
-            <div className="grid grid-cols-4 gap-2 mt-1 text-center">
-              <div>
-                <p className="font-medium text-[8px]">T1</p>
-                <p className="font-bold text-sm">{fmt(bulletinAnnuel.trimestre1?.moyenne)}/20</p>
-                <p className="text-[9px]">Rang {bulletinAnnuel.trimestre1?.rang || '-'}</p>
-              </div>
-              <div>
-                <p className="font-medium text-[8px]">T2</p>
-                <p className="font-bold text-sm">{fmt(bulletinAnnuel.trimestre2?.moyenne)}/20</p>
-                <p className="text-[9px]">Rang {bulletinAnnuel.trimestre2?.rang || '-'}</p>
-              </div>
-              <div>
-                <p className="font-medium text-[8px]">T3</p>
-                <p className="font-bold text-sm">{fmt(bulletinAnnuel.trimestre3?.moyenne)}/20</p>
-                <p className="text-[9px]">Rang {bulletinAnnuel.trimestre3?.rang || '-'}</p>
-              </div>
-              <div className="border-l pl-2">
-                <p className="font-bold text-[8px]">Annuel</p>
-                <p className="font-bold text-sm">{fmt(bulletinAnnuel.annuel?.moyenne)}/20</p>
-                <p className="text-[9px]">Rang {bulletinAnnuel.annuel?.rang || '-'}</p>
-              </div>
-            </div>
-          </div>
+          <table className="w-full border mt-2">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-1.5 py-1" colSpan={4}>Résultats annuels</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="border-r px-1.5 py-1 text-center">
+                  <p className="font-medium text-[8px]">T1</p>
+                  <p className="font-bold text-sm">{fmt(bulletinAnnuel.trimestre1?.moyenne)}/20</p>
+                  <p className="text-[9px]">Rang {bulletinAnnuel.trimestre1?.rang || '-'}</p>
+                </td>
+                <td className="border-r px-1.5 py-1 text-center">
+                  <p className="font-medium text-[8px]">T2</p>
+                  <p className="font-bold text-sm">{fmt(bulletinAnnuel.trimestre2?.moyenne)}/20</p>
+                  <p className="text-[9px]">Rang {bulletinAnnuel.trimestre2?.rang || '-'}</p>
+                </td>
+                <td className="border-r px-1.5 py-1 text-center">
+                  <p className="font-medium text-[8px]">T3</p>
+                  <p className="font-bold text-sm">{fmt(bulletinAnnuel.trimestre3?.moyenne)}/20</p>
+                  <p className="text-[9px]">Rang {bulletinAnnuel.trimestre3?.rang || '-'}</p>
+                </td>
+                <td className="px-1.5 py-1 text-center">
+                  <p className="font-bold text-[8px]">Annuel</p>
+                  <p className="font-bold text-sm">{fmt(bulletinAnnuel.annuel?.moyenne)}/20</p>
+                  <p className="text-[9px]">Rang {bulletinAnnuel.annuel?.rang || '-'}</p>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         )}
 
         {/* Décision de fin d'année - 3ème trimestre uniquement */}
         {trimestre === 3 && (
-          <div className="mt-2 border rounded p-1.5">
-            <p className="font-semibold">Décision de fin d’année :</p>
-            <div className="border-b-2 border-black w-full h-12 mt-1" />
-            <p className="text-[8px] text-gray-500 mt-0.5">(À remplir par le conseil de classe)</p>
-          </div>
+          <table className="w-full border mt-2">
+            <tbody>
+              <tr>
+                <td className="px-1.5 py-1.5">
+                  <p className="font-semibold">Décision de fin d&apos;année :</p>
+                  <div className="border-b-2 border-black w-full h-12 mt-1" />
+                  <p className="text-[8px] text-gray-500 mt-0.5">(À remplir par le conseil de classe)</p>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         )}
 
         {/* Assiduité */}
-        <div className="mt-2 border rounded p-1.5">
-          <p className="font-semibold">Assiduité</p>
-          <div className="flex gap-4 text-[9px]">
-            <p>Absences justifiées : {bulletin.assiduite.absences_justifiees}h</p>
-            <p>Absences non justifiées : {bulletin.assiduite.absences_non_justifiees}h</p>
-          </div>
-        </div>
+        <table className="w-full border mt-2">
+          <tbody>
+            <tr>
+              <td className="px-1.5 py-1">
+                <p className="font-semibold">Assiduité</p>
+                <div className="flex gap-4 text-[9px]">
+                  <p>Absences justifiées : {bulletin.assiduite.absences_justifiees}h</p>
+                  <p>Absences non justifiées : {bulletin.assiduite.absences_non_justifiees}h</p>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
 
         {/* Mentions du conseil */}
-        <div className="mt-2 border rounded p-1.5">
-          <p className="font-semibold">Mentions du conseil de classe</p>
-          <div className="grid grid-cols-2 gap-x-4 text-[9px]">
-            <div>
-              <p className="font-medium">Distinctions</p>
-              <div className="space-y-0.5">
-                <label className="flex items-center gap-1">
-                  <input type="checkbox" checked={formMention === 'tableau_honneur_felicitations'} readOnly />
-                  Tabl. Honneur + Félicitations
-                </label>
-                <label className="flex items-center gap-1">
-                  <input type="checkbox" checked={formMention === 'tableau_honneur_encouragements'} readOnly />
-                  Tabl. Honneur + Encouragements
-                </label>
-                <label className="flex items-center gap-1">
-                  <input type="checkbox" checked={formMention === 'tableau_honneur'} readOnly />
-                  Tableau d'Honneur
-                </label>
-              </div>
-            </div>
-            <div>
-              <p className="font-medium">Sanctions</p>
-              <div className="space-y-0.5">
-                <label className="flex items-center gap-1">
-                  <input type="checkbox" checked={formMention === 'avertissement_travail'} readOnly />
-                  Avertissement travail
-                </label>
-                <label className="flex items-center gap-1">
-                  <input type="checkbox" checked={formMention === 'avertissement_conduite'} readOnly />
-                  Avertissement conduite
-                </label>
-                <label className="flex items-center gap-1">
-                  <input type="checkbox" checked={formMention === 'blame_travail'} readOnly />
-                  Blâme travail
-                </label>
-                <label className="flex items-center gap-1">
-                  <input type="checkbox" checked={formMention === 'blame_conduite'} readOnly />
-                  Blâme conduite
-                </label>
-              </div>
-            </div>
-          </div>
-        </div>
+        <table className="w-full border mt-2">
+          <tbody>
+            <tr>
+              <td className="px-1.5 py-1" colSpan={2}>
+                <p className="font-semibold">Mentions du conseil de classe</p>
+              </td>
+            </tr>
+            <tr>
+              <td className="border-r border-t px-1.5 py-1 align-top w-1/2 text-[9px]">
+                <p className="font-medium">Distinctions</p>
+                <div className="space-y-0.5">
+                  <label className="flex items-center gap-1">
+                    <input type="checkbox" checked={formMention === 'tableau_honneur_felicitations'} readOnly />
+                    Tabl. Honneur + Félicitations
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <input type="checkbox" checked={formMention === 'tableau_honneur_encouragements'} readOnly />
+                    Tabl. Honneur + Encouragements
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <input type="checkbox" checked={formMention === 'tableau_honneur'} readOnly />
+                    Tableau d'Honneur
+                  </label>
+                </div>
+              </td>
+              <td className="border-t px-1.5 py-1 align-top w-1/2 text-[9px]">
+                <p className="font-medium">Sanctions</p>
+                <div className="space-y-0.5">
+                  <label className="flex items-center gap-1">
+                    <input type="checkbox" checked={formMention === 'avertissement_travail'} readOnly />
+                    Avertissement travail
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <input type="checkbox" checked={formMention === 'avertissement_conduite'} readOnly />
+                    Avertissement conduite
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <input type="checkbox" checked={formMention === 'blame_travail'} readOnly />
+                    Blâme travail
+                  </label>
+                  <label className="flex items-center gap-1">
+                    <input type="checkbox" checked={formMention === 'blame_conduite'} readOnly />
+                    Blâme conduite
+                  </label>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
 
         {/* Appréciation */}
-        <div className="mt-2 border rounded p-1.5">
-          <p className="font-semibold">Appréciation du conseil de classe</p>
-          <p>{bulletin.conseil.appreciation || '-'}</p>
-        </div>
+        <table className="w-full border mt-2">
+          <tbody>
+            <tr>
+              <td className="px-1.5 py-1">
+                <p className="font-semibold">Appréciation du conseil de classe</p>
+                <p>{bulletin.conseil.appreciation || '-'}</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
 
         {/* Pied de page */}
-        <div className="mt-2 flex justify-between text-[8px] border-t pt-1.5">
-          <div>
-            <p>Professeur principal : {bulletin.conseil.professeur_principal || '-'}</p>
-          </div>
-          <div className="text-right">
-            <p>Fait le {fmtDate(bulletin.date_edition)}</p>
-            <p className="font-semibold">{bulletin.chef_etablissement || '-'}</p>
-            <p>Chef d'établissement</p>
-          </div>
-        </div>
+        <table className="w-full border mt-2">
+          <tbody>
+            <tr>
+              <td className="border-r px-1.5 py-1 text-[8px] w-1/2">
+                <p>Professeur principal : {bulletin.conseil.professeur_principal || '-'}</p>
+              </td>
+              <td className="px-1.5 py-1 text-[8px] text-right w-1/2">
+                <p>Fait le {fmtDate(bulletin.date_edition)}</p>
+                <p className="font-semibold">{bulletin.chef_etablissement || '-'}</p>
+                <p>Chef d'établissement</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   );
-        }
+                                    }

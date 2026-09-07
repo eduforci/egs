@@ -146,15 +146,14 @@ export default function BulletinPage() {
 
       if (eleveError) throw new Error(`Erreur récupération élève : ${eleveError.message}`);
       setEtablissementId(eleveRow.etablissement_id);
-
-      const { data: etabRow, error: etabError } = await supabase
-        .from('etablissements')
-        .select('annee_scolaire_active')
-        .eq('id', eleveRow.etablissement_id)
+const { data: classeRow, error: classeError } = await supabase
+        .from("classes")
+        .select("annee_scolaire")
+        .eq("id", classeId)
         .single();
 
-      if (etabError) throw new Error(`Erreur récupération établissement : ${etabError.message}`);
-      setAnneeScolaire(etabRow.annee_scolaire_active);
+      if (classeError) throw new Error(`Erreur récupération classe : ${classeError.message}`);
+      setAnneeScolaire(classeRow.annee_scolaire);
 
       const { data: profsData } = await supabase
         .from('profiles')
@@ -166,7 +165,7 @@ export default function BulletinPage() {
       const { data, error: rpcError } = await supabase.rpc('generer_bulletin', {
         p_eleve_id: eleveId,
         p_trimestre: trimestre,
-        p_annee_scolaire: etabRow.annee_scolaire_active,
+        p_annee_scolaire: classeRow.annee_scolaire.
       });
 
       if (rpcError) throw new Error(`Erreur génération bulletin : ${rpcError.message}`);

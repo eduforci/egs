@@ -165,7 +165,7 @@ const { data: classeRow, error: classeError } = await supabase
       const { data, error: rpcError } = await supabase.rpc('generer_bulletin', {
         p_eleve_id: eleveId,
         p_trimestre: trimestre,
-        p_annee_scolaire: classeRow.annee_scolaire.
+        p_annee_scolaire: classeRow.annee_scolaire,
       });
 
       if (rpcError) throw new Error(`Erreur génération bulletin : ${rpcError.message}`);

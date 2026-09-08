@@ -78,11 +78,12 @@ export default function ListeClassePage() {
 
     autoTable(doc, {
       startY: 70,
-      head: [['N°', 'Matricule', 'Nom et Prénoms']],
+      head: [['N°', 'Matricule', 'Nom et Prénoms', '', '', '', '', '', '']],
       body: liste.eleves.map((e, i) => [
         String(i + 1),
         e.matricule ?? '—',
         `${e.nom} ${e.prenom}`,
+        '', '', '', '', '', '',
       ]),
       styles: { fontSize: 9 },
       headStyles: { fillColor: [10, 30, 70] },
@@ -130,6 +131,12 @@ export default function ListeClassePage() {
             <th className="border p-1 w-10">N°</th>
             <th className="border p-1 text-left">Matricule</th>
             <th className="border p-1 text-left">Nom et Prénoms</th>
+            <th className="border p-1 w-8"></th>
+            <th className="border p-1 w-8"></th>
+            <th className="border p-1 w-8"></th>
+            <th className="border p-1 w-8"></th>
+            <th className="border p-1 w-8"></th>
+            <th className="border p-1 w-8"></th>
           </tr>
         </thead>
         <tbody>
@@ -138,6 +145,12 @@ export default function ListeClassePage() {
               <td className="border p-1 text-center">{i + 1}</td>
               <td className="border p-1 font-mono text-xs">{e.matricule ?? '—'}</td>
               <td className="border p-1">{e.nom} {e.prenom}</td>
+              <td className="border p-1"></td>
+              <td className="border p-1"></td>
+              <td className="border p-1"></td>
+              <td className="border p-1"></td>
+              <td className="border p-1"></td>
+              <td className="border p-1"></td>
             </tr>
           ))}
         </tbody>
@@ -157,4 +170,4 @@ export default function ListeClassePage() {
     </div>
   );
       }
-          
+  

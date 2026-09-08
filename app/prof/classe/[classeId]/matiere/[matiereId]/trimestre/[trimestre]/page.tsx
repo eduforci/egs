@@ -17,7 +17,7 @@ export default async function TableauNotes({
 
   const { data: classe } = await supabase
     .from("classes")
-    .select("nom, annee_scolaire, etablissement_id")
+    .select("nom, niveau, annee_scolaire, etablissement_id")
     .eq("id", classeId)
     .single();
 
@@ -26,6 +26,19 @@ export default async function TableauNotes({
     .select("nom")
     .eq("id", matiereId)
     .single();
+
+  const { data: classeMatiere } = await supabase
+    .from("classes_matieres")
+    .select("coefficient")
+    .eq("classe_id", classeId)
+    .eq("matiere_id", matiereId)
+    .maybeSingle();
+
+  const { data: enseignantProfile } = await supabase
+    .from("profiles")
+    .select("nom, prenom")
+    .eq("id", user?.id ?? "")
+    .maybeSingle();
 
   const { data: elevesRaw, error: elevesError } = await supabase
     .from("eleves")
@@ -122,7 +135,10 @@ export default async function TableauNotes({
         matiereId={matiereId}
         trimestre={trimestre}
         classeNom={classe?.nom ?? ""}
+        classeNiveau={classe?.niveau ?? ""}
         matiereNom={matiere?.nom ?? ""}
+        coefficient={classeMatiere?.coefficient ?? null}
+        enseignantNom={enseignantProfile ? `${enseignantProfile.prenom} ${enseignantProfile.nom}` : ""}
         anneeScolaire={classe?.annee_scolaire ?? ""}
         etablissementId={classe?.etablissement_id ?? ""}
         enseignantId={user?.id ?? ""}
@@ -137,4 +153,5 @@ export default async function TableauNotes({
       />
     </>
   );
-}
+         }
+            

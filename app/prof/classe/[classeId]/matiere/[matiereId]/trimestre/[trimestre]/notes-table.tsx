@@ -31,6 +31,11 @@ type Observation = {
   texte: string;
 };
 
+type Bonus = {
+  eleve_id: string;
+  valeur: number;
+};
+
 type Validation = {
   id: string;
   valide: boolean;
@@ -57,10 +62,7 @@ export default function NotesTable({
   matiereId,
   trimestre,
   classeNom,
-  classeNiveau,
   matiereNom,
-  coefficient,
-  enseignantNom,
   anneeScolaire,
   etablissementId,
   enseignantId,
@@ -68,6 +70,7 @@ export default function NotesTable({
   evaluationsExistantes,
   notesExistantes,
   observationsExistantes,
+  bonusExistants,
   validation,
   seuilsMentions,
 }: {
@@ -75,10 +78,7 @@ export default function NotesTable({
   matiereId: string;
   trimestre: string;
   classeNom: string;
-  classeNiveau: string;
   matiereNom: string;
-  coefficient: number | null;
-  enseignantNom: string;
   anneeScolaire: string;
   etablissementId: string;
   enseignantId: string;
@@ -86,6 +86,7 @@ export default function NotesTable({
   evaluationsExistantes: Evaluation[];
   notesExistantes: Note[];
   observationsExistantes: Observation[];
+  bonusExistants: Bonus[];
   validation: Validation;
   seuilsMentions: Record<string, number>;
 }) {
@@ -106,7 +107,14 @@ export default function NotesTable({
     initial[e.id] = ligne;
   });
 
+  const initialBonus: Record<string, string> = {};
+  eleves.forEach((e) => {
+    const b = bonusExistants.find((x) => x.eleve_id === e.id);
+    initialBonus[e.id] = b ? String(b.valeur) : "";
+  });
+
   const [valeurs, setValeurs] = useState(initial);
+  const [bonus, setBonus] = useState(initialBonus);
   const [enregistrement, setEnregistrement] = useState(false);
   const [validationEnCours, setValidationEnCours] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -148,7 +156,12 @@ export default function NotesTable({
     if (termes.length === 0) return null;
     const poidsTotal = termes.reduce((a, t) => a + t.poids, 0);
     const somme = termes.reduce((a, t) => a + t.val * t.poids, 0);
-    return somme / poidsTotal;
+    const base = somme / poidsTotal;
+
+    const bonusBrut = parseFloat(bonus[eleveId]);
+    const bonusValeur = isNaN(bonusBrut) ? 0 : bonusBrut;
+
+    return base + bonusValeur;
   }
 
   function appreciationSuggeree(m: number | null) {
@@ -214,7 +227,8 @@ export default function NotesTable({
       });
     }
   }
-async function supprimerEvaluation(evaluationId: string) {
+
+  async function supprimerEvaluation(evaluationId: string) {
     const confirmation = window.confirm(
       "Supprimer cette évaluation ? Toutes les notes saisies pour cette évaluation seront perdues définitivement."
     );
@@ -244,7 +258,8 @@ async function supprimerEvaluation(evaluationId: string) {
 
     setMessage("Évaluation supprimée.");
     router.refresh();
-    }
+  }
+
   async function creerEvaluation() {
     if (estFrancaisCollege && !nouveauLibelle) {
       setMessage("Choisis un type de note (CF, Orth. ou EO) avant de créer l'évaluation.");
@@ -302,6 +317,14 @@ async function supprimerEvaluation(evaluationId: string) {
           erreurs.push(
             `${nomComplet} — ${libelleColonne(ev)} : ${saisie} dépasse le barème autorisé (0 à ${ev.bareme_max}).`
           );
+        }
+      }
+
+      const bonusSaisi = bonus[eleve.id];
+      if (bonusSaisi !== "") {
+        const nombreBonus = parseFloat(bonusSaisi);
+        if (isNaN(nombreBonus) || nombreBonus < -5 || nombreBonus > 5) {
+          erreurs.push(`${nomComplet} — Bonus : doit être entre -5 et +5.`);
         }
       }
     }
@@ -373,6 +396,37 @@ async function supprimerEvaluation(evaluationId: string) {
         if (estUneModification) {
           await notifierDirection(nomComplet, libelleColonne(ev), ancienneValeurStr, nouvelleValeurStr);
         }
+      }
+
+      // Sauvegarde du bonus (indépendant des évaluations classiques)
+      const bonusSaisi = bonus[eleve.id];
+      if (bonusSaisi !== "") {
+        const { error: bonusError } = await supabase.from("bonus_moyenne").upsert(
+          {
+            eleve_id: eleve.id,
+            classe_id: classeId,
+            matiere_id: matiereId,
+            trimestre: Number(trimestre),
+            annee_scolaire: anneeScolaire,
+            valeur: parseFloat(bonusSaisi),
+            enseignant_id: enseignantId,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "eleve_id,matiere_id,trimestre,annee_scolaire" }
+        );
+        if (bonusError) {
+          setMessage("Erreur (bonus) : " + bonusError.message);
+          setEnregistrement(false);
+          return;
+        }
+      } else {
+        await supabase
+          .from("bonus_moyenne")
+          .delete()
+          .eq("eleve_id", eleve.id)
+          .eq("matiere_id", matiereId)
+          .eq("trimestre", Number(trimestre))
+          .eq("annee_scolaire", anneeScolaire);
       }
 
       await supabase
@@ -561,7 +615,7 @@ async function supprimerEvaluation(evaluationId: string) {
                     placeholder="Ex: Interro chapitre 3"
                     className="w-full border rounded-lg p-2 text-sm"
                   />
-                </div>
+          </div>
               )}
 
               <div className="flex gap-2">
@@ -637,6 +691,7 @@ async function supprimerEvaluation(evaluationId: string) {
                       </div>
                     </th>
                   ))}
+                  <th className="p-3">Bonus</th>
                   <th className="p-3">Moyenne (/20)</th>
                   <th className="p-3">Rang</th>
                   <th className="p-3">Appréciation</th>
@@ -686,6 +741,21 @@ async function supprimerEvaluation(evaluationId: string) {
                           </td>
                         );
                       })}
+                      <td className="p-3">
+                        <input
+                          type="number"
+                          min={-5}
+                          max={5}
+                          step={0.5}
+                          disabled={verrouille}
+                          value={bonus[e.id]}
+                          onChange={(evt) =>
+                            setBonus((prev) => ({ ...prev, [e.id]: evt.target.value }))
+                          }
+                          placeholder="0"
+                          className="w-16 border rounded p-1 disabled:bg-neutral-100 disabled:text-neutral-400"
+                        />
+                      </td>
                       <td className="p-3 font-medium">
                         {m !== null ? m.toFixed(2) : "-"}
                       </td>
@@ -776,4 +846,5 @@ async function supprimerEvaluation(evaluationId: string) {
       )}
     </main>
   );
-                                                        }
+      }
+                          

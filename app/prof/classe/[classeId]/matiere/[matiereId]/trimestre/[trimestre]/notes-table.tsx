@@ -57,7 +57,10 @@ export default function NotesTable({
   matiereId,
   trimestre,
   classeNom,
+  classeNiveau,
   matiereNom,
+  coefficient,
+  enseignantNom,
   anneeScolaire,
   etablissementId,
   enseignantId,
@@ -72,7 +75,10 @@ export default function NotesTable({
   matiereId: string;
   trimestre: string;
   classeNom: string;
+  classeNiveau: string;
   matiereNom: string;
+  coefficient: number | null;
+  enseignantNom: string;
   anneeScolaire: string;
   etablissementId: string;
   enseignantId: string;

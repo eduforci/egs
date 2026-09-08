@@ -1,174 +1,150 @@
-'use client';
+import { createClient } from "@/lib/supabase/server";
+import NotesTable from "./notes-table";
 
-import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+export const dynamic = "force-dynamic";
 
-interface ColonneNote {
-  id: string;
-  libelle: string | null;
-  bareme_max: number;
-}
+export default async function TableauNotes({
+  params,
+}: {
+  params: Promise<{ classeId: string; matiereId: string; trimestre: string }>;
+}) {
+  const { classeId, matiereId, trimestre } = await params;
+  const supabase = await createClient();
 
-interface EleveMoyenne {
-  id: string;
-  matricule: string | null;
-  nom: string;
-  prenom: string;
-  detailNotes: { evaluation_id: string; libelle: string | null; bareme_max: number; valeur: number | null }[];
-  bonus: number;
-  moyenne: number | null;
-  moyenneCoef: number | null;
-  rang: string;
-}
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-interface ListeMoyennes {
-  classe: { nom: string; niveau: string; annee_scolaire: string };
-  matiere: string;
-  coefficient: number | null;
-  enseignant: string;
-  trimestre: string;
-  colonnesNotes: ColonneNote[];
-  eleves: EleveMoyenne[];
-}
+  const { data: classe } = await supabase
+    .from("classes")
+    .select("nom, annee_scolaire, etablissement_id")
+    .eq("id", classeId)
+    .single();
 
-function fmt(n: number | null) {
-  if (n === null) return '-';
-  return n.toFixed(2);
-}
+  const { data: matiere } = await supabase
+    .from("matieres")
+    .select("nom")
+    .eq("id", matiereId)
+    .single();
 
-export default function ListeMoyennesPage() {
-  const params = useParams();
-  const classeId = params.classeId as string;
-  const matiereId = params.matiereId as string;
-  const trimestre = params.trimestre as string;
+  const { data: bonusExistants } = await supabase
+    .from("bonus_moyenne")
+    .select("eleve_id, valeur")
+    .eq("classe_id", classeId)
+    .eq("matiere_id", matiereId)
+    .eq("trimestre", trimestre)
+    .eq("annee_scolaire", classe?.annee_scolaire ?? "");
 
-  const [liste, setListe] = useState<ListeMoyennes | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [erreur, setErreur] = useState<string | null>(null);
+  const { data: elevesRaw, error: elevesError } = await supabase
+    .from("eleves")
+    .select("id, matricule")
+    .eq("classe_id", classeId);
 
-  useEffect(() => {
-    fetch(`/api/enseignant/classes/${classeId}/matieres/${matiereId}/trimestre/${trimestre}/liste-moyennes`)
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.error) throw new Error(json.error);
-        setListe(json);
-      })
-      .catch((e) => setErreur(e.message))
-      .finally(() => setLoading(false));
-  }, [classeId, matiereId, trimestre]);
+  let eleves: any[] = [];
+  let profilesError: string | null = null;
 
-  function telechargerPDF() {
-    if (!liste) return;
-    const doc = new jsPDF();
+  if (elevesRaw && elevesRaw.length > 0) {
+    const ids = elevesRaw.map((e) => e.id);
 
-    doc.setFontSize(11);
-    doc.setDrawColor(0);
-    doc.rect(14, 12, 182, 8);
-    doc.text(
-      `${liste.classe.niveau} — TRIMESTRE ${liste.trimestre} — ${liste.matiere.toUpperCase()}`,
-      105,
-      17.5,
-      { align: 'center' }
-    );
+    const { data: profilesData, error: pErr } = await supabase
+      .from("profiles")
+      .select("id, nom, prenom")
+      .in("id", ids);
 
-    doc.setFontSize(9);
-    doc.text(`COEFFICIENT : ${liste.coefficient ?? '—'}`, 14, 26);
-    doc.text(`PROFESSEUR : ${liste.enseignant.toUpperCase()}`, 196, 26, { align: 'right' });
+    if (pErr) profilesError = pErr.message;
 
-    const nomsColonnesNotes = liste.colonnesNotes.map((c) => c.libelle || `/${c.bareme_max}`);
-
-    autoTable(doc, {
-      startY: 32,
-      head: [['N°', 'MATRICULE', 'NOM ET PRÉNOMS', ...nomsColonnesNotes, 'BONUS', 'MOY.', 'MOY. COEF.', 'RANG']],
-      body: liste.eleves.map((e, i) => [
-        String(i + 1),
-        e.matricule ?? '—',
-        `${e.nom} ${e.prenom}`,
-        ...liste.colonnesNotes.map((c) => {
-          const n = e.detailNotes.find((d) => d.evaluation_id === c.id);
-          return n?.valeur !== null && n?.valeur !== undefined ? String(n.valeur) : '-';
-        }),
-        '', // Bonus laissé vide — à remplir à la main sur le papier
-        fmt(e.moyenne),
-        fmt(e.moyenneCoef),
-        e.rang,
-      ]),
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [10, 30, 70], fontSize: 7 },
-    });
-
-    doc.save(`liste_moyennes_${liste.classe.nom}_${liste.matiere}_T${liste.trimestre}.pdf`);
+    eleves = elevesRaw.map((e) => ({
+      id: e.id,
+      matricule: e.matricule,
+      profiles: profilesData?.find((p) => p.id === e.id) ?? null,
+    }));
   }
 
-  if (loading) return <div className="p-4">Chargement...</div>;
-  if (erreur) return <div className="p-4 text-red-600 text-sm">{erreur}</div>;
-  if (!liste) return null;
+  const { data: evaluations, error: evaluationsError } = await supabase
+    .from("evaluations")
+    .select(
+      "id, categorie, bareme_max, coefficient, type_note, libelle, date_evaluation"
+    )
+    .eq("classe_id", classeId)
+    .eq("matiere_id", matiereId)
+    .eq("trimestre", trimestre)
+    .eq("annee_scolaire", classe?.annee_scolaire ?? "")
+    .order("date_evaluation", { ascending: true });
+
+  const evaluationIds = (evaluations ?? []).map((e) => e.id);
+
+  const { data: notes, error: notesError } =
+    evaluationIds.length > 0
+      ? await supabase
+          .from("notes")
+          .select("eleve_id, evaluation_id, valeur")
+          .in("evaluation_id", evaluationIds)
+      : {
+          data: [] as {
+            eleve_id: string;
+            evaluation_id: string;
+            valeur: number;
+          }[],
+          error: null,
+        };
+
+  const { data: observations } = await supabase
+    .from("observations")
+    .select("eleve_id, texte")
+    .eq("matiere_id", matiereId)
+    .eq("trimestre", trimestre)
+    .eq("enseignant_id", user?.id);
+
+  const { data: validation } = await supabase
+    .from("validations_notes")
+    .select("*")
+    .eq("classe_id", classeId)
+    .eq("matiere_id", matiereId)
+    .eq("trimestre", trimestre)
+    .eq("annee_scolaire", classe?.annee_scolaire ?? "")
+    .maybeSingle();
+
+  const { data: parametres } = await supabase
+    .from("parametres_pedagogiques")
+    .select("seuils_mentions")
+    .eq("etablissement_id", classe?.etablissement_id ?? "")
+    .maybeSingle();
+
+  const erreurDiagnostic =
+    elevesError?.message ||
+    profilesError ||
+    evaluationsError?.message ||
+    notesError?.message ||
+    null;
 
   return (
-    <div className="p-4 max-w-4xl mx-auto">
-      <div className="border-2 border-black text-center py-2 font-bold mb-2" style={{ color: '#0B3D2E' }}>
-        {liste.classe.niveau} — TRIMESTRE {liste.trimestre} — {liste.matiere.toUpperCase()}
-      </div>
-
-      <div className="flex justify-between text-sm mb-4">
-        <p><strong>Coefficient :</strong> {liste.coefficient ?? '—'}</p>
-        <p><strong>Professeur :</strong> {liste.enseignant}</p>
-      </div>
-
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs border mb-4">
-          <thead>
-            <tr style={{ backgroundColor: '#0B3D2E', color: 'white' }}>
-              <th className="border p-1">N°</th>
-              <th className="border p-1 text-left">Matricule</th>
-              <th className="border p-1 text-left">Nom et Prénoms</th>
-              {liste.colonnesNotes.map((c) => (
-                <th key={c.id} className="border p-1">{c.libelle || `/${c.bareme_max}`}</th>
-              ))}
-              <th className="border p-1">Bonus</th>
-              <th className="border p-1">Moy.</th>
-              <th className="border p-1">Moy. coef.</th>
-              <th className="border p-1">Rang</th>
-            </tr>
-          </thead>
-          <tbody>
-            {liste.eleves.map((e, i) => (
-              <tr key={e.id}>
-                <td className="border p-1 text-center">{i + 1}</td>
-                <td className="border p-1 font-mono">{e.matricule ?? '—'}</td>
-                <td className="border p-1">{e.nom} {e.prenom}</td>
-                {liste.colonnesNotes.map((c) => {
-                  const n = e.detailNotes.find((d) => d.evaluation_id === c.id);
-                  return (
-                    <td key={c.id} className="border p-1 text-center">
-                      {n?.valeur !== null && n?.valeur !== undefined ? n.valeur : '-'}
-                    </td>
-                  );
-                })}
-                <td className="border p-1"></td>
-                <td className="border p-1 text-center font-medium">{fmt(e.moyenne)}</td>
-                <td className="border p-1 text-center font-medium">{fmt(e.moyenneCoef)}</td>
-                <td className="border p-1 text-center">{e.rang}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {liste.eleves.length === 0 && (
-        <p className="text-sm text-gray-500 mb-4">Aucun élève dans cette classe.</p>
+    <>
+      {erreurDiagnostic && (
+        <div className="max-w-5xl mx-auto mt-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm border border-red-200">
+          Erreur technique lors du chargement : {erreurDiagnostic}
+        </div>
       )}
 
-      <button
-        onClick={telechargerPDF}
-        className="w-full py-2 rounded text-white font-medium"
-        style={{ backgroundColor: '#0B3D2E' }}
-      >
-        Télécharger en PDF
-      </button>
-    </div>
+      <NotesTable
+        classeId={classeId}
+        matiereId={matiereId}
+        trimestre={trimestre}
+        classeNom={classe?.nom ?? ""}
+        matiereNom={matiere?.nom ?? ""}
+        anneeScolaire={classe?.annee_scolaire ?? ""}
+        etablissementId={classe?.etablissement_id ?? ""}
+        enseignantId={user?.id ?? ""}
+        eleves={eleves as any}
+        evaluationsExistantes={evaluations ?? []}
+        notesExistantes={notes ?? []}
+        observationsExistantes={observations ?? []}
+        bonusExistants={bonusExistants ?? []}
+        validation={validation ?? null}
+        seuilsMentions={
+          (parametres?.seuils_mentions as Record<string, number>) ?? {}
+        }
+      />
+    </>
   );
-}
-  
+    }
+      

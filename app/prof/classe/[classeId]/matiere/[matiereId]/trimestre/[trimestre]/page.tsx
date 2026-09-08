@@ -40,6 +40,14 @@ export default async function TableauNotes({
     .eq("id", user?.id ?? "")
     .maybeSingle();
 
+  const { data: bonusExistants } = await supabase
+    .from("bonus_moyenne")
+    .select("eleve_id, valeur")
+    .eq("classe_id", classeId)
+    .eq("matiere_id", matiereId)
+    .eq("trimestre", trimestre)
+    .eq("annee_scolaire", classe?.annee_scolaire ?? "");
+
   const { data: elevesRaw, error: elevesError } = await supabase
     .from("eleves")
     .select("id, matricule")
@@ -146,6 +154,7 @@ export default async function TableauNotes({
         evaluationsExistantes={evaluations ?? []}
         notesExistantes={notes ?? []}
         observationsExistantes={observations ?? []}
+        bonusExistants={bonusExistants ?? []}
         validation={validation ?? null}
         seuilsMentions={
           (parametres?.seuils_mentions as Record<string, number>) ?? {}
@@ -153,5 +162,5 @@ export default async function TableauNotes({
       />
     </>
   );
-         }
-            
+        }
+    

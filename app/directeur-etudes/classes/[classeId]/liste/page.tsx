@@ -78,15 +78,26 @@ export default function ListeClassePage() {
 
     autoTable(doc, {
       startY: 70,
-      head: [['N°', 'Matricule', 'Nom et Prénoms', ' ', ' ', ' ', ' ', ' ', ' ']],
+      head: [['N°', 'Matricule', 'Nom et Prénoms', '', '', '', '', '', '']],
       body: liste.eleves.map((e, i) => [
         String(i + 1),
         e.matricule ?? '—',
         `${e.nom} ${e.prenom}`,
-        ' ', ' ', ' ', ' ', ' ', ' ',
+        '', '', '', '', '', '',
       ]),
       styles: { fontSize: 9 },
       headStyles: { fillColor: [10, 30, 70] },
+      columnStyles: {
+        0: { cellWidth: 10 },
+        1: { cellWidth: 25 },
+        2: { cellWidth: 45 },
+        3: { cellWidth: 15 },
+        4: { cellWidth: 15 },
+        5: { cellWidth: 15 },
+        6: { cellWidth: 15 },
+        7: { cellWidth: 15 },
+        8: { cellWidth: 15 },
+      },
     });
 
     doc.save(`liste_${liste.classe.nom}_${liste.classe.annee_scolaire}.pdf`);
@@ -169,5 +180,5 @@ export default function ListeClassePage() {
       </button>
     </div>
   );
-      }
-  
+             }
+      

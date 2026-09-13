@@ -63,15 +63,13 @@ export default function ListeMoyennesPage() {
     if (!liste) return;
     const doc = new jsPDF();
 
+    const titre = `${liste.classe.niveau} — TRIMESTRE ${liste.trimestre} — ${liste.matiere.toUpperCase()}`;
     doc.setFontSize(11);
+    const largeurTitre = doc.getTextWidth(titre) + 16;
+    const xCadre = (210 - largeurTitre) / 2;
     doc.setDrawColor(0);
-    doc.rect(14, 12, 182, 8);
-    doc.text(
-      `${liste.classe.niveau} — TRIMESTRE ${liste.trimestre} — ${liste.matiere.toUpperCase()}`,
-      105,
-      17.5,
-      { align: 'center' }
-    );
+    doc.rect(xCadre, 12, largeurTitre, 8);
+    doc.text(titre, 105, 17.5, { align: 'center' });
 
     doc.setFontSize(9);
     doc.text(`COEFFICIENT : ${liste.coefficient ?? '—'}`, 14, 26);
@@ -90,13 +88,14 @@ export default function ListeMoyennesPage() {
           const n = e.detailNotes.find((d) => d.evaluation_id === c.id);
           return n?.valeur !== null && n?.valeur !== undefined ? String(n.valeur) : '-';
         }),
-        '', // Bonus laissé vide — à remplir à la main sur le papier
+        '',
         fmt(e.moyenne),
         fmt(e.moyenneCoef),
         e.rang,
       ]),
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [10, 30, 70], fontSize: 7 },
+      styles: { fontSize: 8, lineWidth: 0.1, lineColor: [0, 0, 0] },
+      headStyles: { fillColor: [10, 30, 70], fontSize: 7, lineWidth: 0.1, lineColor: [0, 0, 0] },
+      theme: 'grid',
     });
 
     doc.save(`liste_moyennes_${liste.classe.nom}_${liste.matiere}_T${liste.trimestre}.pdf`);
@@ -108,8 +107,10 @@ export default function ListeMoyennesPage() {
 
   return (
     <div className="p-4 max-w-4xl mx-auto">
-      <div className="border-2 border-black text-center py-2 font-bold mb-2" style={{ color: '#0B3D2E' }}>
-        {liste.classe.niveau} — TRIMESTRE {liste.trimestre} — {liste.matiere.toUpperCase()}
+      <div className="flex justify-center mb-2">
+        <div className="border-2 border-black text-center py-2 px-6 font-bold inline-block" style={{ color: '#0B3D2E' }}>
+          {liste.classe.niveau} — TRIMESTRE {liste.trimestre} — {liste.matiere.toUpperCase()}
+        </div>
       </div>
 
       <div className="flex justify-between text-sm mb-4">
@@ -118,39 +119,39 @@ export default function ListeMoyennesPage() {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-xs border mb-4">
+        <table className="w-full text-xs border-collapse border mb-4">
           <thead>
             <tr style={{ backgroundColor: '#0B3D2E', color: 'white' }}>
-              <th className="border p-1">N°</th>
-              <th className="border p-1 text-left">Matricule</th>
-              <th className="border p-1 text-left">Nom et Prénoms</th>
+              <th className="border border-gray-400 p-1">N°</th>
+              <th className="border border-gray-400 p-1 text-left">Matricule</th>
+              <th className="border border-gray-400 p-1 text-left">Nom et Prénoms</th>
               {liste.colonnesNotes.map((c) => (
-                <th key={c.id} className="border p-1">{c.libelle || `/${c.bareme_max}`}</th>
+                <th key={c.id} className="border border-gray-400 p-1">{c.libelle || `/${c.bareme_max}`}</th>
               ))}
-              <th className="border p-1">Bonus</th>
-              <th className="border p-1">Moy.</th>
-              <th className="border p-1">Moy. coef.</th>
-              <th className="border p-1">Rang</th>
+              <th className="border border-gray-400 p-1">Bonus</th>
+              <th className="border border-gray-400 p-1">Moy.</th>
+              <th className="border border-gray-400 p-1">Moy. coef.</th>
+              <th className="border border-gray-400 p-1">Rang</th>
             </tr>
           </thead>
           <tbody>
             {liste.eleves.map((e, i) => (
               <tr key={e.id}>
-                <td className="border p-1 text-center">{i + 1}</td>
-                <td className="border p-1 font-mono">{e.matricule ?? '—'}</td>
-                <td className="border p-1">{e.nom} {e.prenom}</td>
+                <td className="border border-gray-400 p-1 text-center">{i + 1}</td>
+                <td className="border border-gray-400 p-1 font-mono">{e.matricule ?? '—'}</td>
+                <td className="border border-gray-400 p-1">{e.nom} {e.prenom}</td>
                 {liste.colonnesNotes.map((c) => {
                   const n = e.detailNotes.find((d) => d.evaluation_id === c.id);
                   return (
-                    <td key={c.id} className="border p-1 text-center">
+                    <td key={c.id} className="border border-gray-400 p-1 text-center">
                       {n?.valeur !== null && n?.valeur !== undefined ? n.valeur : '-'}
                     </td>
                   );
                 })}
-                <td className="border p-1"></td>
-                <td className="border p-1 text-center font-medium">{fmt(e.moyenne)}</td>
-                <td className="border p-1 text-center font-medium">{fmt(e.moyenneCoef)}</td>
-                <td className="border p-1 text-center">{e.rang}</td>
+                <td className="border border-gray-400 p-1"></td>
+                <td className="border border-gray-400 p-1 text-center font-medium">{fmt(e.moyenne)}</td>
+                <td className="border border-gray-400 p-1 text-center font-medium">{fmt(e.moyenneCoef)}</td>
+                <td className="border border-gray-400 p-1 text-center">{e.rang}</td>
               </tr>
             ))}
           </tbody>

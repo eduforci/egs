@@ -34,11 +34,26 @@ export async function GET(
     .eq('matiere_id', matiereId)
     .maybeSingle();
 
-  const { data: enseignantProfile } = await supabase
-    .from('profiles')
-    .select('nom, prenom')
-    .eq('id', user.id)
+  // L'enseignant affiché doit être celui réellement affecté à cette classe/matière,
+  // pas forcément la personne connectée (un directeur des études peut aussi consulter cette page).
+  const { data: affectation } = await supabase
+    .from('affectations_enseignant')
+    .select('enseignant_id')
+    .eq('classe_id', classeId)
+    .eq('matiere_id', matiereId)
     .maybeSingle();
+
+  let enseignantNom = '';
+  if (affectation?.enseignant_id) {
+    const { data: enseignantProfile } = await supabase
+      .from('profiles')
+      .select('nom, prenom')
+      .eq('id', affectation.enseignant_id)
+      .maybeSingle();
+    if (enseignantProfile) {
+      enseignantNom = `${enseignantProfile.prenom} ${enseignantProfile.nom}`;
+    }
+  }
 
   const { data: elevesRaw } = await supabase
     .from('eleves')
@@ -68,8 +83,6 @@ export async function GET(
         .in('evaluation_id', evaluationIds)
     : { data: [] };
 
-  // Une évaluation avec bareme_max=20 et coefficient=2 est traitée comme "bonus"
-  // uniquement si son libellé le précise — sinon toutes comptent dans la moyenne pondérée.
   const evalsBonus = (evaluations || []).filter((e) => (e.libelle || '').toLowerCase().includes('bonus'));
   const evalsNormales = (evaluations || []).filter((e) => !(e.libelle || '').toLowerCase().includes('bonus'));
 
@@ -116,7 +129,6 @@ export async function GET(
     };
   });
 
-  // Rang basé sur la moyenne (avant coefficient), avec gestion des ex-æquo
   const classement = eleves
     .filter((e) => e.moyenne !== null)
     .sort((a, b) => (b.moyenne as number) - (a.moyenne as number));
@@ -142,10 +154,10 @@ export async function GET(
     classe: { nom: classe.nom, niveau: classe.niveau, annee_scolaire: classe.annee_scolaire },
     matiere: matiere?.nom ?? '',
     coefficient: classeMatiere?.coefficient ?? null,
-    enseignant: enseignantProfile ? `${enseignantProfile.prenom} ${enseignantProfile.nom}` : '',
+    enseignant: enseignantNom,
     trimestre,
     colonnesNotes: evalsNormales.map((ev) => ({ id: ev.id, libelle: ev.libelle, bareme_max: ev.bareme_max })),
     eleves: elevesAvecRang,
   });
-    }
-      
+}
+  

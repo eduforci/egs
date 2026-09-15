@@ -113,9 +113,9 @@ export default function ListeMoyennesPage() {
         </div>
       </div>
 
-      <div className="flex justify-between text-sm mb-4">
+      <div className="text-sm mb-4 space-y-1">
         <p><strong>Coefficient :</strong> {liste.coefficient ?? '—'}</p>
-        <p><strong>Professeur :</strong> {liste.enseignant}</p>
+        <p><strong>Professeur :</strong> {liste.enseignant || '—'}</p>
       </div>
 
       <div className="overflow-x-auto">
@@ -171,5 +171,5 @@ export default function ListeMoyennesPage() {
       </button>
     </div>
   );
-      }
-          
+                             }
+            

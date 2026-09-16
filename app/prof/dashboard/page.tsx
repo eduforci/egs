@@ -189,12 +189,18 @@ export default async function ProfDashboard() {
                   </td>
                   <td className="p-3">{a.matieres?.nom}</td>
                   <td className="p-3">{a.matieres?.coefficient_defaut}</td>
-                  <td className="p-3">
+                  <td className="p-3 space-y-1">
                     <Link
                       href={`/prof/classes/${a.classes?.id}/matieres/${a.matieres?.id}/trimestre/1/liste-moyennes`}
-                      className="text-blue-600 text-xs underline"
+                      className="text-blue-600 text-xs underline block"
                     >
                       Liste des moyennes
+                    </Link>
+                    <Link
+                      href={`/prof/classes/${a.classes?.id}/liste`}
+                      className="text-blue-600 text-xs underline block"
+                    >
+                      Liste de classe
                     </Link>
                   </td>
                 </tr>
@@ -210,4 +216,5 @@ export default async function ProfDashboard() {
       </div>
     </main>
   );
-}
+          }
+      

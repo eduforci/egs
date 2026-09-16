@@ -176,19 +176,25 @@ export default async function ProfDashboard() {
                 <th className="p-3">Classe</th>
                 <th className="p-3">Matière</th>
                 <th className="p-3">Coefficient</th>
+                <th className="p-3"></th>
               </tr>
             </thead>
             <tbody>
               {affectations?.map((a: any) => (
                 <tr key={a.id} className="border-t hover:bg-neutral-50">
-                  <td className="p-0" colSpan={3}>
+                  <td className="p-3">
+                    <Link href={`/prof/classe/${a.classes?.id}/matiere/${a.matieres?.id}`}>
+                      {a.classes?.nom}
+                    </Link>
+                  </td>
+                  <td className="p-3">{a.matieres?.nom}</td>
+                  <td className="p-3">{a.matieres?.coefficient_defaut}</td>
+                  <td className="p-3">
                     <Link
-                      href={`/prof/classe/${a.classes?.id}/matiere/${a.matieres?.id}`}
-                      className="grid grid-cols-3 p-3 gap-0"
+                      href={`/prof/classes/${a.classes?.id}/matieres/${a.matieres?.id}/trimestre/1/liste-moyennes`}
+                      className="text-blue-600 text-xs underline"
                     >
-                      <span>{a.classes?.nom}</span>
-                      <span>{a.matieres?.nom}</span>
-                      <span>{a.matieres?.coefficient_defaut}</span>
+                      Liste des moyennes
                     </Link>
                   </td>
                 </tr>

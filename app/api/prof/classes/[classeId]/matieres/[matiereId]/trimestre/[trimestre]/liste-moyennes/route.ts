@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function GET(
   req: NextRequest,
@@ -27,16 +28,20 @@ export async function GET(
     .eq('id', matiereId)
     .single();
 
-  const { data: classeMatiere } = await supabase
+  // Coefficient et affectation enseignant : lecture via le client admin
+  // (contourne RLS) puisque c'est une info administrative, pas confidentielle —
+  // n'importe quel membre du personnel qui consulte cette page doit pouvoir
+  // voir quel professeur est affecté, pas seulement le professeur lui-même.
+  const admin = createAdminClient();
+
+  const { data: classeMatiere } = await admin
     .from('classes_matieres')
     .select('coefficient')
     .eq('classe_id', classeId)
     .eq('matiere_id', matiereId)
     .maybeSingle();
 
-  // L'enseignant affiché doit être celui réellement affecté à cette classe/matière,
-  // pas forcément la personne connectée (un directeur des études peut aussi consulter cette page).
-  const { data: affectation } = await supabase
+  const { data: affectation } = await admin
     .from('affectations_enseignant')
     .select('enseignant_id')
     .eq('classe_id', classeId)
@@ -45,7 +50,7 @@ export async function GET(
 
   let enseignantNom = '';
   if (affectation?.enseignant_id) {
-    const { data: enseignantProfile } = await supabase
+    const { data: enseignantProfile } = await admin
       .from('profiles')
       .select('nom, prenom')
       .eq('id', affectation.enseignant_id)
@@ -159,5 +164,5 @@ export async function GET(
     colonnesNotes: evalsNormales.map((ev) => ({ id: ev.id, libelle: ev.libelle, bareme_max: ev.bareme_max })),
     eleves: elevesAvecRang,
   });
-}
-  
+    }
+                                          

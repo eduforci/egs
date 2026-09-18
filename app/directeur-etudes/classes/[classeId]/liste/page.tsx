@@ -136,6 +136,7 @@ export default function ListeClassePage() {
         </div>
       </div>
 
+      <div className="overflow-x-auto">
       <table className="w-full text-sm border mb-4">
         <thead>
           <tr style={{ backgroundColor: '#0B3D2E', color: 'white' }}>
@@ -166,6 +167,7 @@ export default function ListeClassePage() {
           ))}
         </tbody>
       </table>
+      </div>
 
       {liste.eleves.length === 0 && (
         <p className="text-sm text-gray-500 mb-4">Aucun élève actif dans cette classe.</p>
@@ -180,5 +182,5 @@ export default function ListeClassePage() {
       </button>
     </div>
   );
-             }
-      
+}
+  

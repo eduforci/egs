@@ -71,33 +71,40 @@ export default function ListeClassePage() {
     if (liste.etablissement.telephone) doc.text(`Tél : ${liste.etablissement.telephone}`, 14, 48);
     if (liste.etablissement.email) doc.text(`Email : ${liste.etablissement.email}`, 14, 52);
 
+    const titre = `LISTE DE CLASSE — ${liste.classe.nom} (${liste.classe.niveau})`;
     doc.setFontSize(11);
+    const largeurTitre = doc.getTextWidth(titre) + 16;
+    const xCadre = (210 - largeurTitre) / 2;
     doc.setDrawColor(0);
-    doc.rect(14, 58, 182, 8);
-    doc.text(`LISTE DE CLASSE — ${liste.classe.nom} (${liste.classe.niveau})`, 105, 63.5, { align: 'center' });
+    doc.rect(xCadre, 58, largeurTitre, 8);
+    doc.text(titre, 105, 63.5, { align: 'center' });
 
     autoTable(doc, {
       startY: 70,
-      head: [['N°', 'Matricule', 'Nom et Prénoms', 'Note 1', 'Note 2', 'Note 3', 'Note 4', 'Moy.', 'Rang']],
+      head: [['N°', 'Matricule', 'Nom et Prénoms', 'Note 1', 'Note 2', 'Note 3', 'Note 4', 'Note 5', 'Note 6', 'Note 7', 'Note 8', 'Moy.', 'Rang']],
       body: liste.eleves.map((e, i) => [
         String(i + 1),
         e.matricule ?? '—',
         `${e.nom} ${e.prenom}`,
-        '', '', '', '', '', '',
+        '', '', '', '', '', '', '', '', '', '',
       ]),
-      styles: { fontSize: 9, lineWidth: 0.1, lineColor: [0, 0, 0] },
-      headStyles: { fillColor: [10, 30, 70], lineWidth: 0.1, lineColor: [0, 0, 0] },
+      styles: { fontSize: 8, lineWidth: 0.1, lineColor: [0, 0, 0] },
+      headStyles: { fillColor: [10, 30, 70], fontSize: 7, lineWidth: 0.1, lineColor: [0, 0, 0] },
       theme: 'grid',
       columnStyles: {
-        0: { cellWidth: 10 },
-        1: { cellWidth: 25 },
-        2: { cellWidth: 45 },
-        3: { cellWidth: 15 },
-        4: { cellWidth: 15 },
-        5: { cellWidth: 15 },
-        6: { cellWidth: 15 },
-        7: { cellWidth: 15 },
-        8: { cellWidth: 15 },
+        0: { cellWidth: 8 },
+        1: { cellWidth: 20 },
+        2: { cellWidth: 32 },
+        3: { cellWidth: 10 },
+        4: { cellWidth: 10 },
+        5: { cellWidth: 10 },
+        6: { cellWidth: 10 },
+        7: { cellWidth: 10 },
+        8: { cellWidth: 10 },
+        9: { cellWidth: 10 },
+        10: { cellWidth: 10 },
+        11: { cellWidth: 12 },
+        12: { cellWidth: 12 },
       },
     });
 
@@ -132,8 +139,10 @@ export default function ListeClassePage() {
           {liste.etablissement.email && <p>Email : {liste.etablissement.email}</p>}
         </div>
 
-        <div className="border-2 border-black text-center py-1.5 font-bold" style={{ color: '#0B3D2E' }}>
-          LISTE DE CLASSE — {liste.classe.nom} ({liste.classe.niveau})
+        <div className="flex justify-center">
+          <div className="border-2 border-black text-center py-1.5 px-6 font-bold inline-block" style={{ color: '#0B3D2E' }}>
+            LISTE DE CLASSE — {liste.classe.nom} ({liste.classe.niveau})
+          </div>
         </div>
       </div>
 
@@ -148,6 +157,10 @@ export default function ListeClassePage() {
             <th className="border p-1 w-14">Note 2</th>
             <th className="border p-1 w-14">Note 3</th>
             <th className="border p-1 w-14">Note 4</th>
+            <th className="border p-1 w-14">Note 5</th>
+            <th className="border p-1 w-14">Note 6</th>
+            <th className="border p-1 w-14">Note 7</th>
+            <th className="border p-1 w-14">Note 8</th>
             <th className="border p-1 w-14">Moy.</th>
             <th className="border p-1 w-14">Rang</th>
           </tr>
@@ -158,6 +171,10 @@ export default function ListeClassePage() {
               <td className="border p-1 text-center">{i + 1}</td>
               <td className="border p-1 font-mono text-xs">{e.matricule ?? '—'}</td>
               <td className="border p-1">{e.nom} {e.prenom}</td>
+              <td className="border p-1"></td>
+              <td className="border p-1"></td>
+              <td className="border p-1"></td>
+              <td className="border p-1"></td>
               <td className="border p-1"></td>
               <td className="border p-1"></td>
               <td className="border p-1"></td>
@@ -183,5 +200,5 @@ export default function ListeClassePage() {
       </button>
     </div>
   );
-}
-  
+      }
+      

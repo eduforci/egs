@@ -143,12 +143,12 @@ export default function ListeClassePage() {
             <th className="border p-1 w-10">N°</th>
             <th className="border p-1 text-left">Matricule</th>
             <th className="border p-1 text-left">Nom et Prénoms</th>
-            <th className="border p-1 w-8"></th>
-            <th className="border p-1 w-8"></th>
-            <th className="border p-1 w-8"></th>
-            <th className="border p-1 w-8"></th>
-            <th className="border p-1 w-8"></th>
-            <th className="border p-1 w-8"></th>
+            <th className="border p-1 w-14">Note 1</th>
+            <th className="border p-1 w-14">Note 2</th>
+            <th className="border p-1 w-14">Note 3</th>
+            <th className="border p-1 w-14">Note 4</th>
+            <th className="border p-1 w-14">Moy.</th>
+            <th className="border p-1 w-14">Rang</th>
           </tr>
         </thead>
         <tbody>
@@ -183,4 +183,3 @@ export default function ListeClassePage() {
     </div>
   );
 }
-  

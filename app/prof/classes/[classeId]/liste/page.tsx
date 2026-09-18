@@ -78,15 +78,16 @@ export default function ListeClassePage() {
 
     autoTable(doc, {
       startY: 70,
-      head: [['N°', 'Matricule', 'Nom et Prénoms', '', '', '', '', '', '']],
+      head: [['N°', 'Matricule', 'Nom et Prénoms', 'Note 1', 'Note 2', 'Note 3', 'Note 4', 'Moy.', 'Rang']],
       body: liste.eleves.map((e, i) => [
         String(i + 1),
         e.matricule ?? '—',
         `${e.nom} ${e.prenom}`,
         '', '', '', '', '', '',
       ]),
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [10, 30, 70] },
+      styles: { fontSize: 9, lineWidth: 0.1, lineColor: [0, 0, 0] },
+      headStyles: { fillColor: [10, 30, 70], lineWidth: 0.1, lineColor: [0, 0, 0] },
+      theme: 'grid',
       columnStyles: {
         0: { cellWidth: 10 },
         1: { cellWidth: 25 },
@@ -182,5 +183,5 @@ export default function ListeClassePage() {
       </button>
     </div>
   );
-                                            }
-      
+  }
+        

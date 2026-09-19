@@ -11,6 +11,15 @@ function genererMotDePasseTemporaire() {
   return out;
 }
 
+function determinerCycle(niveau: string): string | null {
+  const n = niveau.trim().toLowerCase();
+  if (/^(6e|6ème|5e|5ème|4e|4ème|3e|3ème)/.test(n)) return "college";
+  if (/^(seconde|première|premiere|terminale|tle|1ere|1ère)/.test(n)) return "lycee";
+  if (/^(cp|ce|cm)/.test(n)) return "primaire";
+  if (/section/.test(n)) return "maternelle";
+  return null;
+}
+
 type LigneImport = {
   nom: string;
   prenom: string;
@@ -116,6 +125,7 @@ export async function POST(request: NextRequest) {
         etablissement_id: etablissementId,
         nom: `${niveau.trim()} A`,
         niveau: niveau.trim(),
+        cycle: determinerCycle(niveau),
         annee_scolaire: etab?.annee_scolaire_active ?? "2025-2026",
       })
       .select("id")

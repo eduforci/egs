@@ -108,7 +108,7 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
     <div className="min-h-screen bg-neutral-50 flex">
       {/* SIDEBAR DESKTOP (visible md+) / DRAWER MOBILE (toggle) */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-64 bg-neutral-900 text-white transform transition-transform duration-200 md:translate-x-0 md:static md:flex md:flex-col ${
+        className={`fixed inset-y-0 left-0 z-40 w-64 bg-neutral-900 text-white flex flex-col transform transition-transform duration-200 md:translate-x-0 md:static ${
           menuOuvert ? 'translate-x-0' : '-translate-x-full'
         }`}
       >

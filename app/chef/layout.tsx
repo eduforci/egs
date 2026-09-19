@@ -122,7 +122,7 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
           </div>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-5">
+        <nav className="flex-1 overflow-y-auto overscroll-contain py-4 px-2 space-y-5">
           {NAV_GROUPS.map((groupe) => (
             <div key={groupe.titre}>
               <div className="px-3 mb-1 text-[10px] font-semibold text-neutral-500 tracking-wider">
@@ -164,7 +164,7 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
 
       {menuOuvert && (
         <div
-          className="fixed inset-0 bg-black/40 z-30 md:hidden"
+          className="fixed inset-0 bg-black/40 z-30 md:hidden overscroll-none touch-none"
           onClick={() => setMenuOuvert(false)}
         />
       )}
@@ -205,3 +205,4 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
     </div>
   );
 }
+  

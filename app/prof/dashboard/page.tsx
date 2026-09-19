@@ -177,6 +177,7 @@ export default async function ProfDashboard() {
                 <th className="p-3">Matière</th>
                 <th className="p-3">Coefficient</th>
                 <th className="p-3"></th>
+                <th className="p-3"></th>
               </tr>
             </thead>
             <tbody>
@@ -189,16 +190,18 @@ export default async function ProfDashboard() {
                   </td>
                   <td className="p-3">{a.matieres?.nom}</td>
                   <td className="p-3">{a.matieres?.coefficient_defaut}</td>
-                  <td className="p-3 space-y-1">
+                  <td className="p-3">
                     <Link
                       href={`/prof/classes/${a.classes?.id}/matieres/${a.matieres?.id}/trimestre/1/liste-moyennes`}
-                      className="text-blue-600 text-xs underline block"
+                      className="inline-block border rounded-md px-2 py-1 text-xs text-blue-700 hover:bg-blue-50"
                     >
                       Liste des moyennes
                     </Link>
+                  </td>
+                  <td className="p-3">
                     <Link
                       href={`/prof/classes/${a.classes?.id}/liste`}
-                      className="text-blue-600 text-xs underline block"
+                      className="inline-block border rounded-md px-2 py-1 text-xs text-blue-700 hover:bg-blue-50"
                     >
                       Liste de classe
                     </Link>
@@ -216,5 +219,5 @@ export default async function ProfDashboard() {
       </div>
     </main>
   );
-          }
-      
+      }
+          

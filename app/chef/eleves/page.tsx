@@ -148,7 +148,12 @@ export default function ListeElevesPage() {
     }
   }, [supabase, etablissementId, anneeChoisie, estAnneeActive]);
 
-  useEffect(() => { charger(); }, [charger]);
+  useEffect(() => {
+  chargerAnnees().catch((e) => {
+    setError(e.message || "Erreur lors du chargement des années");
+    setLoading(false);
+  });
+}, [chargerAnnees]);
 
   const filtres = eleves.filter((e) => {
     const q = recherche.toLowerCase();

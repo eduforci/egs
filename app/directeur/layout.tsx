@@ -13,20 +13,20 @@ const NAV_GROUPS: NavGroup[] = [
     titre: 'TABLEAU DE BORD',
     items: [{ label: 'Accueil', href: '/directeur/dashboard', icon: '🏠' }],
   },
-  
-    {
+  {
     titre: 'GESTION',
     items: [
       { label: 'Classes', href: '/chef/classes', icon: '🏫' },
       { label: 'Élèves', href: '/chef/eleves', icon: '🎓' },
       { label: 'Enseignants', href: '/chef/enseignants', icon: '🧑‍🏫' },
-{ label: 'Répartir en classes', href: '/chef/eleves/repartition', icon: '🔀' },
+      { label: 'Répartir en classes', href: '/chef/eleves/repartition', icon: '🔀' },
       { label: 'Personnel', href: '/chef/personnel', icon: '🧑‍💼' },
+      { label: 'Emploi du temps', href: '/direction/emploi-du-temps', icon: '📅' },
+      { label: 'Grille horaire', href: '/direction/emploi-du-temps/grille', icon: '⏰' },
       { label: 'Examens', href: '/chef/examens', icon: '📝' },
       { label: 'Bulletins', href: '/chef/bulletins', icon: '📄' },
     ],
   },
-    
   {
     titre: 'COMMUNICATION SMS',
     items: [
@@ -81,7 +81,7 @@ export default function DirecteurLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-screen bg-neutral-50 flex">
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-64 bg-neutral-900 text-white transform transition-transform duration-200 md:translate-x-0 md:static md:flex md:flex-col ${
+        className={`fixed inset-y-0 left-0 z-40 w-64 bg-neutral-900 text-white flex flex-col transform transition-transform duration-200 md:translate-x-0 md:static ${
           menuOuvert ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -95,7 +95,7 @@ export default function DirecteurLayout({ children }: { children: React.ReactNod
           </div>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-5">
+        <nav className="flex-1 overflow-y-auto overscroll-contain py-4 px-2 space-y-5">
           {NAV_GROUPS.map((groupe) => (
             <div key={groupe.titre}>
               <div className="px-3 mb-1 text-[10px] font-semibold text-neutral-500 tracking-wider">
@@ -137,7 +137,7 @@ export default function DirecteurLayout({ children }: { children: React.ReactNod
 
       {menuOuvert && (
         <div
-          className="fixed inset-0 bg-black/40 z-30 md:hidden"
+          className="fixed inset-0 bg-black/40 z-30 md:hidden overscroll-none touch-none"
           onClick={() => setMenuOuvert(false)}
         />
       )}
@@ -161,4 +161,4 @@ export default function DirecteurLayout({ children }: { children: React.ReactNod
     </div>
   );
         }
-              
+          

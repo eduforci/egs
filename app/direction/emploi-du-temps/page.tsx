@@ -27,6 +27,11 @@ type Etablissement = {
   code_etablissement: string | null;
   dren: string | null;
   type_etablissement: string | null;
+  logo_url: string | null;
+  armoirie_url: string | null;
+  devise: string | null;
+  chef_etablissement_nom: string | null;
+  chef_etablissement_titre: string | null;
 };
 type ProfPrincipal = { nom: string; prenom: string; specialite: string | null };
 
@@ -91,7 +96,7 @@ function EmploiDuTempsContenu() {
 
       const { data: etab } = await supabase
         .from('etablissements')
-        .select('nom, adresse, telephone, code_etablissement, dren, type_etablissement')
+        .select('nom, adresse, telephone, code_etablissement, dren, type_etablissement, logo_url, armoirie_url, devise, chef_etablissement_nom, chef_etablissement_titre')
         .eq('id', profil.etablissement_id)
         .single();
       setEtablissement(etab || null);
@@ -570,12 +575,11 @@ function EmploiDuTempsContenu() {
 
                 <div>
                   <label className="block text-sm font-medium mb-1">Matière</label>
-                  <select
+          <select
                     value={form.matiere_id}
                     onChange={(e) => setForm({ ...form, matiere_id: e.target.value })}
                     className="w-full border rounded-lg p-2"
                   >
-                    
                     <option value="">-- Choisir --</option>
                     {matieres.map((m) => (
                       <option key={m.id} value={m.id}>{m.nom}</option>
@@ -626,9 +630,27 @@ function EmploiDuTempsContenu() {
       {/* APERCU IMPRIMABLE - format officiel "Emploi du temps classe" */}
       {classeId && classeSelectionnee && periodes.length > 0 && etablissement && (
         <div className="space-y-3 border-t pt-4">
-          <div className="text-center text-xs font-bold leading-tight">
-            <div>MINISTÈRE DE L'ÉDUCATION NATIONALE ET DE L'ALPHABÉTISATION</div>
-            {etablissement.dren && <div>DRENA {etablissement.dren.toUpperCase()}</div>}
+          <div className="flex justify-between items-start text-[10px] font-bold leading-tight">
+            <div className="flex items-start gap-2">
+              {etablissement.logo_url && (
+                <img src={etablissement.logo_url} alt="Logo établissement" className="w-14 h-14 object-contain shrink-0" />
+              )}
+              <div>
+                <div>MINISTÈRE DE L'ÉDUCATION NATIONALE,</div>
+                <div>DE L'ALPHABÉTISATION ET DE</div>
+                <div>L'ENSEIGNEMENT TECHNIQUE</div>
+                {etablissement.dren && <div>DRENA {etablissement.dren.toUpperCase()}</div>}
+              </div>
+            </div>
+            <div className="flex items-start gap-2 text-right">
+              <div>
+                <div>RÉPUBLIQUE DE CÔTE D'IVOIRE</div>
+                <div>{etablissement.devise || 'Union - Discipline - Travail'}</div>
+              </div>
+              {etablissement.armoirie_url && (
+                <img src={etablissement.armoirie_url} alt="Armoiries" className="w-14 h-14 object-contain shrink-0" />
+              )}
+            </div>
           </div>
 
           <div className="flex justify-between items-start text-sm border-b pb-2">
@@ -701,6 +723,22 @@ function EmploiDuTempsContenu() {
               </tbody>
             </table>
           </div>
+
+          <div className="flex justify-between items-end text-xs pt-8">
+            <div className="w-1/3"></div>
+            <div className="w-1/3 text-center text-[9px] leading-tight text-gray-600">
+              <div>MENA | DESPS | EGS</div>
+              <div>Page 1 sur 1</div>
+            </div>
+            <div className="w-1/3 text-right">
+              {etablissement.chef_etablissement_nom && (
+                <>
+                  <div className="font-bold">{etablissement.chef_etablissement_nom}</div>
+                  <div className="text-[10px]">{etablissement.chef_etablissement_titre || "Chef d'Établissement"}</div>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -747,5 +785,5 @@ export default function EmploiDuTempsDirectionPage() {
       <EmploiDuTempsContenu />
     </Suspense>
   );
-      }
-                                                 
+                  }
+      

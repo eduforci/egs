@@ -15,7 +15,7 @@ type Creneau = {
   heure_fin: string;
   salle: string | null;
   matiere_id: string;
-  enseignant_id: string;
+  enseignant_id: string | null;
   periode_id: string | null;
   matieres?: { nom: string };
   profiles?: { nom: string; prenom: string };
@@ -53,6 +53,7 @@ function EmploiDuTempsContenu() {
   const searchParams = useSearchParams();
 
   const [classes, setClasses] = useState<Classe[]>([]);
+  const [etablissementId, setEtablissementId] = useState('');
   const [classeId, setClasseId] = useState(searchParams.get('classe') || '');
   const [matieres, setMatieres] = useState<Matiere[]>([]);
   const [enseignants, setEnseignants] = useState<Enseignant[]>([]);
@@ -65,6 +66,10 @@ function EmploiDuTempsContenu() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const [ppEditing, setPpEditing] = useState(false);
+  const [ppSelectionId, setPpSelectionId] = useState('');
+  const [ppSaving, setPpSaving] = useState(false);
 
   const [form, setForm] = useState(FORM_VIDE);
 
@@ -82,6 +87,7 @@ function EmploiDuTempsContenu() {
         .single();
 
       if (!profil?.etablissement_id) return;
+      setEtablissementId(profil.etablissement_id);
 
       const { data: etab } = await supabase
         .from('etablissements')
@@ -104,6 +110,32 @@ function EmploiDuTempsContenu() {
     };
     load();
   }, [supabase]);
+
+  const chargerProfPrincipal = useCallback(async () => {
+    if (!classeId) return;
+    const { data: ppData } = await supabase
+      .from('complement_service')
+      .select('enseignant_id')
+      .eq('classe_id', classeId)
+      .eq('type', 'PP')
+      .maybeSingle();
+
+    if (ppData?.enseignant_id) {
+      const { data: ppProfil } = await supabase
+        .from('profiles')
+        .select('nom, prenom')
+        .eq('id', ppData.enseignant_id)
+        .single();
+      const { data: ppEns } = await supabase
+        .from('enseignants')
+        .select('specialite')
+        .eq('id', ppData.enseignant_id)
+        .single();
+      setProfPrincipal(ppProfil ? { nom: ppProfil.nom, prenom: ppProfil.prenom, specialite: ppEns?.specialite || null } : null);
+    } else {
+      setProfPrincipal(null);
+    }
+  }, [classeId, supabase]);
 
   useEffect(() => {
     const loadRelated = async () => {
@@ -139,29 +171,7 @@ function EmploiDuTempsContenu() {
         setEnseignants([]);
       }
 
-      // Professeur principal de la classe (via complement_service)
-      const { data: ppData } = await supabase
-        .from('complement_service')
-        .select('enseignant_id')
-        .eq('classe_id', classeId)
-        .eq('type', 'PP')
-        .maybeSingle();
-
-      if (ppData?.enseignant_id) {
-        const { data: ppProfil } = await supabase
-          .from('profiles')
-          .select('nom, prenom')
-          .eq('id', ppData.enseignant_id)
-          .single();
-        const { data: ppEns } = await supabase
-          .from('enseignants')
-          .select('specialite')
-          .eq('id', ppData.enseignant_id)
-          .single();
-        setProfPrincipal(ppProfil ? { nom: ppProfil.nom, prenom: ppProfil.prenom, specialite: ppEns?.specialite || null } : null);
-      } else {
-        setProfPrincipal(null);
-      }
+      await chargerProfPrincipal();
 
       if (classeSelectionnee.cycle && profil?.etablissement_id) {
         const { data: periodesData, error: periodesError } = await supabase
@@ -181,7 +191,7 @@ function EmploiDuTempsContenu() {
       }
     };
     loadRelated();
-  }, [classeId, classeSelectionnee, supabase]);
+  }, [classeId, classeSelectionnee, supabase, chargerProfPrincipal]);
 
   const chargerCreneaux = useCallback(async () => {
     if (!classeId) return;
@@ -218,7 +228,7 @@ function EmploiDuTempsContenu() {
       jour: c.jour,
       periode_id: c.periode_id || '',
       matiere_id: c.matiere_id,
-      enseignant_id: c.enseignant_id,
+      enseignant_id: c.enseignant_id || '',
       salle: c.salle || '',
     });
     setShowForm(true);
@@ -235,8 +245,8 @@ function EmploiDuTempsContenu() {
     setSaving(true);
     setMessage(null);
 
-    if (!form.matiere_id || !form.enseignant_id || !form.periode_id) {
-      setMessage({ type: 'error', text: 'Sélectionnez une période, une matière et un enseignant.' });
+    if (!form.matiere_id || !form.periode_id) {
+      setMessage({ type: 'error', text: 'Sélectionnez une période et une matière.' });
       setSaving(false);
       return;
     }
@@ -248,18 +258,20 @@ function EmploiDuTempsContenu() {
       return;
     }
 
-    const { data: conflitEns } = await supabase.rpc('enseignant_en_conflit', {
-      p_enseignant_id: form.enseignant_id,
-      p_jour: form.jour,
-      p_heure_debut: periode.heure_debut,
-      p_heure_fin: periode.heure_fin,
-      p_exclude_id: editingId,
-    });
+    if (form.enseignant_id) {
+      const { data: conflitEns } = await supabase.rpc('enseignant_en_conflit', {
+        p_enseignant_id: form.enseignant_id,
+        p_jour: form.jour,
+        p_heure_debut: periode.heure_debut,
+        p_heure_fin: periode.heure_fin,
+        p_exclude_id: editingId,
+      });
 
-    if (conflitEns) {
-      setMessage({ type: 'error', text: "Cet enseignant a déjà un cours sur ce créneau." });
-      setSaving(false);
-      return;
+      if (conflitEns) {
+        setMessage({ type: 'error', text: "Cet enseignant a déjà un cours sur ce créneau." });
+        setSaving(false);
+        return;
+      }
     }
 
     const { data: conflitClasse } = await supabase.rpc('classe_en_conflit', {
@@ -281,7 +293,7 @@ function EmploiDuTempsContenu() {
         .from('emploi_du_temps')
         .update({
           matiere_id: form.matiere_id,
-          enseignant_id: form.enseignant_id,
+          enseignant_id: form.enseignant_id || null,
           jour: form.jour,
           periode_id: form.periode_id,
           heure_debut: periode.heure_debut,
@@ -308,7 +320,7 @@ function EmploiDuTempsContenu() {
         etablissement_id: profil?.etablissement_id,
         classe_id: classeId,
         matiere_id: form.matiere_id,
-        enseignant_id: form.enseignant_id,
+        enseignant_id: form.enseignant_id || null,
         jour: form.jour,
         periode_id: form.periode_id,
         heure_debut: periode.heure_debut,
@@ -339,6 +351,55 @@ function EmploiDuTempsContenu() {
     }
     if (editingId === id) annulerForm();
     chargerCreneaux();
+  };
+
+  const ouvrirEditionPP = () => {
+    setPpSelectionId('');
+    setPpEditing(true);
+    setMessage(null);
+  };
+
+  const enregistrerProfPrincipal = async () => {
+    if (ppSelectionId && (!etablissementId || !classeSelectionnee?.annee_scolaire)) {
+      setMessage({ type: 'error', text: "Impossible d'enregistrer : l'année scolaire de la classe n'est pas définie." });
+      return;
+    }
+
+    setPpSaving(true);
+    setMessage(null);
+
+    const { error: errDelete } = await supabase
+      .from('complement_service')
+      .delete()
+      .eq('classe_id', classeId)
+      .eq('type', 'PP');
+
+    if (errDelete) {
+      setMessage({ type: 'error', text: 'Erreur professeur principal: ' + errDelete.message });
+      setPpSaving(false);
+      return;
+    }
+
+    if (ppSelectionId) {
+      const { error: errInsert } = await supabase.from('complement_service').insert({
+        etablissement_id: etablissementId,
+        classe_id: classeId,
+        enseignant_id: ppSelectionId,
+        type: 'PP',
+        annee_scolaire: classeSelectionnee?.annee_scolaire,
+      });
+
+      if (errInsert) {
+        setMessage({ type: 'error', text: 'Erreur professeur principal: ' + errInsert.message });
+        setPpSaving(false);
+        return;
+      }
+    }
+
+    await chargerProfPrincipal();
+    setPpEditing(false);
+    setPpSaving(false);
+    setMessage({ type: 'success', text: 'Professeur principal mis à jour.' });
   };
 
   const trouverCreneau = (jour: string, heureDebut: string, heureFin: string) => {
@@ -380,7 +441,7 @@ function EmploiDuTempsContenu() {
           <label className="block text-sm font-medium mb-1">Classe</label>
           <select
             value={classeId}
-            onChange={(e) => { setClasseId(e.target.value); annulerForm(); }}
+            onChange={(e) => { setClasseId(e.target.value); annulerForm(); setPpEditing(false); }}
             className="w-full border rounded-lg p-2"
           >
             <option value="">-- Sélectionner une classe --</option>
@@ -393,6 +454,48 @@ function EmploiDuTempsContenu() {
         {message && (
           <div className={`p-3 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
             {message.text}
+          </div>
+        )}
+
+        {classeId && enseignants.length > 0 && (
+          <div className="border rounded-lg p-3 bg-gray-50 space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium">Professeur principal</span>
+              {!ppEditing && (
+                <button onClick={ouvrirEditionPP} className="text-sm text-blue-600">
+                  {profPrincipal ? 'Modifier' : 'Désigner'}
+                </button>
+              )}
+            </div>
+            {!ppEditing && (
+              <div className="text-sm text-gray-600">
+                {profPrincipal ? `${profPrincipal.nom} ${profPrincipal.prenom}` : 'Non désigné'}
+              </div>
+            )}
+            {ppEditing && (
+              <div className="space-y-2">
+                <select
+                  value={ppSelectionId}
+                  onChange={(e) => setPpSelectionId(e.target.value)}
+                  className="w-full border rounded-lg p-2"
+                >
+                  <option value="">-- Aucun --</option>
+                  {enseignants.map((e) => (
+                    <option key={e.id} value={e.id}>{e.nom} {e.prenom}</option>
+                  ))}
+                </select>
+                <div className="flex gap-2">
+                  <button
+                    onClick={enregistrerProfPrincipal}
+                    disabled={ppSaving}
+                    className="flex-1 bg-green-600 text-white py-2 rounded-lg text-sm disabled:opacity-50"
+                  >
+                    {ppSaving ? 'Enregistrement...' : 'Enregistrer'}
+                  </button>
+                  <button onClick={() => setPpEditing(false)} className="flex-1 border py-2 rounded-lg text-sm">Annuler</button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -472,6 +575,7 @@ function EmploiDuTempsContenu() {
                     onChange={(e) => setForm({ ...form, matiere_id: e.target.value })}
                     className="w-full border rounded-lg p-2"
                   >
+                    
                     <option value="">-- Choisir --</option>
                     {matieres.map((m) => (
                       <option key={m.id} value={m.id}>{m.nom}</option>
@@ -480,13 +584,13 @@ function EmploiDuTempsContenu() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Enseignant</label>
+                  <label className="block text-sm font-medium mb-1">Enseignant (optionnel)</label>
                   <select
                     value={form.enseignant_id}
                     onChange={(e) => setForm({ ...form, enseignant_id: e.target.value })}
                     className="w-full border rounded-lg p-2"
                   >
-                    <option value="">-- Choisir --</option>
+                    <option value="">-- Aucun --</option>
                     {enseignants.map((e) => (
                       <option key={e.id} value={e.id}>{e.nom} {e.prenom}</option>
                     ))}
@@ -552,7 +656,7 @@ function EmploiDuTempsContenu() {
           </div>
           <div className="text-sm">
             <strong>NOMBRE HEURES DE COURS PAR SEMAINE =</strong> {totalHeuresSemaine}H
-    </div>
+          </div>
 
           <div className="overflow-x-auto">
             <table className="edt-table w-full border-collapse">
@@ -643,4 +747,5 @@ export default function EmploiDuTempsDirectionPage() {
       <EmploiDuTempsContenu />
     </Suspense>
   );
-                            }
+      }
+                                                 

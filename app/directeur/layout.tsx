@@ -20,6 +20,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Élèves', href: '/chef/eleves', icon: '🎓' },
       { label: 'Enseignants', href: '/chef/enseignants', icon: '🧑‍🏫' },
       { label: 'Répartir en classes', href: '/chef/eleves/repartition', icon: '🔀' },
+      { label: 'Parents', href: '/chef/parents', icon: '👨‍👩‍👧' },
       { label: 'Personnel', href: '/chef/personnel', icon: '🧑‍💼' },
       { label: 'Emploi du temps', href: '/direction/emploi-du-temps', icon: '📅' },
       { label: 'Grille horaire', href: '/direction/emploi-du-temps/grille', icon: '⏰' },
@@ -29,15 +30,35 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    titre: 'FINANCES',
+    items: [
+      { label: 'Comptabilité', href: '/chef/comptabilite', icon: '💰' },
+    ],
+  },
+  {
     titre: 'COMMUNICATION SMS',
     items: [
       { label: 'Message libre', href: '/directeur/sms/message', icon: '💬' },
       { label: 'Relances impayés', href: '/directeur/sms/relances', icon: '📨' },
+      { label: 'Messagerie', href: '/direction/messagerie', icon: '💬' },
     ],
   },
   {
     titre: 'POINTAGE',
-    items: [{ label: 'Badger', href: '/pointage', icon: '👆' }],
+    items: [
+      { label: 'Badger', href: '/pointage', icon: '👆' },
+      { label: 'Configuration', href: '/direction/pointage/configuration', icon: '⚙️' },
+      { label: 'Suivi du jour', href: '/direction/pointage/suivi', icon: '📋' },
+      { label: 'Justifications', href: '/direction/pointage/justifications', icon: '✅' },
+      { label: 'Rapports', href: '/direction/pointage/rapports', icon: '📊' },
+    ],
+  },
+  {
+    titre: 'DOCUMENTS',
+    items: [
+      { label: 'Documents élèves', href: '/direction/documents', icon: '📁' },
+      { label: 'Documents enseignants', href: '/direction/documents-enseignants', icon: '📁' },
+    ],
   },
 ];
 

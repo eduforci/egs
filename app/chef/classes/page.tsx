@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
@@ -32,6 +31,18 @@ const CYCLES = [
   { value: 'college', label: 'Collège' },
   { value: 'lycee', label: 'Lycée' },
 ];
+
+function inferCycle(niveauBrut: string): string {
+  const n = niveauBrut.trim().toLowerCase();
+  if (!n) return '';
+
+  if (/(6\s*e|6ème|5\s*e|5ème|4\s*e|4ème|3\s*e|3ème)/.test(n)) return 'college';
+  if (/(seconde|premi[eè]re|terminale|tle)/.test(n)) return 'lycee';
+  if (/(cp|ce1|ce2|cm1|cm2)/.test(n)) return 'primaire';
+  if (/(petite section|moyenne section|grande section|maternelle)/.test(n)) return 'maternelle';
+
+  return '';
+}
 
 export default function ClassesPage() {
   const supabase = createClient();
@@ -124,6 +135,14 @@ export default function ClassesPage() {
       [conduite.id]: { checked: true, coefficient: 1 },
     }));
   }, [cycle, matieresEtablissement]);
+
+  function handleNiveauChange(valeur: string) {
+    setNiveau(valeur);
+    const cycleDeduit = inferCycle(valeur);
+    if (cycleDeduit) {
+      setCycle(cycleDeduit);
+    }
+  }
 
   function toggleMatiere(matiereId: string) {
     setSelection((prev) => ({
@@ -336,7 +355,7 @@ export default function ClassesPage() {
             <input
               type="text"
               value={niveau}
-              onChange={(e) => setNiveau(e.target.value)}
+              onChange={(e) => handleNiveauChange(e.target.value)}
               placeholder="Niveau (ex: 6ème)"
               className="w-full border rounded-md px-3 py-2 text-sm"
             />
@@ -424,4 +443,4 @@ export default function ClassesPage() {
       </div>
     </main>
   );
-              }
+        }

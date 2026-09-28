@@ -49,6 +49,11 @@ const CATEGORIES: { value: Evaluation["categorie"]; label: string; bareme_max: n
   { value: "sur20_coef2", label: "Note sur 20 (coefficient 2 — devoir)", bareme_max: 20, coefficient: 2, type_note: "composition" },
 ];
 
+// Lecture tolérante : accepte "7,5" et "7.5"
+function parseNote(s: string) {
+  return parseFloat(String(s).trim().replace(",", "."));
+}
+
 const LIBELLES_FRANCAIS_COLLEGE = ["CF", "Orth.", "EO"];
 
 function libelleColonne(ev: Evaluation) {
@@ -107,7 +112,7 @@ export default function NotesTable({
     const ligne: Record<string, string> = { appreciation: "" };
     evaluationsExistantes.forEach((ev) => {
       const note = notesExistantes.find((n) => n.eleve_id === e.id && n.evaluation_id === ev.id);
-      ligne[ev.id] = note ? String(note.valeur) : "";
+      ligne[ev.id] = note && note.valeur !== null && note.valeur !== undefined ? String(note.valeur) : "";
     });
     const appreciation = observationsExistantes.find((o) => o.eleve_id === e.id);
     if (appreciation) ligne.appreciation = appreciation.texte;
@@ -117,7 +122,7 @@ export default function NotesTable({
   const initialBonus: Record<string, string> = {};
   eleves.forEach((e) => {
     const b = bonusExistants.find((x) => x.eleve_id === e.id);
-    initialBonus[e.id] = b ? String(b.valeur) : "";
+    initialBonus[e.id] = b && b.valeur !== null && b.valeur !== undefined ? String(b.valeur) : "";
   });
 
   const [valeurs, setValeurs] = useState(initial);
@@ -153,7 +158,7 @@ export default function NotesTable({
     const termes: { val: number; poids: number }[] = [];
 
     evaluationsExistantes.forEach((ev) => {
-      const brut = parseFloat(v[ev.id]);
+      const brut = parseNote(v[ev.id]);
       if (!isNaN(brut)) {
         const surVingt = brut * (20 / ev.bareme_max);
         termes.push({ val: surVingt, poids: ev.coefficient });
@@ -165,7 +170,7 @@ export default function NotesTable({
     const somme = termes.reduce((a, t) => a + t.val * t.poids, 0);
     const base = somme / poidsTotal;
 
-    const bonusBrut = parseFloat(bonus[eleveId]);
+    const bonusBrut = parseNote(bonus[eleveId]);
     const bonusValeur = isNaN(bonusBrut) ? 0 : bonusBrut;
 
     return base + bonusValeur;
@@ -317,7 +322,7 @@ export default function NotesTable({
         const saisie = v[ev.id];
         if (saisie === "") continue;
 
-        const nombre = parseFloat(saisie);
+        const nombre = parseNote(saisie);
         if (isNaN(nombre)) {
           erreurs.push(`${nomComplet} — ${libelleColonne(ev)} : valeur invalide.`);
         } else if (nombre < 0 || nombre > ev.bareme_max) {
@@ -329,7 +334,7 @@ export default function NotesTable({
 
       const bonusSaisi = bonus[eleve.id];
       if (bonusSaisi !== "") {
-        const nombreBonus = parseFloat(bonusSaisi);
+        const nombreBonus = parseNote(bonusSaisi);
         if (isNaN(nombreBonus) || nombreBonus < -5 || nombreBonus > 5) {
           erreurs.push(`${nomComplet} — Bonus : doit être entre -5 et +5.`);
         }
@@ -373,8 +378,8 @@ export default function NotesTable({
           trimestre: Number(trimestre),
           annee_scolaire: anneeScolaire,
           type: ev.type_note,
-          ancienne_valeur: ancienne === "" ? null : parseFloat(ancienne),
-          nouvelle_valeur: nouvelle === "" ? null : parseFloat(nouvelle),
+          ancienne_valeur: ancienne === "" ? null : parseNote(ancienne),
+          nouvelle_valeur: nouvelle === "" ? null : parseNote(nouvelle),
           modifie_par: enseignantId,
         });
 
@@ -389,7 +394,7 @@ export default function NotesTable({
             enseignant_id: enseignantId,
             evaluation_id: ev.id,
             type: ev.type_note,
-            valeur: parseFloat(nouvelle),
+            valeur: parseNote(nouvelle),
             coefficient: ev.coefficient,
             bareme_max: ev.bareme_max,
             trimestre,
@@ -418,7 +423,7 @@ export default function NotesTable({
             matiere_id: matiereId,
             trimestre: Number(trimestre),
             annee_scolaire: anneeScolaire,
-            valeur: parseFloat(bonus[eleve.id]),
+            valeur: parseNote(bonus[eleve.id]),
             enseignant_id: enseignantId,
             updated_at: new Date().toISOString(),
           });
@@ -769,7 +774,7 @@ export default function NotesTable({
                       {evaluationsExistantes.map((ev) => {
                         const modifiable = celluleModifiable(e.id, ev.id);
                         const valeurActuelle = valeurs[e.id][ev.id];
-                        const nombre = parseFloat(valeurActuelle);
+                        const nombre = parseNote(valeurActuelle);
                         const horsBareme =
                           valeurActuelle !== "" &&
                           !isNaN(nombre) &&
@@ -777,17 +782,17 @@ export default function NotesTable({
                         return (
                           <td key={ev.id} className="p-3">
                             <input
-                              type="number"
-                              min={0}
-                              max={ev.bareme_max}
-                              step={0.25}
+                              type="text"
+                              inputMode="decimal"
                               disabled={verrouille || !modifiable}
                               value={valeurActuelle}
-                              onChange={(evt) =>
+                              onChange={(evt) => {
+                                const propre = evt.target.value.replace(",", ".").replace(/[^0-9.]/g, "");
                                 setValeurs((prev) => ({
                                   ...prev,
-                                  [e.id]: { ...prev[e.id], [ev.id]: evt.target.value }, }))
-                                 }
+                                  [e.id]: { ...prev[e.id], [ev.id]: propre },
+                                }));
+                              }}
                               placeholder="—"
                               className={`w-20 border rounded p-1 disabled:bg-neutral-100 disabled:text-neutral-400 ${
                                 horsBareme ? "border-red-400 bg-red-50 text-red-700" : ""
@@ -906,4 +911,4 @@ export default function NotesTable({
       )}
     </main>
   );
-                              }
+}

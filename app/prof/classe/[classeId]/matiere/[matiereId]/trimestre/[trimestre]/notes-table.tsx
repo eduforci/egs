@@ -219,6 +219,10 @@ export default function NotesTable({
     return `${info.position}e${info.exAequo ? " ex" : ""}`;
   }
 
+  function v0(eleveId: string, evaluationId: string) {
+    return initial[eleveId]?.[evaluationId] ?? "";
+  }
+
   function celluleModifiable(eleveId: string, evaluationId: string) {
     return initial[eleveId][evaluationId] === "" || modeEdition;
   }
@@ -324,7 +328,7 @@ export default function NotesTable({
 
         const nombre = parseNote(saisie);
         if (isNaN(nombre)) {
-          erreurs.push(`${nomComplet} — ${libelleColonne(ev)} : valeur invalide.`);
+          erreurs.push(`${nomComplet} — ${libelleColonne(ev)} : valeur invalide (contenu lu : « ${saisie} », avant : « ${v0(eleve.id, ev.id)} »).`);
         } else if (nombre < 0 || nombre > ev.bareme_max) {
           erreurs.push(
             `${nomComplet} — ${libelleColonne(ev)} : ${saisie} dépasse le barème autorisé (0 à ${ev.bareme_max}).`
@@ -911,4 +915,4 @@ export default function NotesTable({
       )}
     </main>
   );
-}
+                            }

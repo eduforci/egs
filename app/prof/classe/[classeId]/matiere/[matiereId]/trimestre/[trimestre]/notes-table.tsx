@@ -66,7 +66,7 @@ export default function NotesTable({
   anneeScolaire,
   etablissementId,
   enseignantId,
-  eleves,
+  eleves: elevesBruts,
   evaluationsExistantes,
   notesExistantes,
   observationsExistantes,
@@ -92,6 +92,13 @@ export default function NotesTable({
 }) {
   const supabase = createClient();
   const router = useRouter();
+
+  // Tri alphabétique (nom puis prénom), accents gérés en français
+  const eleves = [...elevesBruts].sort((a, b) => {
+    const na = `${a.profiles?.nom ?? ""} ${a.profiles?.prenom ?? ""}`.trim();
+    const nb = `${b.profiles?.nom ?? ""} ${b.profiles?.prenom ?? ""}`.trim();
+    return na.localeCompare(nb, "fr", { sensitivity: "base" });
+  });
 
   const estVerrouille = validation?.valide === true;
 
@@ -339,6 +346,15 @@ export default function NotesTable({
 
     setEnregistrement(true);
 
+    const historiques: any[] = [];
+    const notesAInserer: any[] = [];
+    const elevesParEval: Record<string, string[]> = {};
+    const notifs: any[] = [];
+    const bonusAUpserter: any[] = [];
+    const bonusASupprimer: string[] = [];
+    const obsASupprimer: string[] = [];
+    const obsAInserer: any[] = [];
+
     for (const eleve of eleves) {
       const v = valeurs[eleve.id];
       const avant = initial[eleve.id];
@@ -346,112 +362,156 @@ export default function NotesTable({
 
       for (const ev of evaluationsExistantes) {
         if (!celluleModifiable(eleve.id, ev.id)) continue;
+        const ancienne = avant[ev.id];
+        const nouvelle = v[ev.id];
+        if (ancienne === nouvelle) continue;
 
-        const ancienneValeurStr = avant[ev.id];
-        const nouvelleValeurStr = v[ev.id];
-
-        if (ancienneValeurStr === nouvelleValeurStr) continue;
-
-        const estUneModification = ancienneValeurStr !== "";
-
-        await supabase.from("notes_historique").insert({
+        historiques.push({
           eleve_id: eleve.id,
           matiere_id: matiereId,
           classe_id: classeId,
           trimestre: Number(trimestre),
           annee_scolaire: anneeScolaire,
           type: ev.type_note,
-          ancienne_valeur: ancienneValeurStr === "" ? null : parseFloat(ancienneValeurStr),
-          nouvelle_valeur: nouvelleValeurStr === "" ? null : parseFloat(nouvelleValeurStr),
+          ancienne_valeur: ancienne === "" ? null : parseFloat(ancienne),
+          nouvelle_valeur: nouvelle === "" ? null : parseFloat(nouvelle),
           modifie_par: enseignantId,
         });
 
-        await supabase
-          .from("notes")
-          .delete()
-          .eq("eleve_id", eleve.id)
-          .eq("evaluation_id", ev.id);
+        if (!elevesParEval[ev.id]) elevesParEval[ev.id] = [];
+        elevesParEval[ev.id].push(eleve.id);
 
-        if (nouvelleValeurStr !== "") {
-          const { error } = await supabase.from("notes").insert({
+        if (nouvelle !== "") {
+          notesAInserer.push({
             eleve_id: eleve.id,
             matiere_id: matiereId,
             classe_id: classeId,
             enseignant_id: enseignantId,
             evaluation_id: ev.id,
             type: ev.type_note,
-            valeur: parseFloat(nouvelleValeurStr),
+            valeur: parseFloat(nouvelle),
             coefficient: ev.coefficient,
             bareme_max: ev.bareme_max,
             trimestre,
             annee_scolaire: anneeScolaire,
           });
-          if (error) {
-            setMessage("Erreur : " + error.message);
-            setEnregistrement(false);
-            return;
-          }
         }
 
-        if (estUneModification) {
-          await notifierDirection(nomComplet, libelleColonne(ev), ancienneValeurStr, nouvelleValeurStr);
+        if (ancienne !== "") {
+          const contenu = `Note modifiée pour ${nomComplet} (${matiereNom} — ${libelleColonne(ev)}) : ${ancienne || "—"} → ${nouvelle}`;
+          for (const role of ["chef", "directeur_etudes"]) {
+            notifs.push({
+              etablissement_id: etablissementId,
+              destinataire_role: role,
+              titre: "Modification de note",
+              contenu,
+            });
+          }
         }
       }
 
-      // Sauvegarde du bonus (indépendant des évaluations classiques)
-      const bonusSaisi = bonus[eleve.id];
-      if (bonusSaisi !== "") {
-        const { error: bonusError } = await supabase.from("bonus_moyenne").upsert(
-          {
+      if (bonus[eleve.id] !== initialBonus[eleve.id]) {
+        if (bonus[eleve.id] !== "") {
+          bonusAUpserter.push({
             eleve_id: eleve.id,
             classe_id: classeId,
             matiere_id: matiereId,
             trimestre: Number(trimestre),
             annee_scolaire: anneeScolaire,
-            valeur: parseFloat(bonusSaisi),
+            valeur: parseFloat(bonus[eleve.id]),
             enseignant_id: enseignantId,
             updated_at: new Date().toISOString(),
-          },
-          { onConflict: "eleve_id,matiere_id,trimestre,annee_scolaire" }
+          });
+        } else {
+          bonusASupprimer.push(eleve.id);
+        }
+      }
+
+      if (v.appreciation.trim() !== avant.appreciation.trim()) {
+        obsASupprimer.push(eleve.id);
+        if (v.appreciation.trim() !== "") {
+          obsAInserer.push({
+            eleve_id: eleve.id,
+            enseignant_id: enseignantId,
+            matiere_id: matiereId,
+            texte: v.appreciation.trim(),
+            trimestre,
+            annee_scolaire: anneeScolaire,
+          });
+        }
+      }
+    }
+
+    try {
+      // 1. Historique (une seule requête)
+      if (historiques.length > 0) {
+        await supabase.from("notes_historique").insert(historiques);
+      }
+
+      // 2. Notes : suppression groupée par évaluation, puis insertion unique
+      const suppressions = await Promise.all(
+        Object.entries(elevesParEval).map(([evId, ids]) =>
+          supabase.from("notes").delete().eq("evaluation_id", evId).in("eleve_id", ids)
+        )
+      );
+      const errSupp = suppressions.find((r) => r.error);
+      if (errSupp?.error) throw new Error(errSupp.error.message);
+
+      if (notesAInserer.length > 0) {
+        const { error } = await supabase.from("notes").insert(notesAInserer);
+        if (error) throw new Error(error.message);
+      }
+
+      // 3. Notifications, bonus et appréciations en parallèle
+      const taches: PromiseLike<{ error: any }>[] = [];
+
+      if (notifs.length > 0) {
+        taches.push(supabase.from("notifications").insert(notifs));
+      }
+      if (bonusAUpserter.length > 0) {
+        taches.push(
+          supabase.from("bonus_moyenne").upsert(bonusAUpserter, {
+            onConflict: "eleve_id,matiere_id,trimestre,annee_scolaire",
+          })
         );
-        if (bonusError) {
-          setMessage("Erreur (bonus) : " + bonusError.message);
-          setEnregistrement(false);
-          return;
-        }
-      } else {
-        await supabase
-          .from("bonus_moyenne")
-          .delete()
-          .eq("eleve_id", eleve.id)
-          .eq("matiere_id", matiereId)
-          .eq("trimestre", Number(trimestre))
-          .eq("annee_scolaire", anneeScolaire);
+      }
+      if (bonusASupprimer.length > 0) {
+        taches.push(
+          supabase
+            .from("bonus_moyenne")
+            .delete()
+            .in("eleve_id", bonusASupprimer)
+            .eq("matiere_id", matiereId)
+            .eq("trimestre", Number(trimestre))
+            .eq("annee_scolaire", anneeScolaire)
+        );
+      }
+      if (obsASupprimer.length > 0) {
+        taches.push(
+          (async () => {
+            const del = await supabase
+              .from("observations")
+              .delete()
+              .in("eleve_id", obsASupprimer)
+              .eq("matiere_id", matiereId)
+              .eq("trimestre", trimestre)
+              .eq("enseignant_id", enseignantId);
+            if (del.error) return del;
+            if (obsAInserer.length > 0) {
+              return await supabase.from("observations").insert(obsAInserer);
+            }
+            return del;
+          })()
+        );
       }
 
-      await supabase
-        .from("observations")
-        .delete()
-        .eq("eleve_id", eleve.id)
-        .eq("matiere_id", matiereId)
-        .eq("trimestre", trimestre)
-        .eq("enseignant_id", enseignantId);
-
-      if (v.appreciation.trim() !== "") {
-        const { error: obsError } = await supabase.from("observations").insert({
-          eleve_id: eleve.id,
-          enseignant_id: enseignantId,
-          matiere_id: matiereId,
-          texte: v.appreciation.trim(),
-          trimestre,
-          annee_scolaire: anneeScolaire,
-        });
-        if (obsError) {
-          setMessage("Erreur (appréciation) : " + obsError.message);
-          setEnregistrement(false);
-          return;
-        }
-      }
+      const resultats = await Promise.all(taches);
+      const echec = resultats.find((r) => r.error);
+      if (echec?.error) throw new Error(echec.error.message);
+    } catch (e: any) {
+      setMessage("Erreur : " + e.message);
+      setEnregistrement(false);
+      return;
     }
 
     setEnregistrement(false);
@@ -615,7 +675,7 @@ export default function NotesTable({
                     placeholder="Ex: Interro chapitre 3"
                     className="w-full border rounded-lg p-2 text-sm"
                   />
-          </div>
+                </div>
               )}
 
               <div className="flex gap-2">
@@ -846,5 +906,4 @@ export default function NotesTable({
       )}
     </main>
   );
-      }
-                          
+                              }

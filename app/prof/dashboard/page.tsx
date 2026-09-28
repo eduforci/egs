@@ -166,10 +166,48 @@ export default async function ProfDashboard() {
       <div>
         <h2 className="text-xl font-semibold mb-1">Mes classes</h2>
         <p className="text-neutral-500 mb-4 text-sm">
-          {affectations?.length ?? 0} affectation(s) — cliquez pour saisir les notes
+          {affectations?.length ?? 0} affectation(s) — touchez une carte pour saisir les notes
         </p>
 
-        <div className="bg-white border rounded-xl overflow-hidden">
+        {/* MOBILE : cartes entièrement cliquables */}
+        <div className="space-y-3 md:hidden">
+          {affectations?.map((a: any) => (
+            <div key={a.id} className="bg-white border rounded-xl overflow-hidden">
+              <Link
+                href={`/prof/classe/${a.classes?.id}/matiere/${a.matieres?.id}`}
+                className="flex items-center justify-between gap-3 p-4 active:bg-neutral-100"
+              >
+                <div>
+                  <div className="text-lg font-semibold">{a.classes?.nom}</div>
+                  <div className="text-sm text-neutral-600">{a.matieres?.nom}</div>
+                  <div className="text-xs text-neutral-400 mt-0.5">
+                    Coefficient {a.matieres?.coefficient_defaut}
+                  </div>
+                </div>
+                <span className="text-sm font-medium text-blue-700 whitespace-nowrap">
+                  Saisir les notes →
+                </span>
+              </Link>
+              <div className="grid grid-cols-2 border-t divide-x text-center text-sm">
+                <Link
+                  href={`/prof/classes/${a.classes?.id}/matieres/${a.matieres?.id}/trimestre/1/liste-moyennes`}
+                  className="py-3 text-blue-700 active:bg-blue-50"
+                >
+                  Liste des moyennes
+                </Link>
+                <Link
+                  href={`/prof/classes/${a.classes?.id}/liste`}
+                  className="py-3 text-blue-700 active:bg-blue-50"
+                >
+                  Liste de classe
+                </Link>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* ORDINATEUR / TABLETTE : tableau */}
+        <div className="hidden md:block bg-white border rounded-xl overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-neutral-50 text-left text-xs uppercase text-neutral-500">
               <tr>
@@ -178,18 +216,23 @@ export default async function ProfDashboard() {
                 <th className="p-3">Coefficient</th>
                 <th className="p-3"></th>
                 <th className="p-3"></th>
+                <th className="p-3"></th>
               </tr>
             </thead>
             <tbody>
               {affectations?.map((a: any) => (
                 <tr key={a.id} className="border-t hover:bg-neutral-50">
-                  <td className="p-3">
-                    <Link href={`/prof/classe/${a.classes?.id}/matiere/${a.matieres?.id}`}>
-                      {a.classes?.nom}
-                    </Link>
-                  </td>
+                  <td className="p-3">{a.classes?.nom}</td>
                   <td className="p-3">{a.matieres?.nom}</td>
                   <td className="p-3">{a.matieres?.coefficient_defaut}</td>
+                  <td className="p-3">
+                    <Link
+                      href={`/prof/classe/${a.classes?.id}/matiere/${a.matieres?.id}`}
+                      className="inline-block border rounded-md px-2 py-1 text-xs text-blue-700 hover:bg-blue-50"
+                    >
+                      Saisir les notes
+                    </Link>
+                  </td>
                   <td className="p-3">
                     <Link
                       href={`/prof/classes/${a.classes?.id}/matieres/${a.matieres?.id}/trimestre/1/liste-moyennes`}
@@ -210,14 +253,15 @@ export default async function ProfDashboard() {
               ))}
             </tbody>
           </table>
-          {(!affectations || affectations.length === 0) && (
-            <p className="p-4 text-neutral-500 text-sm">
-              Aucune classe ne vous a encore été affectée. Contactez votre chef d'établissement.
-            </p>
-          )}
         </div>
+
+        {(!affectations || affectations.length === 0) && (
+          <p className="p-4 text-neutral-500 text-sm">
+            Aucune classe ne vous a encore été affectée. Contactez votre chef d'établissement.
+          </p>
+        )}
       </div>
     </main>
   );
-      }
+          }
           

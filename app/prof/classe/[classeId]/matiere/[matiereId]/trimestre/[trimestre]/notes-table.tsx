@@ -596,10 +596,17 @@ export default function NotesTable({
 
   return (
     <main className="p-4 md:p-8">
-      <h1 className="font-display text-2xl md:text-3xl font-semibold mb-1">
-        {classeNom} — {matiereNom} — Trimestre {trimestre}
-      </h1>
-      <p className="text-neutral-500 mb-6">{eleves.length} élève(s)</p>
+      <div className="flex justify-center mb-2">
+        <div
+          className="border-2 border-black text-center py-2 px-6 font-bold inline-block"
+          style={{ color: "#0B3D2E" }}
+        >
+          {classeNom} — TRIMESTRE {trimestre} — {matiereNom.toUpperCase()}
+        </div>
+      </div>
+      <p className="text-center text-sm text-neutral-500 mb-4">
+        {eleves.length} élève(s) · Année {anneeScolaire}
+      </p>
 
       {verrouille && (
         <div className="mb-4 p-3 rounded-lg bg-amber-50 text-amber-800 text-sm border border-amber-200">
@@ -738,41 +745,50 @@ export default function NotesTable({
             </div>
           )}
 
-          <div className="bg-white border rounded-xl overflow-x-auto mb-4">
-            <table className="w-full text-sm">
-              <thead className="bg-neutral-50 text-left text-xs uppercase text-neutral-500">
-                <tr>
-                  <th className="p-3 sticky left-0 bg-neutral-50">Élève</th>
-                  {evaluationsExistantes.map((ev) => (
-                    <th key={ev.id} className="p-3 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5">
-                        <span>{libelleColonne(ev)}</span>
+          <div className="overflow-x-auto mb-2">
+            <table className="w-full text-xs border-collapse border border-gray-400">
+              <thead>
+                <tr style={{ backgroundColor: "#0B3D2E", color: "white" }}>
+                  <th className="border border-gray-400 p-1 w-8">N°</th>
+                  <th className="border border-gray-400 p-1 text-left">Matricule</th>
+                  <th className="border border-gray-400 p-1 text-left sticky left-0" style={{ backgroundColor: "#0B3D2E" }}>
+                    Nom et Prénoms
+                  </th>
+                  {evaluationsExistantes.map((ev) => {
+                    const cat = CATEGORIES.find((c) => c.value === ev.categorie);
+                    const date = new Date(ev.date_evaluation).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+                    return (
+                      <th key={ev.id} className="border border-gray-400 p-1 whitespace-nowrap">
+                        <div className="font-semibold">{ev.libelle || cat?.label || ev.categorie}</div>
+                        <div className="font-normal opacity-80">/{ev.bareme_max} · {date}</div>
                         {!verrouille && (
                           <button
                             type="button"
                             onClick={() => supprimerEvaluation(ev.id)}
                             title="Supprimer cette évaluation"
-                            className="text-red-500 hover:text-red-700 text-xs normal-case font-normal"
+                            className="text-xs mt-0.5"
                           >
                             🗑️
                           </button>
                         )}
-                      </div>
-                    </th>
-                  ))}
-                  <th className="p-3">Bonus</th>
-                  <th className="p-3">Moyenne (/20)</th>
-                  <th className="p-3">Rang</th>
-                  <th className="p-3">Appréciation</th>
+                      </th>
+                    );
+                  })}
+                  <th className="border border-gray-400 p-1">Bonus</th>
+                  <th className="border border-gray-400 p-1">Moy.</th>
+                  <th className="border border-gray-400 p-1">Rang</th>
+                  <th className="border border-gray-400 p-1">Appréciation</th>
                 </tr>
               </thead>
               <tbody>
-                {eleves.map((e) => {
+                {eleves.map((e, i) => {
                   const m = moyenne(e.id);
                   const suggestion = appreciationSuggeree(m);
                   return (
-                    <tr key={e.id} className="border-t align-top">
-                      <td className="p-3 whitespace-nowrap sticky left-0 bg-white">
+                    <tr key={e.id}>
+                      <td className="border border-gray-400 p-1 text-center">{i + 1}</td>
+                      <td className="border border-gray-400 p-1 font-mono whitespace-nowrap">{e.matricule || "—"}</td>
+                      <td className="border border-gray-400 p-1 whitespace-nowrap sticky left-0 bg-white">
                         {e.profiles?.nom} {e.profiles?.prenom}
                       </td>
                       {evaluationsExistantes.map((ev) => {
@@ -784,7 +800,7 @@ export default function NotesTable({
                           !isNaN(nombre) &&
                           (nombre < 0 || nombre > ev.bareme_max);
                         return (
-                          <td key={ev.id} className="p-3">
+                          <td key={ev.id} className="border border-gray-400 p-1 text-center">
                             <input
                               type="text"
                               inputMode="decimal"
@@ -798,19 +814,17 @@ export default function NotesTable({
                                 }));
                               }}
                               placeholder="—"
-                              className={`w-20 border rounded p-1 disabled:bg-neutral-100 disabled:text-neutral-400 ${
-                                horsBareme ? "border-red-400 bg-red-50 text-red-700" : ""
+                              className={`w-14 border border-gray-400 rounded-none p-1 text-center disabled:bg-neutral-100 disabled:text-neutral-500 ${
+                                horsBareme ? "border-red-500 bg-red-50 text-red-700" : ""
                               }`}
                             />
                             {horsBareme && (
-                              <p className="text-[10px] text-red-600 mt-0.5">
-                                Max {ev.bareme_max}
-                              </p>
+                              <div className="text-[10px] text-red-600">Max {ev.bareme_max}</div>
                             )}
                           </td>
                         );
                       })}
-                      <td className="p-3">
+                      <td className="border border-gray-400 p-1 text-center">
                         <input
                           type="number"
                           min={-5}
@@ -822,16 +836,16 @@ export default function NotesTable({
                             setBonus((prev) => ({ ...prev, [e.id]: evt.target.value }))
                           }
                           placeholder="0"
-                          className="w-16 border rounded p-1 disabled:bg-neutral-100 disabled:text-neutral-400"
+                          className="w-14 border border-gray-400 rounded-none p-1 text-center disabled:bg-neutral-100 disabled:text-neutral-500"
                         />
                       </td>
-                      <td className="p-3 font-medium">
+                      <td className="border border-gray-400 p-1 text-center font-medium">
                         {m !== null ? m.toFixed(2) : "-"}
                       </td>
-                      <td className="p-3">{rang(e.id)}</td>
-                      <td className="p-3">
-                        <textarea
-                          rows={2}
+                      <td className="border border-gray-400 p-1 text-center whitespace-nowrap">{rang(e.id)}</td>
+                      <td className="border border-gray-400 p-1">
+                        <input
+                          type="text"
                           disabled={verrouille}
                           value={valeurs[e.id].appreciation}
                           onChange={(ev) =>
@@ -840,27 +854,22 @@ export default function NotesTable({
                               [e.id]: { ...prev[e.id], appreciation: ev.target.value },
                             }))
                           }
-                          placeholder="Appréciation..."
-                          className="w-40 border rounded p-1 text-xs disabled:bg-neutral-100 disabled:text-neutral-400"
+                          placeholder={suggestion ?? "Appréciation..."}
+                          className="w-36 border border-gray-400 rounded-none p-1 disabled:bg-neutral-100 disabled:text-neutral-500"
                         />
-                        {suggestion && (
-                          <div className="mt-1 flex items-center gap-1 text-xs text-neutral-400">
-                            <span>Suggestion : {suggestion}</span>
-                            {!verrouille && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setValeurs((prev) => ({
-                                    ...prev,
-                                    [e.id]: { ...prev[e.id], appreciation: suggestion },
-                                  }))
-                                }
-                                className="underline hover:text-neutral-600"
-                              >
-                                Utiliser
-                              </button>
-                            )}
-                          </div>
+                        {suggestion && !verrouille && valeurs[e.id].appreciation.trim() === "" && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setValeurs((prev) => ({
+                                ...prev,
+                                [e.id]: { ...prev[e.id], appreciation: suggestion },
+                              }))
+                            }
+                            className="ml-1 underline text-neutral-500"
+                          >
+                            Utiliser
+                          </button>
                         )}
                       </td>
                     </tr>
@@ -868,15 +877,15 @@ export default function NotesTable({
                 })}
               </tbody>
             </table>
+          </div>
 
-            <div className="p-4 border-t bg-neutral-50 flex items-center justify-between text-sm">
-              <div>
-                <span className="font-medium">Moyenne de classe : </span>
-                {moyenneClasse !== null ? moyenneClasse.toFixed(2) + "/20" : "-"}
-              </div>
-              <div className="text-neutral-500">
-                {new Date().toLocaleDateString("fr-FR")} — EGS
-              </div>
+          <div className="border border-gray-400 bg-neutral-50 p-3 flex items-center justify-between text-sm mb-4">
+            <div>
+              <span className="font-medium">Moyenne de classe : </span>
+              {moyenneClasse !== null ? moyenneClasse.toFixed(2) + "/20" : "-"}
+            </div>
+            <div className="text-neutral-500">
+              {new Date().toLocaleDateString("fr-FR")} — EGS
             </div>
           </div>
 
@@ -884,7 +893,8 @@ export default function NotesTable({
             <button
               onClick={handleSave}
               disabled={enregistrement || verrouille}
-              className="bg-black text-white rounded-lg px-6 py-3 font-medium disabled:opacity-50"
+              className="text-white rounded-lg px-6 py-3 font-medium disabled:opacity-50"
+              style={{ backgroundColor: "#0B3D2E" }}
             >
               {enregistrement ? "Enregistrement..." : "Enregistrer les notes"}
             </button>
@@ -915,4 +925,4 @@ export default function NotesTable({
       )}
     </main>
   );
-                            }
+}

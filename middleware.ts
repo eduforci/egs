@@ -10,6 +10,7 @@ const ROLE_ROUTES: Record<string, string> = {
   "/comptable": "comptable",
   "/secretariat": "secretaire",
   "/prof": "enseignant",
+  "/enseignant": "enseignant",
   "/parent": "parent",
   "/eleve": "eleve",
   "/educateur": "educateur",
@@ -54,22 +55,22 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(
-  cookiesToSet: {
-    name: string;
-    value: string;
-    options?: Record<string, any>;
-  }[]
-) {
-  cookiesToSet.forEach(({ name, value }) => {
-    request.cookies.set(name, value);
-  });
+          cookiesToSet: {
+            name: string;
+            value: string;
+            options?: Record<string, any>;
+          }[]
+        ) {
+          cookiesToSet.forEach(({ name, value }) => {
+            request.cookies.set(name, value);
+          });
 
-  response = NextResponse.next({ request });
+          response = NextResponse.next({ request });
 
-  cookiesToSet.forEach(({ name, value, options }) => {
-    response.cookies.set(name, value, options);
-  });
-},
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
+          });
+        },
       },
     }
   );
@@ -124,10 +125,9 @@ export const config = {
     "/comptable/:path*",
     "/secretariat/:path*",
     "/prof/:path*",
+    "/enseignant/:path*",
     "/parent/:path*",
     "/eleve/:path*",
     "/educateur/:path*",
   ],
 };
-      
-        

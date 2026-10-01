@@ -1,0 +1,16 @@
+{
+  "name": "EGS — by EDUFORCI",
+  "short_name": "EGS",
+  "description": "Gestion scolaire pour établissements en Côte d'Ivoire",
+  "start_url": "/enseignant/appel",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#0B3D2E",
+  "lang": "fr",
+  "icons": [
+    { "src": "/icons/192", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/512", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/512", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

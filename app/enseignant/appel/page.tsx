@@ -288,6 +288,7 @@ export default function CahierAppelPage() {
     const res = await synchroniserFile(supabase);
     setEnAttente(res.restants);
     setErreurSync(res.erreur);
+    if (res.envoyes > 0) setHorsLigne(false);
     if (res.envoyes > 0 && res.restants === 0) {
       setMessage({ type: 'success', text: 'Appels en attente envoyés au serveur.' });
     }

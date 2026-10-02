@@ -11,7 +11,7 @@ export type LigneAppel = {
 };
 
 export type AppelEnAttente = {
-  cle: string; // "classeId|date" : un seul appel en attente par classe et par date
+  cle: string; // "classeId|date" : un seul appel en attente par enseignant, classe et date
   classeId: string;
   date: string;
   etablissementId: string;
@@ -23,6 +23,25 @@ export type AppelEnAttente = {
 
 const DB_NOM = 'egs-offline';
 const DB_VERSION = 1;
+
+// ---------- Utilisateur courant : chaque enseignant a son propre espace ----------
+
+let utilisateur = '';
+
+export function definirUtilisateur(uid: string) {
+  utilisateur = uid;
+}
+
+// 'userId' est le seul repère partagé : il sert à reconnaître l'enseignant sans connexion
+function cleCache(cle: string) {
+  return cle === 'userId' ? cle : `${utilisateur}:${cle}`;
+}
+
+function cleFile(cle: string) {
+  return `${utilisateur}|${cle}`;
+}
+
+// ---------- Base locale ----------
 
 function ouvrirDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -71,7 +90,7 @@ function executer<T>(
 
 export async function cacheGet<T>(cle: string): Promise<T | null> {
   try {
-    const v = await executer<T | undefined>('cache', 'readonly', (s) => s.get(cle));
+    const v = await executer<T | undefined>('cache', 'readonly', (s) => s.get(cleCache(cle)));
     return v ?? null;
   } catch {
     return null;
@@ -80,45 +99,61 @@ export async function cacheGet<T>(cle: string): Promise<T | null> {
 
 export async function cacheSet(cle: string, valeur: unknown): Promise<void> {
   try {
-    await executer('cache', 'readwrite', (s) => s.put(valeur, cle));
+    await executer('cache', 'readwrite', (s) => s.put(valeur, cleCache(cle)));
   } catch {
     // le cache est facultatif : on ignore l'erreur
+  }
+}
+
+// Efface les classes et les élèves gardés sur le téléphone.
+// Les appels pas encore envoyés ne sont PAS effacés.
+export async function viderCache(): Promise<void> {
+  try {
+    await executer('cache', 'readwrite', (s) => s.clear());
+  } catch {
+    // rien à faire
   }
 }
 
 // ---------- File d'attente des appels à envoyer ----------
 
 export async function fileAjouter(item: AppelEnAttente): Promise<void> {
-  await executer('file', 'readwrite', (s) => s.put(item, item.cle));
+  await executer('file', 'readwrite', (s) =>
+    s.put(item, `${item.enseignantId}|${item.cle}`)
+  );
 }
 
 export async function fileObtenir(cle: string): Promise<AppelEnAttente | null> {
+  if (!utilisateur) return null;
   try {
-    const v = await executer<AppelEnAttente | undefined>('file', 'readonly', (s) => s.get(cle));
+    const v = await executer<AppelEnAttente | undefined>('file', 'readonly', (s) =>
+      s.get(cleFile(cle))
+    );
     return v ?? null;
   } catch {
     return null;
   }
 }
 
+// Ne renvoie que les appels de l'enseignant connecté
 export async function fileLister(): Promise<AppelEnAttente[]> {
+  if (!utilisateur) return [];
   try {
-    return await executer<AppelEnAttente[]>('file', 'readonly', (s) => s.getAll());
+    const tous = await executer<AppelEnAttente[]>('file', 'readonly', (s) => s.getAll());
+    return tous.filter((i) => i.enseignantId === utilisateur);
   } catch {
     return [];
   }
 }
 
-export async function fileSupprimer(cle: string): Promise<void> {
-  await executer('file', 'readwrite', (s) => s.delete(cle));
+async function fileSupprimer(item: AppelEnAttente): Promise<void> {
+  await executer('file', 'readwrite', (s) => s.delete(`${item.enseignantId}|${item.cle}`));
+  // ancien format de clé, d'avant la séparation par enseignant
+  await executer('file', 'readwrite', (s) => s.delete(item.cle));
 }
 
 export async function fileCompter(): Promise<number> {
-  try {
-    return await executer<number>('file', 'readonly', (s) => s.count());
-  } catch {
-    return 0;
-  }
+  return (await fileLister()).length;
 }
 
 // ---------- Utilitaire : abandonner une requête trop lente ----------
@@ -202,7 +237,7 @@ export async function synchroniserFile(
       }
 
       // 3. Tout est passé : on retire l'appel de la file
-      await fileSupprimer(item.cle);
+      await fileSupprimer(item);
       envoyes++;
     }
   } catch (e: any) {

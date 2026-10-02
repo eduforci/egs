@@ -6,6 +6,7 @@ import {
   avecDelai,
   cacheGet,
   cacheSet,
+  definirUtilisateur,
   fileAjouter,
   fileCompter,
   fileObtenir,
@@ -58,6 +59,7 @@ export default function CahierAppelPage() {
   const [lignes, setLignes] = useState<Record<string, LigneAppel>>({});
   const [contexte, setContexte] = useState<ContexteClasse | null>(null);
   const [enseignantId, setEnseignantId] = useState<string | null>(null);
+  const [pret, setPret] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [horsLigne, setHorsLigne] = useState(false);
@@ -168,7 +170,10 @@ export default function CahierAppelPage() {
         return;
       }
       if (annule) return;
+      // Chaque enseignant a son propre espace sur le téléphone
+      definirUtilisateur(userId);
       setEnseignantId(userId);
+      setPret(true);
 
       try {
         const { data, error } = await avecDelai(
@@ -295,6 +300,7 @@ export default function CahierAppelPage() {
   }, [supabase]);
 
   useEffect(() => {
+    if (!pret) return;
     essayerSynchro();
     // On réessaie toutes les 30 s : "en ligne" selon le navigateur ne garantit
     // pas qu'Internet fonctionne vraiment, donc on tente simplement l'envoi.
@@ -304,7 +310,7 @@ export default function CahierAppelPage() {
       clearInterval(intervalle);
       window.removeEventListener('online', essayerSynchro);
     };
-  }, [essayerSynchro]);
+  }, [essayerSynchro, pret]);
 
   // Indique si l'appel affiché attend encore d'être envoyé
   useEffect(() => {
@@ -321,7 +327,7 @@ export default function CahierAppelPage() {
     return () => {
       annule = true;
     };
-  }, [classeId, date, enAttente]);
+  }, [classeId, date, enAttente, pret]);
 
   const envoyerMaintenant = async () => {
     setSyncManuelle(true);

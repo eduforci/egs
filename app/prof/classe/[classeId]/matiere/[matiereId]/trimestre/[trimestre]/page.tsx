@@ -63,7 +63,7 @@ export default async function TableauNotes({
   const { data: evaluations, error: evaluationsError } = await supabase
     .from("evaluations")
     .select(
-      "id, categorie, bareme_max, coefficient, type_note, libelle, date_evaluation"
+      "id, categorie, bareme_max, coefficient, type_note, nature, libelle, date_evaluation"
     )
     .eq("classe_id", classeId)
     .eq("matiere_id", matiereId)
@@ -146,5 +146,4 @@ export default async function TableauNotes({
       />
     </>
   );
-    }
-      
+}

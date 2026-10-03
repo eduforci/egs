@@ -414,6 +414,16 @@ export default function CahierAppelPage() {
     <div className="max-w-xl mx-auto p-4 space-y-4">
       <h1 className="text-2xl font-bold">Cahier d'appel</h1>
 
+      <nav className="flex gap-2 text-sm">
+        <span className="px-3 py-1.5 rounded-full bg-gray-800 text-white">Appel</span>
+        <a
+          href="/enseignant/cahier-texte"
+          className="px-3 py-1.5 rounded-full border border-gray-300 text-gray-700"
+        >
+          Cahier de texte
+        </a>
+      </nav>
+
       {horsLigne && (
         <div className="p-3 rounded-lg text-sm bg-gray-100 text-gray-700 border border-gray-300">
           Mode hors ligne : vous pouvez faire l'appel, il sera envoyé plus tard.

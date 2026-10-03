@@ -7,6 +7,7 @@ export type CahierEnAttente = {
   classeId: string;
   matiereId: string;
   dateCours: string;
+  prochainCoursDate: string | null;
   contenu: string;
   travailAFaire: string | null;
   prochainDevoirDate: string | null;
@@ -159,6 +160,7 @@ export async function synchroniserCahier(
             matiere_id: item.matiereId,
             enseignant_id: item.enseignantId,
             date_cours: item.dateCours,
+            prochain_cours_date: item.prochainCoursDate ?? null,
             contenu: item.contenu,
             travail_a_faire: item.travailAFaire,
             prochain_devoir_date: item.prochainDevoirDate,

@@ -16,6 +16,7 @@ type Evaluation = {
   bareme_max: number;
   coefficient: number;
   type_note: string;
+  nature?: string | null;
   libelle: string | null;
   date_evaluation: string;
 };
@@ -49,6 +50,26 @@ const CATEGORIES: { value: Evaluation["categorie"]; label: string; bareme_max: n
   { value: "sur20_coef2", label: "Note sur 20 (coefficient 2 — devoir)", bareme_max: 20, coefficient: 2, type_note: "composition" },
 ];
 
+// Nature de chaque évaluation : permet à l'enseignant de se retrouver
+// quand un élève n'a pas la note et doit se racheter.
+const NATURES_SECONDAIRE = [
+  { value: "IE", court: "IE", label: "IE — Interrogation écrite" },
+  { value: "IO", court: "IO", label: "IO — Interrogation orale" },
+  { value: "DC", court: "DC", label: "DC — Devoir de classe" },
+  { value: "DN", court: "DN", label: "DN — Devoir de niveau" },
+];
+
+const NATURES_PRIMAIRE = [
+  { value: "COMP_ESSAI", court: "Comp. d'essai", label: "Composition d'essai" },
+  { value: "COMP_PASSAGE", court: "Comp. de passage", label: "Composition de passage" },
+];
+
+const TOUTES_NATURES = [...NATURES_SECONDAIRE, ...NATURES_PRIMAIRE];
+
+function natureCourte(nature: string | null | undefined) {
+  return TOUTES_NATURES.find((n) => n.value === nature)?.court ?? "";
+}
+
 // Lecture tolérante : accepte "7,5" et "7.5"
 function parseNote(s: string) {
   return parseFloat(String(s).trim().replace(",", "."));
@@ -59,7 +80,8 @@ const LIBELLES_FRANCAIS_COLLEGE = ["CF", "Orth.", "EO"];
 function libelleColonne(ev: Evaluation) {
   const cat = CATEGORIES.find((c) => c.value === ev.categorie);
   const date = new Date(ev.date_evaluation).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
-  return `${ev.libelle || cat?.label || ev.categorie} · /${ev.bareme_max} · ${date}`;
+  const nature = natureCourte(ev.nature);
+  return `${nature ? nature + " · " : ""}${ev.libelle || cat?.label || ev.categorie} · /${ev.bareme_max} · ${date}`;
 }
 
 export default function NotesTable({
@@ -137,10 +159,12 @@ export default function NotesTable({
 
   const [formulaireOuvert, setFormulaireOuvert] = useState(false);
   const [nouvelleCategorie, setNouvelleCategorie] = useState<Evaluation["categorie"]>("sur10");
+  const [nouvelleNature, setNouvelleNature] = useState("");
   const [nouvelleDate, setNouvelleDate] = useState(new Date().toISOString().slice(0, 10));
   const [nouveauLibelle, setNouveauLibelle] = useState("");
   const [creationEnCours, setCreationEnCours] = useState(false);
   const [classeCycle, setClasseCycle] = useState<string | null>(null);
+  const [naturesLocales, setNaturesLocales] = useState<Record<string, string>>({});
 
   useEffect(() => {
     supabase
@@ -152,6 +176,9 @@ export default function NotesTable({
   }, [classeId, supabase]);
 
   const estFrancaisCollege = matiereNom === "Français" && classeCycle === "college";
+
+  // Au primaire : seulement les deux compositions. Ailleurs : IE, IO, DC, DN.
+  const naturesDisponibles = classeCycle === "primaire" ? NATURES_PRIMAIRE : NATURES_SECONDAIRE;
 
   function moyenne(eleveId: string) {
     const v = valeurs[eleveId];
@@ -276,7 +303,31 @@ export default function NotesTable({
     router.refresh();
   }
 
+  // Pour les anciennes évaluations créées avant l'ajout de la nature
+  async function definirNature(evaluationId: string, nature: string) {
+    if (!nature) return;
+    setMessage(null);
+
+    const { error } = await supabase
+      .from("evaluations")
+      .update({ nature })
+      .eq("id", evaluationId);
+
+    if (error) {
+      setMessage("Erreur lors de l'enregistrement de la nature : " + error.message);
+      return;
+    }
+
+    setNaturesLocales((prev) => ({ ...prev, [evaluationId]: nature }));
+    router.refresh();
+  }
+
   async function creerEvaluation() {
+    if (!nouvelleNature) {
+      setMessage("Erreur : choisis la nature de l'évaluation avant de la créer.");
+      return;
+    }
+
     if (estFrancaisCollege && !nouveauLibelle) {
       setMessage("Choisis un type de note (CF, Orth. ou EO) avant de créer l'évaluation.");
       return;
@@ -297,6 +348,7 @@ export default function NotesTable({
       bareme_max: cat.bareme_max,
       coefficient: cat.coefficient,
       type_note: cat.type_note,
+      nature: nouvelleNature,
       libelle: nouveauLibelle.trim() || null,
       date_evaluation: nouvelleDate,
     });
@@ -309,6 +361,7 @@ export default function NotesTable({
     }
 
     setNouveauLibelle("");
+    setNouvelleNature("");
     setFormulaireOuvert(false);
     router.refresh();
   }
@@ -645,7 +698,21 @@ export default function NotesTable({
               <p className="font-semibold text-sm">Nouvelle évaluation</p>
 
               <div>
-                <label className="block text-xs text-neutral-500 mb-1">Type de note</label>
+                <label className="block text-xs text-neutral-500 mb-1">Nature de l'évaluation</label>
+                <select
+                  value={nouvelleNature}
+                  onChange={(e) => setNouvelleNature(e.target.value)}
+                  className="w-full border rounded-lg p-2 text-sm"
+                >
+                  <option value="">Choisir...</option>
+                  {naturesDisponibles.map((n) => (
+                    <option key={n.value} value={n.value}>{n.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs text-neutral-500 mb-1">Barème</label>
                 <select
                   value={nouvelleCategorie}
                   onChange={(e) => setNouvelleCategorie(e.target.value as Evaluation["categorie"])}
@@ -757,8 +824,25 @@ export default function NotesTable({
                   {evaluationsExistantes.map((ev) => {
                     const cat = CATEGORIES.find((c) => c.value === ev.categorie);
                     const date = new Date(ev.date_evaluation).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+                    const nature = naturesLocales[ev.id] ?? ev.nature ?? null;
                     return (
                       <th key={ev.id} className="border border-gray-400 p-1 whitespace-nowrap">
+                        {nature ? (
+                          <div className="font-bold">{natureCourte(nature)}</div>
+                        ) : !verrouille ? (
+                          <select
+                            value=""
+                            onChange={(evt) => definirNature(ev.id, evt.target.value)}
+                            className="text-black text-[10px] rounded p-0.5 mb-0.5"
+                          >
+                            <option value="">Nature ?</option>
+                            {TOUTES_NATURES.map((n) => (
+                              <option key={n.value} value={n.value}>{n.label}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <div className="opacity-70">Nature ?</div>
+                        )}
                         <div className="font-semibold">{ev.libelle || cat?.label || ev.categorie}</div>
                         <div className="font-normal opacity-80">/{ev.bareme_max} · {date}</div>
                         {!verrouille && (

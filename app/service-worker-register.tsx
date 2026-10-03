@@ -3,6 +3,12 @@
 import { useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { viderCache } from '@/lib/offline/appel-store';
+import { viderCacheCahier } from '@/lib/offline/cahier-store';
+
+function toutEffacer() {
+  viderCache();
+  viderCacheCahier();
+}
 
 export default function ServiceWorkerRegister() {
   useEffect(() => {
@@ -13,15 +19,15 @@ export default function ServiceWorkerRegister() {
     }
 
     // Sur la page de connexion, personne n'est connecté :
-    // on efface les classes et élèves gardés pour le hors ligne.
+    // on efface les données gardées pour le hors ligne.
     if (window.location.pathname === '/login') {
-      viderCache();
+      toutEffacer();
     }
 
     // À chaque déconnexion, même chose.
     const supabase = createClient();
     const { data } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_OUT') viderCache();
+      if (event === 'SIGNED_OUT') toutEffacer();
     });
 
     return () => data.subscription.unsubscribe();

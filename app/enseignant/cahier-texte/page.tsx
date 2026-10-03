@@ -27,6 +27,7 @@ type Entree = {
   classe_id: string;
   matiere_id: string;
   date_cours: string;
+  prochain_cours_date: string | null;
   contenu: string;
   travail_a_faire: string | null;
   prochain_devoir_date: string | null;
@@ -65,6 +66,7 @@ export default function CahierTextePage() {
   // Formulaire
   const [affCle, setAffCle] = useState('');
   const [dateCours, setDateCours] = useState(new Date().toISOString().slice(0, 10));
+  const [prochainCours, setProchainCours] = useState('');
   const [contenu, setContenu] = useState('');
   const [travail, setTravail] = useState('');
   const [devoirDate, setDevoirDate] = useState('');
@@ -80,7 +82,7 @@ export default function CahierTextePage() {
           supabase
             .from('cahier_texte')
             .select(
-              'id, classe_id, matiere_id, date_cours, contenu, travail_a_faire, prochain_devoir_date, prochaine_interro_date'
+              'id, classe_id, matiere_id, date_cours, prochain_cours_date, contenu, travail_a_faire, prochain_devoir_date, prochaine_interro_date'
             )
             .eq('enseignant_id', uid)
             .order('date_cours', { ascending: false })
@@ -249,6 +251,10 @@ export default function CahierTextePage() {
       setMessage({ type: 'error', text: 'Indiquez ce qui a été fait pendant le cours.' });
       return;
     }
+    if (prochainCours && prochainCours < dateCours) {
+      setMessage({ type: 'error', text: 'La date du prochain cours doit être après la date du cours.' });
+      return;
+    }
     if (devoirDate && devoirDate < dateCours) {
       setMessage({ type: 'error', text: 'La date du devoir doit être après la date du cours.' });
       return;
@@ -272,6 +278,7 @@ export default function CahierTextePage() {
       classeId: aff.classeId,
       matiereId: aff.matiereId,
       dateCours,
+      prochainCoursDate: prochainCours || null,
       contenu: contenu.trim(),
       travailAFaire: travail.trim() || null,
       prochainDevoirDate: devoirDate || null,
@@ -292,6 +299,7 @@ export default function CahierTextePage() {
     }
 
     // Le formulaire est vidé, la classe et la date restent pour l'entrée suivante
+    setProchainCours('');
     setContenu('');
     setTravail('');
     setDevoirDate('');
@@ -329,6 +337,7 @@ export default function CahierTextePage() {
         classe_id: p.classeId,
         matiere_id: p.matiereId,
         date_cours: p.dateCours,
+        prochain_cours_date: p.prochainCoursDate ?? null,
         contenu: p.contenu,
         travail_a_faire: p.travailAFaire,
         prochain_devoir_date: p.prochainDevoirDate,
@@ -413,6 +422,17 @@ export default function CahierTextePage() {
             type="date"
             value={dateCours}
             onChange={(e) => setDateCours(e.target.value)}
+            className="w-full border rounded-lg p-2"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Date du prochain cours (optionnel)</label>
+          <input
+            type="date"
+            value={prochainCours}
+            min={dateCours}
+            onChange={(e) => setProchainCours(e.target.value)}
             className="w-full border rounded-lg p-2"
           />
         </div>
@@ -507,6 +527,9 @@ export default function CahierTextePage() {
                 <span className="font-medium">À faire : </span>
                 {e.travail_a_faire}
               </div>
+            )}
+            {e.prochain_cours_date && (
+              <div className="text-gray-600">Prochain cours le {jour(e.prochain_cours_date)}</div>
             )}
             {e.prochain_devoir_date && (
               <div className="text-blue-700">Devoir le {jour(e.prochain_devoir_date)}</div>

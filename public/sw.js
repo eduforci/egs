@@ -1,11 +1,25 @@
-// Service worker EGS : permet d'ouvrir la page d'appel sans connexion.
+// Service worker EGS : permet d'ouvrir l'appel, le cahier de texte et la saisie
+// des notes sans connexion.
 // Pour forcer une mise à jour chez tous les utilisateurs, changer VERSION.
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE_PAGES = 'egs-pages-' + VERSION;
 const CACHE_STATIC = 'egs-static-' + VERSION;
 
 // Seules ces pages sont gardées en cache (pas les pages des autres rôles)
-const PAGES_HORS_LIGNE = ['/enseignant/appel', '/enseignant/cahier-texte'];
+const PAGES_EXACTES = ['/enseignant/appel', '/enseignant/cahier-texte', '/prof/dashboard'];
+const ID = '[0-9a-fA-F-]+';
+const PAGES_NOTES = [
+  new RegExp('^/prof/classe/' + ID + '/matiere/' + ID + '/?$'),
+  new RegExp('^/prof/classe/' + ID + '/matiere/' + ID + '/trimestre/[1-3]/?$'),
+];
+
+function pageNotes(chemin) {
+  return PAGES_NOTES.some((r) => r.test(chemin));
+}
+
+function pageHorsLigne(chemin) {
+  return PAGES_EXACTES.includes(chemin) || pageNotes(chemin);
+}
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -34,12 +48,14 @@ async function cacheDabord(req) {
   return res;
 }
 
-async function reseauPuisCache(req) {
+// Les pages de notes contiennent les données : on attend un peu plus longtemps le réseau
+// avant de servir la copie gardée sur le téléphone.
+async function reseauPuisCache(req, delai) {
   const cache = await caches.open(CACHE_PAGES);
   try {
     const res = await Promise.race([
       fetch(req),
-      new Promise((_, rejeter) => setTimeout(() => rejeter(new Error('lent')), 4000)),
+      new Promise((_, rejeter) => setTimeout(() => rejeter(new Error('lent')), delai)),
     ]);
     // On ne garde que les vraies pages (pas les redirections vers la connexion)
     if (res.ok && !res.redirected) {
@@ -52,7 +68,8 @@ async function reseauPuisCache(req) {
     return new Response(
       '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
         '<body style="font-family:sans-serif;padding:24px"><h2>Hors ligne</h2>' +
-        "<p>Cette page n'a pas encore été enregistrée sur ce téléphone. Ouvrez-la une fois avec Internet.</p></body>",
+        "<p>Cette page n'a pas encore été enregistrée sur ce téléphone. Ouvrez-la une fois avec Internet, " +
+        'ou utilisez « Préparer ce téléphone » sur le tableau de bord.</p></body>',
       { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
     );
   }
@@ -72,7 +89,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (req.mode === 'navigate' && PAGES_HORS_LIGNE.includes(url.pathname)) {
-    event.respondWith(reseauPuisCache(req));
+  if (req.mode === 'navigate' && pageHorsLigne(url.pathname)) {
+    event.respondWith(reseauPuisCache(req, pageNotes(url.pathname) ? 10000 : 6000));
   }
 });

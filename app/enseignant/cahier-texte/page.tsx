@@ -13,6 +13,7 @@ import {
   synchroniserCahier,
   type CahierEnAttente,
 } from '@/lib/offline/cahier-store';
+import EnseignantNav from '@/components/enseignant-nav';
 
 type Affectation = {
   cle: string; // "classeId|matiereId"
@@ -359,15 +360,7 @@ export default function CahierTextePage() {
     <div className="max-w-xl mx-auto p-4 space-y-4">
       <h1 className="text-2xl font-bold">Cahier de texte</h1>
 
-      <nav className="flex gap-2 text-sm">
-        <a
-          href="/enseignant/appel"
-          className="px-3 py-1.5 rounded-full border border-gray-300 text-gray-700"
-        >
-          Appel
-        </a>
-        <span className="px-3 py-1.5 rounded-full bg-gray-800 text-white">Cahier de texte</span>
-      </nav>
+      <EnseignantNav />
 
       {horsLigne && (
         <div className="p-3 rounded-lg text-sm bg-gray-100 text-gray-700 border border-gray-300">

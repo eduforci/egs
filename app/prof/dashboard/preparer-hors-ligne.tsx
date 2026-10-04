@@ -42,6 +42,22 @@ function chargerPage(url: string): Promise<boolean> {
   });
 }
 
+// Vérifie que la page est vraiment gardée sur le téléphone (et pas seulement chargée)
+async function estEnCache(url: string): Promise<boolean> {
+  try {
+    if (!('caches' in window)) return false;
+    const cles = (await caches.keys()).filter((k) => k.startsWith('egs-pages-'));
+    for (const k of cles) {
+      const cache = await caches.open(k);
+      const trouve = await cache.match(url, { ignoreSearch: true });
+      if (trouve) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export default function PreparerHorsLigne({ cibles }: { cibles: Cible[] }) {
   const [trimestre, setTrimestre] = useState('1');
   const [etatSw, setEtatSw] = useState('Vérification...');
@@ -51,6 +67,7 @@ export default function PreparerHorsLigne({ cibles }: { cibles: Cible[] }) {
   const [total, setTotal] = useState(0);
   const [resultat, setResultat] = useState<string | null>(null);
   const [manquantes, setManquantes] = useState<Page[]>([]);
+  const [pretes, setPretes] = useState('...');
 
   // État réel du mode hors ligne sur ce téléphone
   useEffect(() => {
@@ -96,6 +113,21 @@ export default function PreparerHorsLigne({ cibles }: { cibles: Cible[] }) {
     };
   }, []);
 
+  // Combien de pages sont réellement gardées sur ce téléphone (pour le trimestre choisi)
+  async function compterPretes() {
+    const liste = listeDesPages();
+    let n = 0;
+    for (const p of liste) {
+      if (await estEnCache(p.url)) n++;
+    }
+    setPretes(`${n} sur ${liste.length}`);
+  }
+
+  useEffect(() => {
+    compterPretes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trimestre]);
+
   function listeDesPages(): Page[] {
     const pages: Page[] = [
       { url: '/prof/dashboard', nom: 'Tableau de bord' },
@@ -121,6 +153,15 @@ export default function PreparerHorsLigne({ cibles }: { cibles: Cible[] }) {
       return;
     }
 
+    // Sans service worker qui contrôle cette page, rien ne peut être gardé :
+    // on le dit au lieu d'annoncer un faux succès.
+    if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
+      setResultat(
+        "Le mode hors ligne n'est pas actif sur ce téléphone, donc rien ne peut être gardé. Fermez complètement Chrome, rouvrez cette page avec Internet, puis vérifiez que la ligne « Mode hors ligne » affiche « actif (v4) » avant de réessayer."
+      );
+      return;
+    }
+
     setEnCours(true);
     setResultat(null);
     setFait(0);
@@ -128,13 +169,16 @@ export default function PreparerHorsLigne({ cibles }: { cibles: Cible[] }) {
 
     const rates: Page[] = [];
     for (let i = 0; i < pages.length; i++) {
-      const ok = await chargerPage(pages[i].url);
+      const charge = await chargerPage(pages[i].url);
+      // Vraie vérification : la page est-elle bien enregistrée sur le téléphone ?
+      const ok = charge && (await estEnCache(pages[i].url));
       if (!ok) rates.push(pages[i]);
       setFait(i + 1);
     }
 
     setManquantes(rates);
     setEnCours(false);
+    compterPretes();
 
     if (rates.length === 0) {
       const trace =
@@ -196,6 +240,7 @@ export default function PreparerHorsLigne({ cibles }: { cibles: Cible[] }) {
 
       <div className="text-xs text-neutral-500 space-y-0.5">
         <div>Mode hors ligne : {etatSw}</div>
+        <div>Pages réellement gardées sur ce téléphone : {pretes}</div>
         <div>Dernière préparation : {derniere ?? 'jamais sur ce téléphone'}</div>
       </div>
 

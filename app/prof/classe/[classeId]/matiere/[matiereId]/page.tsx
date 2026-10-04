@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import EnseignantNav from "@/components/enseignant-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,9 @@ export default async function ChoixTrimestre({
 
   return (
     <main className="p-8">
+      <div className="mb-6">
+        <EnseignantNav />
+      </div>
       <h1 className="font-display text-3xl font-semibold mb-1">
         {classe?.nom} — {matiere?.nom}
       </h1>

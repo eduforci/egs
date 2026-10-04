@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -34,15 +33,19 @@ export default async function ChoixTrimestre({
 
       <div className="grid grid-cols-1 gap-3 max-w-md">
         {trimestres.map((t) => (
-          <Link
+          <a
             key={t}
             href={`/prof/classe/${classeId}/matiere/${matiereId}/trimestre/${t}`}
             className="bg-white border rounded-xl p-4 font-medium hover:bg-neutral-50"
           >
             {t}er/ème trimestre
-          </Link>
+          </a>
         ))}
       </div>
+
+      <a href="/prof/dashboard" className="inline-block mt-6 text-sm text-neutral-500 underline">
+        ← Retour au tableau de bord
+      </a>
     </main>
   );
-  }
+}

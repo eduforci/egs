@@ -30,6 +30,30 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    titre: 'SUIVI PÉDAGOGIQUE',
+    items: [
+      { label: 'Validation des notes', href: '/directeur/notes-validation', icon: '✔️' },
+      { label: 'Résultats', href: '/directeur/resultats', icon: '🏆' },
+      { label: 'Absences', href: '/directeur/absences', icon: '🚫' },
+    ],
+  },
+  {
+    titre: 'ADMINISTRATION OFFICIELLE',
+    items: [
+      { label: 'Statistiques DESPS', href: '/directeur-etudes/desps', icon: '📈' },
+      { label: 'Code établissement', href: '/directeur-etudes/etablissement', icon: '🏷️' },
+    ],
+  },
+  {
+    titre: 'AGFNE',
+    items: [
+      { label: 'Élèves sans matricule', href: '/directeur-etudes/agfne/sans-matricule', icon: '❓' },
+      { label: 'Comparer (GAP)', href: '/directeur-etudes/agfne/comparer', icon: '🔍' },
+      { label: 'Suivi immatriculation', href: '/directeur-etudes/agfne/immatriculation', icon: '🆔' },
+      { label: 'Transferts', href: '/directeur-etudes/agfne/transferts', icon: '🔁' },
+    ],
+  },
+  {
     titre: 'FINANCES',
     items: [
       { label: 'Comptabilité', href: '/chef/comptabilite', icon: '💰' },

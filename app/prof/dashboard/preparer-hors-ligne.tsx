@@ -155,11 +155,43 @@ export default function PreparerHorsLigne({ cibles }: { cibles: Cible[] }) {
 
     // Sans service worker qui contrôle cette page, rien ne peut être gardé :
     // on le dit au lieu d'annoncer un faux succès.
-    if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
-      setResultat(
-        "Le mode hors ligne n'est pas actif sur ce téléphone, donc rien ne peut être gardé. Fermez complètement Chrome, rouvrez cette page avec Internet, puis vérifiez que la ligne « Mode hors ligne » affiche « actif (v4) » avant de réessayer."
-      );
+    if (!('serviceWorker' in navigator)) {
+      setResultat("Ce navigateur ne permet pas le mode hors ligne.");
       return;
+    }
+
+    // Le mode hors ligne n'est pas encore actif : on essaie de l'activer nous-mêmes
+    if (!navigator.serviceWorker.controller) {
+      setResultat('Activation du mode hors ligne...');
+      try {
+        await navigator.serviceWorker.register('/sw.js');
+        await navigator.serviceWorker.ready;
+      } catch (e) {
+        setResultat(
+          "Impossible d'activer le mode hors ligne. Détail technique à m'envoyer : " +
+            (e instanceof Error ? e.message : String(e))
+        );
+        return;
+      }
+      // Laisse un instant au service worker pour prendre le contrôle de la page
+      for (let i = 0; i < 10 && !navigator.serviceWorker.controller; i++) {
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      if (!navigator.serviceWorker.controller) {
+        // Un rechargement unique suffit en général
+        const deja = sessionStorage.getItem('egs-rechargement-sw');
+        if (!deja) {
+          sessionStorage.setItem('egs-rechargement-sw', '1');
+          window.location.reload();
+          return;
+        }
+        setResultat(
+          "Le mode hors ligne est installé mais ne prend pas encore le contrôle de cette page. Touchez le bouton une dernière fois ; si le message revient, envoyez-moi une capture."
+        );
+        sessionStorage.removeItem('egs-rechargement-sw');
+        return;
+      }
+      sessionStorage.removeItem('egs-rechargement-sw');
     }
 
     setEnCours(true);

@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import NotesTable from "./notes-table";
+import EnseignantNav from "@/components/enseignant-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -119,6 +120,10 @@ export default async function TableauNotes({
 
   return (
     <>
+      <div className="max-w-5xl mx-auto px-4 pt-4">
+        <EnseignantNav />
+      </div>
+
       {erreurDiagnostic && (
         <div className="max-w-5xl mx-auto mt-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm border border-red-200">
           Erreur technique lors du chargement : {erreurDiagnostic}

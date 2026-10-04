@@ -4,10 +4,27 @@ import { useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { viderCache } from '@/lib/offline/appel-store';
 import { viderCacheCahier } from '@/lib/offline/cahier-store';
+import { viderCacheNotes } from '@/lib/offline/notes-store';
 
+// Les pages de notes gardées pour le hors ligne contiennent les noms et les notes des élèves
+async function viderPagesEnCache() {
+  try {
+    if (!('caches' in window)) return;
+    const cles = await caches.keys();
+    await Promise.all(
+      cles.filter((k) => k.startsWith('egs-pages-')).map((k) => caches.delete(k))
+    );
+  } catch {
+    // rien à faire
+  }
+}
+
+// Les saisies pas encore envoyées ne sont jamais effacées ici.
 function toutEffacer() {
   viderCache();
   viderCacheCahier();
+  viderCacheNotes();
+  viderPagesEnCache();
 }
 
 export default function ServiceWorkerRegister() {

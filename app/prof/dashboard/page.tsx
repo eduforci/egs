@@ -1,4 +1,4 @@
-import Link from "next/link";
+import PreparerHorsLigne from "./preparer-hors-ligne";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -122,21 +122,28 @@ export default async function ProfDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Link
+      <div className="grid grid-cols-3 gap-3">
+        <a
           href="/enseignant/appel"
           className="bg-white border rounded-xl p-4 text-center hover:bg-neutral-50"
         >
           <div className="text-2xl">📋</div>
           <div className="text-sm font-medium mt-1">Cahier d'appel</div>
-        </Link>
-        <Link
+        </a>
+        <a
+          href="/enseignant/cahier-texte"
+          className="bg-white border rounded-xl p-4 text-center hover:bg-neutral-50"
+        >
+          <div className="text-2xl">📖</div>
+          <div className="text-sm font-medium mt-1">Cahier de texte</div>
+        </a>
+        <a
           href="/enseignant/emploi-du-temps"
           className="bg-white border rounded-xl p-4 text-center hover:bg-neutral-50"
         >
           <div className="text-2xl">📅</div>
           <div className="text-sm font-medium mt-1">Emploi du temps</div>
-        </Link>
+        </a>
       </div>
 
       <div className="bg-white border rounded-xl p-4">
@@ -163,6 +170,16 @@ export default async function ProfDashboard() {
         )}
       </div>
 
+      <PreparerHorsLigne
+        cibles={(affectations ?? [])
+          .filter((a: any) => a.classes?.id && a.matieres?.id)
+          .map((a: any) => ({
+            classeId: a.classes.id,
+            matiereId: a.matieres.id,
+            nom: `${a.classes.nom} · ${a.matieres.nom}`,
+          }))}
+      />
+
       <div>
         <h2 className="text-xl font-semibold mb-1">Mes classes</h2>
         <p className="text-neutral-500 mb-4 text-sm">
@@ -173,7 +190,7 @@ export default async function ProfDashboard() {
         <div className="space-y-3 md:hidden">
           {affectations?.map((a: any) => (
             <div key={a.id} className="bg-white border rounded-xl overflow-hidden">
-              <Link
+              <a
                 href={`/prof/classe/${a.classes?.id}/matiere/${a.matieres?.id}`}
                 className="flex items-center justify-between gap-3 p-4 active:bg-neutral-100"
               >
@@ -187,20 +204,20 @@ export default async function ProfDashboard() {
                 <span className="text-sm font-medium text-blue-700 whitespace-nowrap">
                   Saisir les notes →
                 </span>
-              </Link>
+              </a>
               <div className="grid grid-cols-2 border-t divide-x text-center text-sm">
-                <Link
+                <a
                   href={`/prof/classes/${a.classes?.id}/matieres/${a.matieres?.id}/trimestre/1/liste-moyennes`}
                   className="py-3 text-blue-700 active:bg-blue-50"
                 >
                   Liste des moyennes
-                </Link>
-                <Link
+                </a>
+                <a
                   href={`/prof/classes/${a.classes?.id}/liste`}
                   className="py-3 text-blue-700 active:bg-blue-50"
                 >
                   Liste de classe
-                </Link>
+                </a>
               </div>
             </div>
           ))}
@@ -226,28 +243,28 @@ export default async function ProfDashboard() {
                   <td className="p-3">{a.matieres?.nom}</td>
                   <td className="p-3">{a.matieres?.coefficient_defaut}</td>
                   <td className="p-3">
-                    <Link
+                    <a
                       href={`/prof/classe/${a.classes?.id}/matiere/${a.matieres?.id}`}
                       className="inline-block border rounded-md px-2 py-1 text-xs text-blue-700 hover:bg-blue-50"
                     >
                       Saisir les notes
-                    </Link>
+                    </a>
                   </td>
                   <td className="p-3">
-                    <Link
+                    <a
                       href={`/prof/classes/${a.classes?.id}/matieres/${a.matieres?.id}/trimestre/1/liste-moyennes`}
                       className="inline-block border rounded-md px-2 py-1 text-xs text-blue-700 hover:bg-blue-50"
                     >
                       Liste des moyennes
-                    </Link>
+                    </a>
                   </td>
                   <td className="p-3">
-                    <Link
+                    <a
                       href={`/prof/classes/${a.classes?.id}/liste`}
                       className="inline-block border rounded-md px-2 py-1 text-xs text-blue-700 hover:bg-blue-50"
                     >
                       Liste de classe
-                    </Link>
+                    </a>
                   </td>
                 </tr>
               ))}
@@ -263,5 +280,4 @@ export default async function ProfDashboard() {
       </div>
     </main>
   );
-          }
-          
+}

@@ -50,11 +50,63 @@ export default async function ProfDashboard() {
     nbElevesTotal = count ?? 0;
   }
 
-  const { data: emploiDuTemps } = await supabase
+  // Cours de l'enseignant : ceux à son nom, et ceux sans nom d'enseignant qui
+  // correspondent à une classe + matière qui lui sont affectées.
+  const paires = new Set(
+    (affectations ?? []).map((a: any) => `${a.classe_id}|${a.matiere_id}`)
+  );
+  let requeteEdt: any = supabase
     .from("emploi_du_temps")
-    .select(`id, jour, heure_debut, heure_fin, salle, classes ( nom ), matieres ( nom )`)
-    .eq("enseignant_id", user?.id)
+    .select(
+      `id, jour, heure_debut, heure_fin, salle, classe_id, matiere_id, enseignant_id, classes ( nom ), matieres ( nom )`
+    )
     .order("heure_debut", { ascending: true });
+  requeteEdt =
+    classeIds.length > 0
+      ? requeteEdt.or(
+          `enseignant_id.eq.${user?.id},and(enseignant_id.is.null,classe_id.in.(${classeIds.join(",")}))`
+        )
+      : requeteEdt.eq("enseignant_id", user?.id);
+  const { data: edtBrut } = await requeteEdt;
+  const emploiDuTemps = ((edtBrut ?? []) as any[]).filter(
+    (c) => c.enseignant_id === user?.id || paires.has(`${c.classe_id}|${c.matiere_id}`)
+  );
+
+  // Prochains cours à partir de maintenant (heure de la Côte d'Ivoire = heure UTC)
+  const ORDRE_JOURS = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+  const maintenant = new Date();
+  const jourActuel = maintenant.getUTCDay();
+  const minutesActuelles = maintenant.getUTCHours() * 60 + maintenant.getUTCMinutes();
+  const enMinutes = (h: string) => {
+    const [hh, mm] = (h ?? "00:00").slice(0, 5).split(":").map(Number);
+    return hh * 60 + mm;
+  };
+  const prochainsCours = emploiDuTemps
+    .map((c: any) => {
+      const idx = ORDRE_JOURS.indexOf(c.jour);
+      if (idx < 0) return null;
+      let ecartJours = (idx - jourActuel + 7) % 7;
+      // Un cours d'aujourd'hui déjà terminé passe à la semaine suivante
+      if (ecartJours === 0 && enMinutes(c.heure_fin) <= minutesActuelles) ecartJours = 7;
+      return {
+        ...c,
+        ecartJours,
+        tri: ecartJours * 1440 + enMinutes(c.heure_debut),
+        enCours:
+          ecartJours === 0 &&
+          enMinutes(c.heure_debut) <= minutesActuelles &&
+          enMinutes(c.heure_fin) > minutesActuelles,
+      };
+    })
+    .filter(Boolean)
+    .sort((a: any, b: any) => a.tri - b.tri)
+    .slice(0, 5) as any[];
+  const quand = (c: any) =>
+    c.ecartJours === 0
+      ? "Aujourd'hui"
+      : c.ecartJours === 1
+      ? "Demain"
+      : JOURS_LABEL[c.jour] ?? c.jour;
 
   const { data: complements } = user?.id
     ? await supabase
@@ -148,13 +200,18 @@ export default async function ProfDashboard() {
 
       <div className="bg-white border rounded-xl p-4">
         <h2 className="text-base font-semibold mb-3">Prochains cours</h2>
-        {emploiDuTemps && emploiDuTemps.length > 0 ? (
+        {prochainsCours.length > 0 ? (
           <ul className="space-y-2 text-sm">
-            {emploiDuTemps.slice(0, 5).map((c: any) => (
-              <li key={c.id} className="flex justify-between border-b last:border-0 pb-2 last:pb-0">
+            {prochainsCours.map((c: any) => (
+              <li key={c.id} className="flex justify-between gap-3 border-b last:border-0 pb-2 last:pb-0">
                 <span>
-                  <span className="font-medium">{JOURS_LABEL[c.jour] ?? c.jour}</span>{" "}
+                  <span className="font-medium">{quand(c)}</span>{" "}
                   {c.heure_debut?.slice(0, 5)}–{c.heure_fin?.slice(0, 5)}
+                  {c.enCours && (
+                    <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                      En cours
+                    </span>
+                  )}
                 </span>
                 <span className="text-neutral-500">
                   {c.matieres?.nom} · {c.classes?.nom}

@@ -1,8 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import {
+  cleJob,
+  definirUtilisateur,
+  estErreurReseau,
+  jobCompter,
+  jobObtenir,
+  jobSauver,
+  jobSupprimer,
+  synchroniserNotes,
+  type JobNotes,
+} from "@/lib/offline/notes-store";
 
 type Eleve = {
   id: string;
@@ -75,6 +86,14 @@ function parseNote(s: string) {
   return parseFloat(String(s).trim().replace(",", "."));
 }
 
+// Les actions lourdes (créer, supprimer, valider...) demandent Internet
+function messageErreur(prefixe: string, msg: string) {
+  if (estErreurReseau(msg)) {
+    return "Erreur : pas de connexion Internet. Cette action n'est possible qu'avec Internet.";
+  }
+  return prefixe + msg;
+}
+
 const LIBELLES_FRANCAIS_COLLEGE = ["CF", "Orth.", "EO"];
 
 function libelleColonne(ev: Evaluation) {
@@ -100,6 +119,7 @@ export default function NotesTable({
   bonusExistants,
   validation,
   seuilsMentions,
+  chargeLe,
 }: {
   classeId: string;
   matiereId: string;
@@ -116,8 +136,9 @@ export default function NotesTable({
   bonusExistants: Bonus[];
   validation: Validation;
   seuilsMentions: Record<string, number>;
+  chargeLe?: string;
 }) {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
 
   // Tri alphabétique (nom puis prénom), accents gérés en français
@@ -157,6 +178,16 @@ export default function NotesTable({
   const [valideParId, setValideParId] = useState(validation?.valide_par ?? null);
   const [modeEdition, setModeEdition] = useState(false);
 
+  // Hors ligne : saisies gardées sur le téléphone en attendant l'envoi
+  const [enAttente, setEnAttente] = useState(0);
+  const [pageEnAttente, setPageEnAttente] = useState(false);
+  const [erreurSync, setErreurSync] = useState<string | null>(null);
+  const [syncManuelle, setSyncManuelle] = useState(false);
+  const [pret, setPret] = useState(false);
+  const [horsLigne, setHorsLigne] = useState(false);
+  const [copieAncienne, setCopieAncienne] = useState(false);
+  const cleCourante = cleJob(enseignantId, classeId, matiereId, trimestre, anneeScolaire);
+
   const [formulaireOuvert, setFormulaireOuvert] = useState(false);
   const [nouvelleCategorie, setNouvelleCategorie] = useState<Evaluation["categorie"]>("sur10");
   const [nouvelleNature, setNouvelleNature] = useState("");
@@ -174,6 +205,105 @@ export default function NotesTable({
       .single()
       .then(({ data }) => setClasseCycle(data?.cycle ?? null));
   }, [classeId, supabase]);
+
+  // Au chargement : on remet par-dessus la page les saisies pas encore envoyées
+  useEffect(() => {
+    if (!enseignantId) return;
+    definirUtilisateur(enseignantId);
+    let annule = false;
+
+    (async () => {
+      const job = await jobObtenir(cleCourante);
+      if (annule) return;
+      if (job) {
+        setValeurs((prev) => {
+          const suivant = { ...prev };
+          for (const [k, val] of Object.entries(job.cells)) {
+            const [eleveId, evId] = k.split("|");
+            if (suivant[eleveId]) suivant[eleveId] = { ...suivant[eleveId], [evId]: val };
+          }
+          for (const [eleveId, texte] of Object.entries(job.appreciations)) {
+            if (suivant[eleveId]) suivant[eleveId] = { ...suivant[eleveId], appreciation: texte };
+          }
+          return suivant;
+        });
+        setBonus((prev) => ({ ...prev, ...job.bonus }));
+        setPageEnAttente(true);
+      }
+      setEnAttente(await jobCompter());
+      if (chargeLe) {
+        setCopieAncienne(Date.now() - new Date(chargeLe).getTime() > 120000);
+      }
+      setPret(true);
+    })();
+
+    return () => {
+      annule = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enseignantId, cleCourante]);
+
+  // Indicateur de connexion
+  useEffect(() => {
+    const maj = () => setHorsLigne(!navigator.onLine);
+    maj();
+    window.addEventListener("online", maj);
+    window.addEventListener("offline", maj);
+    return () => {
+      window.removeEventListener("online", maj);
+      window.removeEventListener("offline", maj);
+    };
+  }, []);
+
+  // Envoi automatique des saisies en attente
+  const essayerSynchro = useCallback(async () => {
+    if (!enseignantId) return;
+    const n = await jobCompter();
+    if (n === 0) {
+      setEnAttente(0);
+      setPageEnAttente(false);
+      setErreurSync(null);
+      return;
+    }
+    const res = await synchroniserNotes(supabase);
+    setEnAttente(res.restants);
+    setErreurSync(res.erreur);
+    setPageEnAttente(!!(await jobObtenir(cleCourante)));
+    if (res.envoyes > 0) {
+      setHorsLigne(false);
+      if (res.restants === 0) setMessage("Notes en attente envoyées au serveur.");
+      router.refresh();
+    }
+  }, [enseignantId, supabase, cleCourante, router]);
+
+  useEffect(() => {
+    // La page chargée en arrière-plan pour la préparation hors ligne n'envoie rien
+    if (!pret || window.name === "egs-prep") return;
+    essayerSynchro();
+    // Toutes les 30 s : "en ligne" selon le navigateur ne garantit pas qu'Internet
+    // fonctionne vraiment, donc on tente simplement l'envoi.
+    const intervalle = setInterval(essayerSynchro, 30000);
+    window.addEventListener("online", essayerSynchro);
+    return () => {
+      clearInterval(intervalle);
+      window.removeEventListener("online", essayerSynchro);
+    };
+  }, [pret, essayerSynchro]);
+
+  async function envoyerMaintenant() {
+    setSyncManuelle(true);
+    await essayerSynchro();
+    setSyncManuelle(false);
+  }
+
+  async function abandonnerSaisie() {
+    const confirmation = window.confirm(
+      "Abandonner les modifications de cette page qui n'ont pas encore été envoyées ? Elles seront perdues."
+    );
+    if (!confirmation) return;
+    await jobSupprimer(cleCourante);
+    window.location.reload();
+  }
 
   const estFrancaisCollege = matiereNom === "Français" && classeCycle === "college";
 
@@ -285,7 +415,7 @@ export default function NotesTable({
       .eq("evaluation_id", evaluationId);
 
     if (notesError) {
-      setMessage("Erreur lors de la suppression des notes : " + notesError.message);
+      setMessage(messageErreur("Erreur lors de la suppression des notes : ", notesError.message));
       return;
     }
 
@@ -295,7 +425,7 @@ export default function NotesTable({
       .eq("id", evaluationId);
 
     if (error) {
-      setMessage("Erreur lors de la suppression de l'évaluation : " + error.message);
+      setMessage(messageErreur("Erreur lors de la suppression de l'évaluation : ", error.message));
       return;
     }
 
@@ -314,7 +444,7 @@ export default function NotesTable({
       .eq("id", evaluationId);
 
     if (error) {
-      setMessage("Erreur lors de l'enregistrement de la nature : " + error.message);
+      setMessage(messageErreur("Erreur lors de l'enregistrement de la nature : ", error.message));
       return;
     }
 
@@ -356,7 +486,7 @@ export default function NotesTable({
     setCreationEnCours(false);
 
     if (error) {
-      setMessage("Erreur lors de la création de l'évaluation : " + error.message);
+      setMessage(messageErreur("Erreur lors de la création de l'évaluation : ", error.message));
       return;
     }
 
@@ -375,7 +505,6 @@ export default function NotesTable({
       const nomComplet = `${eleve.profiles?.nom ?? ""} ${eleve.profiles?.prenom ?? ""}`.trim();
 
       for (const ev of evaluationsExistantes) {
-        if (!celluleModifiable(eleve.id, ev.id)) continue;
         const saisie = v[ev.id];
         if (saisie === "") continue;
 
@@ -423,7 +552,6 @@ export default function NotesTable({
       const nomComplet = `${eleve.profiles?.nom ?? ""} ${eleve.profiles?.prenom ?? ""}`.trim();
 
       for (const ev of evaluationsExistantes) {
-        if (!celluleModifiable(eleve.id, ev.id)) continue;
         const ancienne = avant[ev.id];
         const nouvelle = v[ev.id];
         if (ancienne === nouvelle) continue;
@@ -478,7 +606,7 @@ export default function NotesTable({
             eleve_id: eleve.id,
             classe_id: classeId,
             matiere_id: matiereId,
-            trimestre: Number(trimestre),
+ trimestre: Number(trimestre),
             annee_scolaire: anneeScolaire,
             valeur: parseNote(bonus[eleve.id]),
             enseignant_id: enseignantId,
@@ -504,85 +632,103 @@ export default function NotesTable({
       }
     }
 
+    // Ce qui a changé par rapport à la page chargée : c'est ce qui est gardé sur le téléphone
+    const cells: Record<string, string> = {};
+    const bonusJob: Record<string, string> = {};
+    const apprJob: Record<string, string> = {};
+    for (const eleve of eleves) {
+      for (const ev of evaluationsExistantes) {
+        if (valeurs[eleve.id][ev.id] !== initial[eleve.id][ev.id]) {
+          cells[`${eleve.id}|${ev.id}`] = valeurs[eleve.id][ev.id];
+        }
+      }
+      if (bonus[eleve.id] !== initialBonus[eleve.id]) bonusJob[eleve.id] = bonus[eleve.id];
+      if (valeurs[eleve.id].appreciation.trim() !== initial[eleve.id].appreciation.trim()) {
+        apprJob[eleve.id] = valeurs[eleve.id].appreciation;
+      }
+    }
+
+    definirUtilisateur(enseignantId);
+
+    if (
+      Object.keys(cells).length + Object.keys(bonusJob).length + Object.keys(apprJob).length ===
+      0
+    ) {
+      try {
+        await jobSupprimer(cleCourante);
+      } catch {
+        // rien à faire
+      }
+      setPageEnAttente(false);
+      setEnAttente(await jobCompter());
+      setEnregistrement(false);
+      setModeEdition(false);
+      setMessage("Aucune modification à enregistrer.");
+      return;
+    }
+
+    const job: JobNotes = {
+      cle: cleCourante,
+      enseignantId,
+      classeId,
+      matiereId,
+      trimestre,
+      anneeScolaire,
+      cells,
+      bonus: bonusJob,
+      appreciations: apprJob,
+      historiques,
+      notesAInserer,
+      elevesParEval,
+      notifs,
+      bonusAUpserter,
+      bonusASupprimer,
+      obsASupprimer,
+      obsAInserer,
+      etape: 0,
+      saisieLe: new Date().toISOString(),
+    };
+
+    // 1. D'abord sur le téléphone : rien ne peut se perdre si la connexion coupe
     try {
-      // 1. Historique (une seule requête)
-      if (historiques.length > 0) {
-        await supabase.from("notes_historique").insert(historiques);
-      }
-
-      // 2. Notes : suppression groupée par évaluation, puis insertion unique
-      const suppressions = await Promise.all(
-        Object.entries(elevesParEval).map(([evId, ids]) =>
-          supabase.from("notes").delete().eq("evaluation_id", evId).in("eleve_id", ids)
-        )
-      );
-      const errSupp = suppressions.find((r) => r.error);
-      if (errSupp?.error) throw new Error(errSupp.error.message);
-
-      if (notesAInserer.length > 0) {
-        const { error } = await supabase.from("notes").insert(notesAInserer);
-        if (error) throw new Error(error.message);
-      }
-
-      // 3. Notifications, bonus et appréciations en parallèle
-      const taches: PromiseLike<{ error: any }>[] = [];
-
-      if (notifs.length > 0) {
-        taches.push(supabase.from("notifications").insert(notifs));
-      }
-      if (bonusAUpserter.length > 0) {
-        taches.push(
-          supabase.from("bonus_moyenne").upsert(bonusAUpserter, {
-            onConflict: "eleve_id,matiere_id,trimestre,annee_scolaire",
-          })
-        );
-      }
-      if (bonusASupprimer.length > 0) {
-        taches.push(
-          supabase
-            .from("bonus_moyenne")
-            .delete()
-            .in("eleve_id", bonusASupprimer)
-            .eq("matiere_id", matiereId)
-            .eq("trimestre", Number(trimestre))
-            .eq("annee_scolaire", anneeScolaire)
-        );
-      }
-      if (obsASupprimer.length > 0) {
-        taches.push(
-          (async () => {
-            const del = await supabase
-              .from("observations")
-              .delete()
-              .in("eleve_id", obsASupprimer)
-              .eq("matiere_id", matiereId)
-              .eq("trimestre", trimestre)
-              .eq("enseignant_id", enseignantId);
-            if (del.error) return del;
-            if (obsAInserer.length > 0) {
-              return await supabase.from("observations").insert(obsAInserer);
-            }
-            return del;
-          })()
-        );
-      }
-
-      const resultats = await Promise.all(taches);
-      const echec = resultats.find((r) => r.error);
-      if (echec?.error) throw new Error(echec.error.message);
-    } catch (e: any) {
-      setMessage("Erreur : " + e.message);
+      await jobSauver(job);
+    } catch {
+      setMessage("Erreur : impossible d'enregistrer sur le téléphone (stockage plein ou bloqué).");
       setEnregistrement(false);
       return;
     }
 
+    // 2. Puis envoi au serveur
+    const res = await synchroniserNotes(supabase);
+    setEnAttente(res.restants);
+    setErreurSync(res.erreur);
+    const reste = await jobObtenir(cleCourante);
+    setPageEnAttente(!!reste);
     setEnregistrement(false);
     setModeEdition(false);
-    setMessage("Notes enregistrées avec succès.");
-    router.refresh();
+
+    if (!reste) {
+      setHorsLigne(false);
+      setMessage("Notes enregistrées avec succès.");
+      router.refresh();
+    } else if (res.erreur && !estErreurReseau(res.erreur)) {
+      setMessage(
+        "Erreur : " +
+          res.erreur +
+          "\nVos notes restent enregistrées sur le téléphone. Réessayez, ou prévenez l'administration si le problème continue."
+      );
+    } else {
+      setMessage(
+        "Enregistré sur le téléphone. Les notes seront envoyées automatiquement dès que la connexion revient."
+      );
+    }
   }
 
   async function handleValider() {
+    if (pageEnAttente) {
+      setMessage("Erreur : des notes de cette page n'ont pas encore été envoyées. Attendez l'envoi avant de valider.");
+      return;
+    }
     const confirmation = window.confirm(
       "Une fois validées, vous ne pourrez plus modifier ces notes vous-même. Seul le chef d'établissement ou une personne autorisée pourra les déverrouiller. Continuer ?"
     );
@@ -607,7 +753,7 @@ export default function NotesTable({
     setValidationEnCours(false);
 
     if (error) {
-      setMessage("Erreur lors de la validation : " + error.message);
+      setMessage(messageErreur("Erreur lors de la validation : ", error.message));
       return;
     }
 
@@ -638,7 +784,7 @@ export default function NotesTable({
     setValidationEnCours(false);
 
     if (error) {
-      setMessage("Erreur lors du déverrouillage : " + error.message);
+      setMessage(messageErreur("Erreur lors du déverrouillage : ", error.message));
       return;
     }
 
@@ -671,11 +817,57 @@ export default function NotesTable({
         </div>
       )}
 
+      {horsLigne && (
+        <div className="mb-4 p-3 rounded-lg bg-gray-100 text-gray-700 text-sm border border-gray-300">
+          Mode hors ligne : vous pouvez saisir des notes, elles seront envoyées plus tard.
+          Créer, supprimer ou valider une évaluation demande Internet.
+        </div>
+      )}
+
+      {copieAncienne && chargeLe && (
+        <div className="mb-4 p-3 rounded-lg bg-neutral-50 text-neutral-600 text-xs border border-neutral-200">
+          Page affichée d'après la copie du {new Date(chargeLe).toLocaleString("fr-FR")}. Ce qui a
+          été modifié ailleurs depuis ne s'y voit pas encore.
+        </div>
+      )}
+
+      {enAttente > 0 && (
+        <div className="mb-4 p-3 rounded-lg text-sm bg-orange-50 text-orange-800 border border-orange-200 space-y-2">
+          <div>
+            {enAttente} saisie(s) de notes en attente d'envoi
+            {pageEnAttente ? " (dont cette page)" : ""}. Ne désinstallez pas l'application et ne
+            videz pas les données du navigateur avant l'envoi.
+          </div>
+          {erreurSync && <div className="text-xs">Dernier essai : {erreurSync}</div>}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={envoyerMaintenant}
+              disabled={syncManuelle}
+              className="px-3 py-1.5 rounded-md bg-orange-600 text-white text-sm font-medium disabled:opacity-50"
+            >
+              {syncManuelle ? "Envoi..." : "Envoyer maintenant"}
+            </button>
+            {pageEnAttente && (
+              <button
+                type="button"
+                onClick={abandonnerSaisie}
+                className="px-3 py-1.5 rounded-md border border-orange-300 text-sm"
+              >
+                Abandonner cette saisie
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {message && (
         <div
           className={`mb-4 p-3 rounded-lg text-sm whitespace-pre-line ${
             message.startsWith("Enregistrement refusé") || message.startsWith("Erreur")
               ? "bg-red-50 text-red-700"
+              : message.startsWith("Enregistré sur le téléphone")
+              ? "bg-blue-50 text-blue-700"
               : "bg-green-50 text-green-700"
           }`}
         >
@@ -920,7 +1112,7 @@ export default function NotesTable({
                             setBonus((prev) => ({ ...prev, [e.id]: evt.target.value }))
                           }
                           placeholder="0"
-                          className="w-14 border border-gray-400 rounded-none p-1 text-center disabled:bg-neutral-100 disabled:text-neutral-500"
+              className="w-14 border border-gray-400 rounded-none p-1 text-center disabled:bg-neutral-100 disabled:text-neutral-500"
                         />
                       </td>
                       <td className="border border-gray-400 p-1 text-center font-medium">

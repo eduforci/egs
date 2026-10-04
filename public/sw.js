@@ -1,7 +1,7 @@
 // Service worker EGS : permet d'ouvrir l'appel, le cahier de texte et la saisie
 // des notes sans connexion.
 // Pour forcer une mise à jour chez tous les utilisateurs, changer VERSION.
-const VERSION = 'v3';
+const VERSION = 'v4';
 const CACHE_PAGES = 'egs-pages-' + VERSION;
 const CACHE_STATIC = 'egs-static-' + VERSION;
 
@@ -20,6 +20,13 @@ function pageNotes(chemin) {
 function pageHorsLigne(chemin) {
   return PAGES_EXACTES.includes(chemin) || pageNotes(chemin);
 }
+
+// Permet à l'application d'afficher quelle version du mode hors ligne est active
+self.addEventListener('message', (event) => {
+  if (event.data === 'version' && event.source) {
+    event.source.postMessage({ version: VERSION });
+  }
+});
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -48,30 +55,49 @@ async function cacheDabord(req) {
   return res;
 }
 
-// Les pages de notes contiennent les données : on attend un peu plus longtemps le réseau
-// avant de servir la copie gardée sur le téléphone.
+function pageHorsLigne503() {
+  return new Response(
+    '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+      '<body style="font-family:sans-serif;padding:24px"><h2>Hors ligne</h2>' +
+      "<p>Cette page n'a pas encore été enregistrée sur ce téléphone. Ouvrez-la une fois avec Internet, " +
+      'ou utilisez « Préparer ce téléphone » sur le tableau de bord.</p></body>',
+    { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+  );
+}
+
+// Réseau d'abord, copie du téléphone en secours.
+// - S'il existe une copie : on attend le réseau au plus `delai`, puis on sert la copie
+//   (connexion lente ou absente). Le réseau continue en arrière-plan et met la copie à jour.
+// - S'il n'existe PAS de copie : on attend le réseau aussi longtemps qu'il faut,
+//   sans jamais afficher la page « Hors ligne » à cause d'une simple lenteur.
 async function reseauPuisCache(req, delai) {
   const cache = await caches.open(CACHE_PAGES);
-  try {
-    const res = await Promise.race([
-      fetch(req),
-      new Promise((_, rejeter) => setTimeout(() => rejeter(new Error('lent')), delai)),
-    ]);
+  const enCache = await cache.match(req, { ignoreSearch: true });
+
+  const reseau = fetch(req).then((res) => {
     // On ne garde que les vraies pages (pas les redirections vers la connexion)
     if (res.ok && !res.redirected) {
       cache.put(req, res.clone());
     }
     return res;
+  });
+
+  if (!enCache) {
+    try {
+      return await reseau;
+    } catch (e) {
+      return pageHorsLigne503();
+    }
+  }
+
+  try {
+    return await Promise.race([
+      reseau,
+      new Promise((_, rejeter) => setTimeout(() => rejeter(new Error('lent')), delai)),
+    ]);
   } catch (e) {
-    const enCache = await cache.match(req, { ignoreSearch: true });
-    if (enCache) return enCache;
-    return new Response(
-      '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
-        '<body style="font-family:sans-serif;padding:24px"><h2>Hors ligne</h2>' +
-        "<p>Cette page n'a pas encore été enregistrée sur ce téléphone. Ouvrez-la une fois avec Internet, " +
-        'ou utilisez « Préparer ce téléphone » sur le tableau de bord.</p></body>',
-      { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
-    );
+    reseau.catch(() => {});
+    return enCache;
   }
 }
 

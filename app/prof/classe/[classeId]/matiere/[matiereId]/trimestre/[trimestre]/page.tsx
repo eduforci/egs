@@ -143,6 +143,7 @@ export default async function TableauNotes({
         seuilsMentions={
           (parametres?.seuils_mentions as Record<string, number>) ?? {}
         }
+        chargeLe={new Date().toISOString()}
       />
     </>
   );

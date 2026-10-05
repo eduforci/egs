@@ -145,7 +145,7 @@ export default function SaisieConduitePage() {
     if (!etablissementId) return;
     const contenu = `Note de conduite modifiée pour ${prenom} ${nom} : ${avant || '—'}/20 → ${apres}/20`;
 
-    for (const role of ['chef', 'directeur_etudes'] as const) {
+    for (const role of ['administration', 'chef', 'directeur_etudes'] as const) {
       await supabase.from('notifications').insert({
         etablissement_id: etablissementId,
         destinataire_role: role,
@@ -279,7 +279,7 @@ export default function SaisieConduitePage() {
 
           {modeEdition && (
             <div className="mb-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-md p-2.5 flex items-center justify-between">
-              <span>Mode modification activé — le chef et le directeur des études seront notifiés des changements.</span>
+              <span>Mode modification activé — la direction sera notifiée des changements.</span>
               <button
                 type="button"
                 onClick={() => setModeEdition(false)}

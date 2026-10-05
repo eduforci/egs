@@ -391,7 +391,7 @@ export default function NotesTable({
   async function notifierDirection(nomComplet: string, evLabel: string, avant: string, apres: string) {
     const contenu = `Note modifiée pour ${nomComplet} (${matiereNom} — ${evLabel}) : ${avant || "—"} → ${apres}`;
 
-    for (const role of ["chef", "directeur_etudes"] as const) {
+  for (const role of ["administration", "chef", "directeur_etudes"] as const) {
       await supabase.from("notifications").insert({
         etablissement_id: etablissementId,
         destinataire_role: role,
@@ -589,7 +589,7 @@ export default function NotesTable({
 
         if (ancienne !== "") {
           const contenu = `Note modifiée pour ${nomComplet} (${matiereNom} — ${libelleColonne(ev)}) : ${ancienne || "—"} → ${nouvelle}`;
-          for (const role of ["chef", "directeur_etudes"]) {
+         for (const role of ["administration", "chef", "directeur_etudes"]) {
             notifs.push({
               etablissement_id: etablissementId,
               destinataire_role: role,

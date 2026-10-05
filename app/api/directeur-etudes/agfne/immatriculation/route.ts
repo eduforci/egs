@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     .eq('id', user.id)
     .single();
 
-  if (!profile || profile.role !== 'directeur_etudes') {
+  if (!profile || !['directeur_etudes', 'administration'].includes(profile.role)) {
     return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
   }
 
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     .eq('id', user.id)
     .single();
 
-  if (!profile || profile.role !== 'directeur_etudes') {
+  if (!profile || !['directeur_etudes', 'administration'].includes(profile.role)) {
     return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
   }
 
@@ -80,4 +80,4 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ demande: data });
-      }
+}

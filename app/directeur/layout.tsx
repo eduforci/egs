@@ -93,6 +93,7 @@ export default function DirecteurLayout({ children }: { children: React.ReactNod
   const [nom, setNom] = useState('');
   const [prenom, setPrenom] = useState('');
   const [etablissementNom, setEtablissementNom] = useState('');
+  const [role, setRole] = useState('');
 
   useEffect(() => {
     const charger = async () => {
@@ -101,12 +102,13 @@ export default function DirecteurLayout({ children }: { children: React.ReactNod
 
       const { data: profil } = await supabase
         .from('profiles')
-        .select('nom, prenom, etablissement_id')
+        .select('nom, prenom, role, etablissement_id')
         .eq('id', userData.user.id)
         .single();
 
       setNom(profil?.nom || '');
       setPrenom(profil?.prenom || '');
+      setRole(profil?.role || '');
 
       if (profil?.etablissement_id) {
         const { data: etab } = await supabase
@@ -176,7 +178,13 @@ export default function DirecteurLayout({ children }: { children: React.ReactNod
           </div>
           <div className="text-xs">
             <div className="font-medium">{prenom} {nom}</div>
-            <div className="text-neutral-400">Directeur des études</div>
+            <div className="text-neutral-400">
+              {role === 'administration'
+                ? 'Administration'
+                : role === 'chef'
+                ? "Chef d'établissement"
+                : 'Directeur des études'}
+            </div>
           </div>
         </div>
       </aside>

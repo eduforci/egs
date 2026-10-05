@@ -8,6 +8,7 @@ type Classe = { id: string; nom: string; niveau: string };
 
 export default function DashboardEducateur() {
   const [classes, setClasses] = useState<Classe[]>([]);
+  const [appelsFaits, setAppelsFaits] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,6 +37,15 @@ export default function DashboardEducateur() {
         if (classesError) throw new Error(`Erreur classes : ${classesError.message}`);
 
         setClasses(classesData ?? []);
+
+        // Résumé des appels du jour (non bloquant)
+        const aujourdhui = new Date().toISOString().slice(0, 10);
+        const { count } = await supabase
+          .from('appels_journaliers')
+          .select('id', { count: 'exact', head: true })
+          .eq('etablissement_id', profile.etablissement_id)
+          .eq('date', aujourdhui);
+        setAppelsFaits(count ?? 0);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Erreur inconnue');
       } finally {
@@ -48,7 +58,31 @@ export default function DashboardEducateur() {
   return (
     <main className="p-4 md:p-6 max-w-2xl mx-auto">
       <h1 className="text-xl font-bold mb-1">Espace Éducateur</h1>
-      <p className="text-sm text-gray-500 mb-4">Saisie des notes de conduite par classe</p>
+      <p className="text-sm text-gray-500 mb-4">Suivi des appels et saisie des notes de conduite</p>
+
+      <Link
+        href="/educateur/appels"
+        className="block border-2 border-neutral-900 rounded-xl p-4 mb-6 hover:bg-gray-50"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="font-semibold">📋 Point des appels</div>
+            <div className="text-xs text-gray-500 mt-0.5">
+              Voir quelles classes ont fait l'appel, les absents et les retards
+            </div>
+          </div>
+          {appelsFaits !== null && classes.length > 0 && (
+            <div className="text-right shrink-0">
+              <div className="text-lg font-bold">
+                {appelsFaits}/{classes.length}
+              </div>
+              <div className="text-[11px] text-gray-500">faits aujourd'hui</div>
+            </div>
+          )}
+        </div>
+      </Link>
+
+      <h2 className="text-sm font-semibold text-gray-700 mb-2">Notes de conduite par classe</h2>
 
       {error && (
         <div className="bg-red-50 border border-red-300 text-red-700 text-sm rounded-md p-3 mb-4">
@@ -79,4 +113,4 @@ export default function DashboardEducateur() {
       )}
     </main>
   );
-      }
+}

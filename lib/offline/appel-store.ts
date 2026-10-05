@@ -236,6 +236,27 @@ export async function synchroniserFile(
         }
       }
 
+      // 2 bis. Garder la trace de l'appel (même sans aucun absent) pour le suivi de l'éducateur.
+      // Non bloquant : si cette trace échoue, l'appel lui-même reste bien enregistré.
+      const lignesAppel = Object.values(item.lignes);
+      const { error: traceErr } = await avecDelai(
+        supabase.from('appels_journaliers').upsert(
+          {
+            etablissement_id: item.etablissementId,
+            classe_id: item.classeId,
+            date: item.date,
+            enseignant_id: item.enseignantId,
+            nb_eleves: lignesAppel.length,
+            nb_absents: lignesAppel.filter((l) => l.statut === 'absence').length,
+            nb_retards: lignesAppel.filter((l) => l.statut === 'retard').length,
+            saisi_le: item.saisieLe,
+          },
+          { onConflict: 'classe_id,date' }
+        ),
+        15000
+      );
+      if (traceErr) console.warn("Trace de l'appel non enregistrée :", traceErr.message);
+
       // 3. Tout est passé : on retire l'appel de la file
       await fileSupprimer(item);
       envoyes++;

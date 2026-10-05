@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 
 const DASHBOARD_BY_ROLE: Record<string, string> = {
   super_admin: "/admin/dashboard",
+  administration: "/directeur/dashboard",
   chef: "/chef/dashboard",
   directeur_etudes: "/directeur/dashboard",
   comptable: "/comptable/dashboard",
@@ -29,5 +30,7 @@ export default async function Home() {
 
   if (profile?.must_change_password) redirect("/changer-mot-de-passe");
 
-  redirect(profile?.role ? DASHBOARD_BY_ROLE[profile.role] : "/login");
+  redirect(
+    (profile?.role && DASHBOARD_BY_ROLE[profile.role]) || "/login"
+  );
 }

@@ -1,156 +1,322 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/client";
 
-export const dynamic = "force-dynamic";
+const STATUTS = ["actif", "en_attente", "suspendu", "expire"] as const;
+const TYPES = [
+  { value: "maternelle", label: "Maternelle" },
+  { value: "primaire", label: "Primaire" },
+  { value: "college", label: "Collège" },
+  { value: "lycee", label: "Lycée" },
+  { value: "college_lycee", label: "Collège-Lycée" },
+] as const;
+const SYSTEMES = [{ value: "ivoirien", label: "Ivoirien" }];
 
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    actif: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    en_attente: "bg-amber-50 text-amber-700 border-amber-200",
-    suspendu: "bg-red-50 text-red-700 border-red-200",
-    expire: "bg-neutral-100 text-neutral-600 border-neutral-200",
-  };
+export default function NouvelEtablissement() {
+  const supabase = createClient();
 
-  const labels: Record<string, string> = {
-    actif: "Actif",
-    en_attente: "En attente",
-    suspendu: "Suspendu",
-    expire: "Expiré",
-  };
+  const [nom, setNom] = useState("");
+  const [ville, setVille] = useState("");
+  const [adresse, setAdresse] = useState("");
+  const [telephone, setTelephone] = useState("");
+  const [statut, setStatut] = useState<(typeof STATUTS)[number]>("en_attente");
+  const [dateDebut, setDateDebut] = useState("");
+  const [typeEtablissement, setTypeEtablissement] = useState<(typeof TYPES)[number]["value"]>("college");
+  const [systeme, setSysteme] = useState("ivoirien");
+  const [anneeScolaire, setAnneeScolaire] = useState("2025-2026");
+  const [nomChef, setNomChef] = useState("");
+  const [prenomChef, setPrenomChef] = useState("");
 
-  return (
-    <span
-      className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${
-        styles[status] ?? styles.expire
-      }`}
-    >
-      {labels[status] ?? status}
-    </span>
-  );
-}
+  const [chargement, setChargement] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [resultat, setResultat] = useState<{
+    classes: number;
+    matieres: number;
+    identifiantChef: string;
+    motDePasseChef: string;
+  } | null>(null);
 
-export default async function EtablissementsListe({
-  searchParams,
-}: {
-  searchParams: Promise<{ q?: string }>;
-}) {
-  const { q } = await searchParams;
-  const search = (q ?? "").trim();
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setErreur(null);
 
-  const supabase = await createClient();
+    if (!nom.trim()) {
+      setErreur("Le nom de l'établissement est obligatoire.");
+      return;
+    }
+    if (!nomChef.trim() || !prenomChef.trim()) {
+      setErreur("Le nom et le prénom du responsable du compte administration sont obligatoires.");
+      return;
+    }
 
-  let query = supabase
-    .from("etablissements")
-    .select("id, nom, ville, statut")
-    .order("created_at", { ascending: false });
+    setChargement(true);
 
-  if (search) {
-    query = query.ilike("nom", `%${search}%`);
+    const { data: nouvelEtab, error } = await supabase
+      .from("etablissements")
+      .insert({
+        nom: nom.trim(),
+        ville: ville.trim() || null,
+        adresse: adresse.trim() || null,
+        telephone: telephone.trim() || null,
+        statut,
+        date_debut_abonnement: dateDebut || null,
+        type_etablissement: typeEtablissement,
+        systeme_enseignement: systeme,
+        annee_scolaire_active: anneeScolaire,
+      })
+      .select("id")
+      .single();
+
+    if (error || !nouvelEtab) {
+      setErreur(error?.message || "Erreur lors de la création.");
+      setChargement(false);
+      return;
+    }
+
+    // Initialisation automatique : classes, matières, barèmes, paramètres, trimestres
+    const { data: initData, error: initError } = await supabase.rpc(
+      "initialiser_etablissement",
+      { p_etablissement_id: nouvelEtab.id }
+    );
+
+    if (initError) {
+      setChargement(false);
+      setErreur(
+        `Établissement créé, mais l'initialisation automatique a échoué : ${initError.message}. Tu peux réessayer depuis la fiche de l'établissement.`
+      );
+      return;
+    }
+
+    // Création automatique du compte administration (compte principal de l'école)
+    const reponseChef = await fetch("/api/admin/creer-directeur", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        etablissementId: nouvelEtab.id,
+        nom: nomChef.trim(),
+        prenom: prenomChef.trim(),
+      }),
+    });
+
+    const dataChef = await reponseChef.json();
+
+    setChargement(false);
+
+    if (!reponseChef.ok) {
+      setErreur(
+        `Établissement initialisé, mais la création du compte administration a échoué : ${dataChef.error}. Tu peux réessayer depuis la fiche de l'établissement.`
+      );
+      return;
+    }
+
+    setResultat({
+      classes: initData?.classes_creees ?? 0,
+      matieres: initData?.matieres_creees ?? 0,
+      identifiantChef: dataChef.identifiant,
+      motDePasseChef: dataChef.motDePasseProvisoire,
+    });
   }
 
-  const { data: etablissements } = await query;
+  if (resultat) {
+    return (
+      <main className="p-6 sm:p-8 max-w-lg">
+        <h1 className="font-display text-2xl font-semibold mb-1">
+          Établissement créé et initialisé
+        </h1>
+        <p className="text-neutral-500 mb-6 text-sm">
+          Le moteur d'initialisation a préparé la structure de base.
+        </p>
 
-  return (
-    <div className="p-4 sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-7xl">
-        {/* EN-TÊTE */}
-        <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="mb-1 text-sm font-medium text-[#0B3D2E]">
-              Tableau de bord / Établissements
-            </p>
+        <div className="bg-white border rounded-xl p-5 space-y-2 mb-4">
+          <p><span className="font-medium">{resultat.classes}</span> classe(s) créée(s)</p>
+          <p><span className="font-medium">{resultat.matieres}</span> matière(s) créée(s), avec coefficients</p>
+        </div>
 
-            <h1 className="font-display text-3xl font-semibold tracking-tight text-[#1C1B18] sm:text-4xl">
-              Établissements
-            </h1>
-
-            <p className="mt-2 text-sm text-[#8A8272]">
-              {etablissements?.length ?? 0} établissement(s){" "}
-              {search ? `pour « ${search} »` : "enregistré(s)"}
-            </p>
-          </div>
-
-          <Link
-            href="/admin/etablissements/nouveau"
-            className="inline-flex items-center justify-center rounded-xl bg-[#0B3D2E] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#082C21]"
-          >
-            + Nouvel établissement
-          </Link>
-        </header>
-
-        {/* RECHERCHE */}
-        <form method="GET" className="mb-4">
-          <div className="relative max-w-md">
-            <svg
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8A8272]"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
-            <input
-              type="text"
-              name="q"
-              defaultValue={search}
-              placeholder="Rechercher un établissement..."
-              className="w-full rounded-xl border border-[#E7E2D6] bg-white py-2.5 pl-9 pr-3 text-sm text-[#1C1B18] placeholder:text-[#8A8272] focus:border-[#0B3D2E] focus:outline-none focus:ring-1 focus:ring-[#0B3D2E]"
-            />
-          </div>
-        </form>
-
-        {/* TABLEAU */}
-        <div className="overflow-hidden rounded-2xl border border-[#E7E2D6] bg-white shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-[#FAF8F3] text-left text-xs uppercase tracking-wide text-[#8A8272]">
-                <tr>
-                  <th className="px-5 py-3 font-medium">Nom</th>
-                  <th className="px-5 py-3 font-medium">Ville</th>
-                  <th className="px-5 py-3 font-medium">Statut</th>
-                  <th className="px-5 py-3 font-medium">Actions</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {etablissements?.map((e) => (
-                  <tr key={e.id} className="border-t border-[#F1EEE4]">
-                    <td className="px-5 py-4 font-medium text-[#1C1B18]">
-                      {e.nom}
-                    </td>
-                    <td className="px-5 py-4 text-[#8A8272]">
-                      {e.ville || "—"}
-                    </td>
-                    <td className="px-5 py-4">
-                      <StatusBadge status={e.statut} />
-                    </td>
-                    <td className="px-5 py-4 whitespace-nowrap">
-                      <Link
-                        href={`/admin/etablissements/${e.id}`}
-                        className="text-sm font-medium text-[#0B3D2E] hover:underline"
-                      >
-                        Voir / Modifier
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {(!etablissements || etablissements.length === 0) && (
-              <p className="px-5 py-10 text-center text-sm text-[#8A8272]">
-                {search
-                  ? `Aucun établissement ne correspond à « ${search} ».`
-                  : "Aucun établissement pour le moment."}
-              </p>
-            )}
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 space-y-2 mb-4">
+          <h2 className="font-medium text-amber-900">Identifiants du compte administration</h2>
+          <p className="text-sm text-amber-800">
+            Transmets ces identifiants à l'école : c'est avec ce compte qu'elle se connecte. Le mot de passe sera changé à la première connexion. Depuis ce compte, l'école crée ensuite ses autres comptes (chef, directeur des études, secrétaire, comptable, enseignants...).
+          </p>
+          <div className="bg-white rounded-lg p-3 font-mono text-sm space-y-1">
+            <p>Identifiant : <span className="font-semibold">{resultat.identifiantChef}</span></p>
+            <p>Mot de passe : <span className="font-semibold">{resultat.motDePasseChef}</span></p>
           </div>
         </div>
-      </div>
-    </div>
+
+        <div className="flex gap-3">
+          <Link href="/admin/etablissements" className="bg-black text-white rounded-lg px-4 py-2.5 text-sm font-medium">
+            Voir les établissements
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="p-6 sm:p-8 max-w-xl">
+      <h1 className="font-display text-3xl font-semibold mb-1">
+        Nouvel établissement
+      </h1>
+      <p className="text-neutral-500 mb-6">
+        Renseignez les informations. Les classes, matières et le compte administration seront créés automatiquement.
+      </p>
+
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white border rounded-xl p-6 space-y-4"
+      >
+        {erreur && (
+          <div className="bg-red-50 text-red-700 text-sm p-3 rounded-lg">
+            {erreur}
+          </div>
+        )}
+
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            Nom de l'établissement *
+          </label>
+          <input
+            type="text"
+            value={nom}
+            onChange={(e) => setNom(e.target.value)}
+            required
+            className="w-full border rounded-lg p-2"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Type d'établissement *</label>
+            <select
+              value={typeEtablissement}
+              onChange={(e) => setTypeEtablissement(e.target.value as any)}
+              className="w-full border rounded-lg p-2"
+              required
+            >
+              {TYPES.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Système d'enseignement *</label>
+            <select
+              value={systeme}
+              onChange={(e) => setSysteme(e.target.value)}
+              className="w-full border rounded-lg p-2"
+              required
+            >
+              {SYSTEMES.map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Année scolaire</label>
+          <input
+            type="text"
+            value={anneeScolaire}
+            onChange={(e) => setAnneeScolaire(e.target.value)}
+            placeholder="2025-2026"
+            className="w-full border rounded-lg p-2"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Ville</label>
+          <input
+            type="text"
+            value={ville}
+            onChange={(e) => setVille(e.target.value)}
+            className="w-full border rounded-lg p-2"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Adresse</label>
+          <input
+            type="text"
+            value={adresse}
+            onChange={(e) => setAdresse(e.target.value)}
+            className="w-full border rounded-lg p-2"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Téléphone</label>
+          <input
+            type="tel"
+            value={telephone}
+            onChange={(e) => setTelephone(e.target.value)}
+            className="w-full border rounded-lg p-2"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Statut</label>
+          <select
+            value={statut}
+            onChange={(e) => setStatut(e.target.value as (typeof STATUTS)[number])}
+            className="w-full border rounded-lg p-2"
+          >
+            {STATUTS.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            Date de début d'abonnement
+          </label>
+          <input
+            type="date"
+            value={dateDebut}
+            onChange={(e) => setDateDebut(e.target.value)}
+            className="w-full border rounded-lg p-2"
+          />
+        </div>
+
+        <div className="pt-2 border-t">
+          <h2 className="text-sm font-semibold mt-4 mb-3">Compte administration (responsable de l'école)</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Nom *</label>
+              <input
+                type="text"
+                value={nomChef}
+                onChange={(e) => setNomChef(e.target.value)}
+                required
+                className="w-full border rounded-lg p-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Prénom *</label>
+              <input
+                type="text"
+                value={prenomChef}
+                onChange={(e) => setPrenomChef(e.target.value)}
+                required
+                className="w-full border rounded-lg p-2"
+              />
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          disabled={chargement}
+          className="w-full bg-black text-white rounded-lg p-3 font-medium disabled:opacity-50"
+        >
+          {chargement ? "Création et initialisation..." : "Créer et initialiser l'établissement"}
+        </button>
+      </form>
+    </main>
   );
-          }
+        }
+      

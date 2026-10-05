@@ -23,8 +23,8 @@ export default function ArchivesPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const peutGerer = ['chef', 'directeur_etudes', 'comptable', 'super_admin'].includes(role);
-  const peutDeverrouiller = ['chef', 'directeur_etudes', 'super_admin'].includes(role);
+  const peutGerer = ['administration', 'chef', 'directeur_etudes', 'comptable', 'super_admin'].includes(role);
+  const peutDeverrouiller = ['administration', 'chef', 'directeur_etudes', 'super_admin'].includes(role);
 
   const charger = useCallback(async () => {
     setLoading(true);

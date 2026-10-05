@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 
 type Role =
   | 'super_admin'
+  | 'administration'
   | 'chef'
   | 'enseignant'
   | 'parent'
@@ -14,6 +15,7 @@ type Role =
   | 'caissier';
 
 type RolePointagePersonnel =
+  | 'administration'
   | 'chef'
   | 'enseignant'
   | 'educateur'
@@ -42,7 +44,7 @@ const ROLES_POINTAGE: {
 } = {
   enseignants: ['enseignant'],
   educateurs: ['educateur'],
-  direction: ['chef', 'directeur_etudes'],
+  direction: ['administration', 'chef', 'directeur_etudes'],
   administration: [
     'secretaire',
     'comptable',
@@ -95,6 +97,7 @@ function roleAutorise(
 function estRoleValide(role: string): role is Role {
   return [
     'super_admin',
+    'administration',
     'chef',
     'enseignant',
     'parent',
@@ -111,6 +114,7 @@ function estRolePointagePersonnel(
   role: Role
 ): role is RolePointagePersonnel {
   return (
+    role === 'administration' ||
     role === 'chef' ||
     role === 'enseignant' ||
     role === 'educateur' ||

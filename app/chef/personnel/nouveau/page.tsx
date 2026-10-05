@@ -5,6 +5,7 @@ import { useState } from 'react';
 const ROLES = [
   { value: 'enseignant', label: 'Enseignant' },
   { value: 'educateur', label: 'Éducateur' },
+  { value: 'chef', label: "Chef d'établissement" },
   { value: 'directeur_etudes', label: 'Directeur des études' },
   { value: 'comptable', label: 'Comptable' },
   { value: 'secretaire', label: 'Secrétaire' },
@@ -130,4 +131,4 @@ export default function AjouterMembrePage() {
       )}
     </div>
   );
-    }
+}

@@ -4,6 +4,7 @@ import { marquerToutesNotificationsLues } from "./actions";
 
 const roleLabels: Record<string, string> = {
   super_admin: "Super Administrateur",
+administration: "Administration",
   chef: "Chef d'établissement",
   directeur_etudes: "Directeur des études",
   enseignant: "Enseignant",

@@ -3,6 +3,7 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 
 const ROLES_AUTORISES = [
+  "chef",
   "enseignant",
   "educateur",
   "directeur_etudes",
@@ -13,11 +14,12 @@ const ROLES_AUTORISES = [
 
 type RoleAutorise = (typeof ROLES_AUTORISES)[number];
 
-const ROLES_CREATEURS = ["chef", "directeur_etudes"] as const;
+const ROLES_CREATEURS = ["administration", "chef", "directeur_etudes"] as const;
 
 // Préfixes distincts pour chaque rôle, afin d'éviter toute confusion :
 // "directeur_etudes" utilise "DE" (et non "DIR", réservé au chef d'établissement).
 const PREFIXES: Record<RoleAutorise, string> = {
+  chef: "DIR",
   enseignant: "ENS",
   educateur: "EDU",
   directeur_etudes: "DE",
@@ -47,7 +49,7 @@ export async function POST(request: Request) {
       !ROLES_CREATEURS.includes(createurProfile.role as (typeof ROLES_CREATEURS)[number])
     ) {
       return NextResponse.json(
-        { error: "Accès réservé au chef d'établissement ou au directeur des études." },
+        { error: "Accès réservé à l'administration, au chef d'établissement ou au directeur des études." },
         { status: 403 }
       );
     }
@@ -65,6 +67,14 @@ export async function POST(request: Request) {
 
     if (!ROLES_AUTORISES.includes(role)) {
       return NextResponse.json({ error: "Ce rôle ne peut pas être créé depuis cette page." }, { status: 400 });
+    }
+
+    // Seule l'administration peut créer un compte chef d'établissement
+    if (role === "chef" && createurProfile.role !== "administration") {
+      return NextResponse.json(
+        { error: "Seule l'administration peut créer un compte chef d'établissement." },
+        { status: 403 }
+      );
     }
 
     const admin = createAdminClient(

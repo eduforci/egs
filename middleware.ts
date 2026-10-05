@@ -6,6 +6,7 @@ const ROLE_ROUTES: Record<string, string> = {
   "/admin": "super_admin",
   "/chef": "chef",
   "/directeur": "directeur_etudes",
+  "/directeur-etudes": "directeur_etudes",
   "/direction": "directeur_etudes",
   "/comptable": "comptable",
   "/secretariat": "secretaire",
@@ -22,6 +23,7 @@ const DASHBOARD_PAR_ROLE: Record<string, string> = {
   super_admin: "/admin/dashboard",
   chef: "/chef/dashboard",
   directeur_etudes: "/directeur/dashboard",
+  administration: "/directeur/dashboard",
   comptable: "/comptable/dashboard",
   secretaire: "/secretariat/dashboard",
   enseignant: "/prof/dashboard",
@@ -41,7 +43,30 @@ const EXCEPTIONS: { prefix: string; rolesSupplementaires: string[] }[] = [
   { prefix: "/chef/enseignants", rolesSupplementaires: ["directeur_etudes"] },
   { prefix: "/chef/parents", rolesSupplementaires: ["directeur_etudes"] },
   { prefix: "/direction", rolesSupplementaires: ["chef"] },
+  // DESPS, AGFNE, établissement : le chef les consulte (lecture seule)
+  { prefix: "/directeur-etudes", rolesSupplementaires: ["chef"] },
 ];
+
+// Le compte « administration » est le compte principal de l'école : il accède à tous
+// les espaces de gestion de l'école (pas aux espaces personnels enseignant, parent, élève
+// ni à l'espace super admin).
+const ESPACES_ADMINISTRATION = [
+  "/chef",
+  "/directeur",
+  "/directeur-etudes",
+  "/direction",
+  "/comptable",
+  "/secretariat",
+  "/educateur",
+];
+
+// Trouve l'espace correspondant à l'adresse, en comparant des segments entiers
+// (« /admin » ne doit pas attraper « /administration »).
+function espaceCorrespondant(path: string): string | undefined {
+  return Object.keys(ROLE_ROUTES)
+    .filter((p) => path === p || path.startsWith(p + "/"))
+    .sort((a, b) => b.length - a.length)[0];
+}
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -79,9 +104,7 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const matchedPrefix = Object.keys(ROLE_ROUTES).find((p) =>
-    path.startsWith(p)
-  );
+  const matchedPrefix = espaceCorrespondant(path);
 
   if (matchedPrefix) {
     if (!user) {
@@ -100,7 +123,10 @@ export async function middleware(request: NextRequest) {
       ? [roleRequis, ...exception.rolesSupplementaires]
       : [roleRequis];
 
-    if (!profile?.role || !rolesAutorises.includes(profile.role)) {
+    const accesAdministration =
+      profile?.role === "administration" && ESPACES_ADMINISTRATION.includes(matchedPrefix);
+
+    if (!profile?.role || (!rolesAutorises.includes(profile.role) && !accesAdministration)) {
       // Connecté, mais mauvais espace : renvoyé vers son propre tableau de bord
       const dashboard = profile?.role ? DASHBOARD_PAR_ROLE[profile.role] : undefined;
       return NextResponse.redirect(new URL(dashboard || "/login", request.url));
@@ -121,6 +147,7 @@ export const config = {
     "/admin/:path*",
     "/chef/:path*",
     "/directeur/:path*",
+    "/directeur-etudes/:path*",
     "/direction/:path*",
     "/comptable/:path*",
     "/secretariat/:path*",

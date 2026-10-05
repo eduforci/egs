@@ -12,8 +12,8 @@ export async function GET(req: NextRequest) {
     .eq('id', user.id)
     .single();
 
-  // Chef ET directeur_etudes peuvent tous les deux lire (RLS "desps_select_etablissement" le permet déjà)
-  if (!profile || !['chef', 'directeur_etudes'].includes(profile.role)) {
+  // Administration, chef ET directeur_etudes peuvent lire (RLS "desps_select_etablissement")
+  if (!profile || !['administration', 'chef', 'directeur_etudes'].includes(profile.role)) {
     return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
   }
 

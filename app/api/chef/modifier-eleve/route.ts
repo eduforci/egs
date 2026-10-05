@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     .eq("id", user.id)
     .single();
 
-  const rolesAutorises = ["chef", "directeur_etudes", "secretaire", "educateur", "super_admin"];
+ const rolesAutorises = ["administration", "chef", "directeur_etudes", "secretaire", "educateur", "super_admin"];
   if (!profile || !rolesAutorises.includes(profile.role)) {
     return NextResponse.json({ error: "Accès réservé au personnel administratif." }, { status: 403 });
   }

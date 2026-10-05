@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const rolesAutorises = ["chef", "directeur_etudes", "secretaire", "super_admin"];
+    const rolesAutorises = ["administration", "chef", "directeur_etudes", "secretaire", "super_admin"];
 
     if (!rolesAutorises.includes(profile.role)) {
       return NextResponse.json(

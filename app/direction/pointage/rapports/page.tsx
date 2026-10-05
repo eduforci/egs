@@ -17,6 +17,7 @@ type StatPersonne = {
 const ROLE_LABEL: Record<string, string> = {
   enseignant: 'Enseignant',
   educateur: 'Éducateur',
+  administration: 'Administration',
   chef: 'Chef',
   directeur_etudes: 'Directeur des études',
   secretaire: 'Secrétaire',

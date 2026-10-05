@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 
 const roleLabels: Record<string, string> = {
   super_admin: "Super Admin",
+  administration: "Administration",
   chef: "Chef d'établissement",
   directeur_etudes: "Directeur des études",
   enseignant: "Enseignant",
@@ -18,6 +19,7 @@ const roleLabels: Record<string, string> = {
 
 const roleStyles: Record<string, string> = {
   super_admin: "bg-[#0B3D2E]/10 text-[#0B3D2E] border-[#0B3D2E]/20",
+  administration: "bg-neutral-900 text-white border-neutral-900",
   chef: "bg-[#C9962B]/15 text-[#8A6A1A] border-[#C9962B]/30",
   directeur_etudes: "bg-blue-50 text-blue-700 border-blue-200",
   enseignant: "bg-violet-50 text-violet-700 border-violet-200",

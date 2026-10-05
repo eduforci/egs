@@ -59,6 +59,7 @@ const NAV_GROUPS: NavGroup[] = [
 ];
 
 const ROLE_LABELS: Record<string, string> = {
+  administration: 'Administration',
   chef: "Chef d'établissement",
   directeur_etudes: 'Directeur des études',
 };
@@ -103,7 +104,7 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
     setMenuOuvert(false);
   }, [pathname]);
 
-  const estVisiteurDirecteur = role === 'directeur_etudes';
+  const estVisiteurDirecteur = role === 'directeur_etudes' || role === 'administration';
 
   return (
     <div className="min-h-screen bg-neutral-50 flex">
@@ -190,7 +191,7 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
         {estVisiteurDirecteur && (
           <div className="bg-blue-50 border-b border-blue-200 px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap print:hidden">
             <p className="text-xs text-blue-800">
-              Vous consultez cette page en tant que <strong>Directeur des études</strong> — elle est partagée avec l'espace chef.
+              Vous consultez cette page en tant que <strong>{ROLE_LABELS[role] || 'Directeur des études'}</strong> — elle est partagée avec l'espace chef.
             </p>
             <Link
               href="/directeur/dashboard"

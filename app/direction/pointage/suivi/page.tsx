@@ -26,6 +26,7 @@ type PersonneSansPointage = {
 const ROLE_LABEL: Record<string, string> = {
   enseignant: 'Enseignant',
   educateur: 'Éducateur',
+  administration: 'Administration',
   chef: 'Chef',
   directeur_etudes: 'Directeur des études',
   secretaire: 'Secrétaire',
@@ -130,7 +131,7 @@ export default function SuiviPointagePage() {
     const rolesAttendus: string[] = [];
     if (config?.pointage_enseignants) rolesAttendus.push('enseignant');
     if (config?.pointage_educateurs) rolesAttendus.push('educateur');
-    if (config?.pointage_direction) rolesAttendus.push('chef', 'directeur_etudes');
+    if (config?.pointage_direction) rolesAttendus.push('administration', 'chef', 'directeur_etudes');
     if (config?.pointage_administration) rolesAttendus.push('secretaire', 'comptable', 'caissier');
 
     if (rolesAttendus.length > 0) {

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 
+// Crée le compte principal « administration » d'un établissement.
+// (Le chemin de la route est conservé pour ne pas casser les écrans existants.)
 export async function POST(request: Request) {
   const supabase = await createServerClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -24,7 +26,7 @@ export async function POST(request: Request) {
 
   if (!etablissementId || !nom || !prenom) {
     return NextResponse.json(
-      { error: "Établissement, nom et prénom du directeur sont obligatoires." },
+      { error: "Établissement, nom et prénom du responsable sont obligatoires." },
       { status: 400 }
     );
   }
@@ -34,36 +36,34 @@ export async function POST(request: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // Vérifie qu'un directeur n'existe pas déjà pour cet établissement
-  const { count: dejaExistant } = await supabase
+  // Un seul compte administration par établissement
+  const { count: dejaExistant } = await admin
     .from("profiles")
     .select("id", { count: "exact", head: true })
     .eq("etablissement_id", etablissementId)
-    .eq("role", "chef");
+    .eq("role", "administration");
 
   if (dejaExistant && dejaExistant > 0) {
     return NextResponse.json(
-      { error: "Un directeur existe déjà pour cet établissement." },
+      { error: "Un compte administration existe déjà pour cet établissement." },
       { status: 409 }
     );
   }
 
-  // Numérotation robuste : plus grand numéro DIR-XXXX déjà utilisé
-  // sur toute la base (identifiant unique globalement). Un simple
-  // comptage peut provoquer des collisions après une suppression.
+  // Numérotation : plus grand numéro AD-XXXX déjà utilisé sur toute la base
   const { data: existants } = await admin
     .from("profiles")
     .select("identifiant")
-    .like("identifiant", "CE-%");
+    .like("identifiant", "AD-%");
 
   const maxNumero = (existants ?? []).reduce((max, p) => {
-    const match = p.identifiant?.match(/^CE-(\d+)$/);
+    const match = p.identifiant?.match(/^AD-(\d+)$/);
     const n = match ? parseInt(match[1], 10) : 0;
     return n > max ? n : max;
   }, 0);
 
   const numero = String(maxNumero + 1).padStart(4, "0");
-  const identifiant = `CE-${numero}`;
+  const identifiant = `AD-${numero}`;
   const emailTechnique = `${identifiant.toLowerCase()}@${etablissementId}.egs.local`;
   const motDePasseProvisoire = Math.random().toString(36).slice(-8) + "A1!";
 
@@ -79,14 +79,16 @@ export async function POST(request: Request) {
 
   const { error: profileError } = await admin.from("profiles").insert({
     id: nouvelUser.user.id,
-    role: "chef",
+    role: "administration",
     etablissement_id: etablissementId,
-    nom,
-    prenom,
+    nom: String(nom).trim(),
+    prenom: String(prenom).trim(),
     identifiant,
+    must_change_password: true,
   });
 
   if (profileError) {
+    await admin.auth.admin.deleteUser(nouvelUser.user.id);
     return NextResponse.json({ error: profileError.message }, { status: 500 });
   }
 

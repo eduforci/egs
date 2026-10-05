@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     .eq("id", user.id)
     .single();
 
-  const rolesAutorises = ["chef", "directeur_etudes"];
+  const rolesAutorises = ["administration", "chef", "directeur_etudes"];
   if (!profile || !rolesAutorises.includes(profile.role)) {
     return NextResponse.json(
       { error: "Vous n'êtes pas autorisé à envoyer des SMS." },

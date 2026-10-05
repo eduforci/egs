@@ -14,6 +14,10 @@ const NAV_GROUPS: NavGroup[] = [
     items: [{ label: 'Accueil', href: '/educateur/dashboard', icon: '🏠' }],
   },
   {
+    titre: 'SUIVI',
+    items: [{ label: 'Point des appels', href: '/educateur/appels', icon: '📋' }],
+  },
+  {
     titre: 'POINTAGE',
     items: [{ label: 'Badger', href: '/pointage', icon: '👆' }],
   },
@@ -25,6 +29,7 @@ export default function EducateurLayout({ children }: { children: React.ReactNod
   const [menuOuvert, setMenuOuvert] = useState(false);
   const [nom, setNom] = useState('');
   const [prenom, setPrenom] = useState('');
+  const [role, setRole] = useState('');
   const [etablissementNom, setEtablissementNom] = useState('');
 
   useEffect(() => {
@@ -34,12 +39,13 @@ export default function EducateurLayout({ children }: { children: React.ReactNod
 
       const { data: profil } = await supabase
         .from('profiles')
-        .select('nom, prenom, etablissement_id')
+        .select('nom, prenom, role, etablissement_id')
         .eq('id', userData.user.id)
         .single();
 
       setNom(profil?.nom || '');
       setPrenom(profil?.prenom || '');
+      setRole(profil?.role || '');
 
       if (profil?.etablissement_id) {
         const { data: etab } = await supabase
@@ -109,7 +115,7 @@ export default function EducateurLayout({ children }: { children: React.ReactNod
           </div>
           <div className="text-xs">
             <div className="font-medium">{prenom} {nom}</div>
-            <div className="text-neutral-400">Éducateur</div>
+            <div className="text-neutral-400">{role === 'administration' ? 'Administration' : 'Éducateur'}</div>
           </div>
         </div>
       </aside>

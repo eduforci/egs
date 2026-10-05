@@ -128,10 +128,11 @@ try {
   }
 
   const rolesAutorises = [
-    'super_admin',
-    'chef',
-    'directeur_etudes',
-  ];
+  'super_admin',
+  'administration',
+  'chef',
+  'directeur_etudes',
+];
 
   if (!rolesAutorises.includes(profil.role)) {
     afficherErreur(

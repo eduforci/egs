@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 
 const roleLabels: Record<string, string> = {
+  administration: "Administration",
+  chef: "Chef d'établissement",
   enseignant: "Enseignant",
   directeur_etudes: "Directeur des études",
   comptable: "Comptable",
@@ -13,6 +15,8 @@ const roleLabels: Record<string, string> = {
 };
 
 const roleStyles: Record<string, string> = {
+  administration: "bg-neutral-900 text-white border-neutral-900",
+  chef: "bg-amber-50 text-amber-700 border-amber-200",
   enseignant: "bg-violet-50 text-violet-700 border-violet-200",
   directeur_etudes: "bg-blue-50 text-blue-700 border-blue-200",
   comptable: "bg-teal-50 text-teal-700 border-teal-200",
@@ -90,6 +94,8 @@ export default async function PersonnelSupervision() {
     .select("id, role, nom, prenom, identifiant")
     .eq("etablissement_id", etablissementId ?? "")
     .in("role", [
+      "administration",
+      "chef",
       "enseignant",
       "directeur_etudes",
       "comptable",
@@ -174,6 +180,8 @@ export default async function PersonnelSupervision() {
           { label: "Notes saisies", value: notesParEnseignant.get(s.id) ?? 0 },
           { label: "Absences enregistrées", value: absencesSaisiesParEnseignant.get(s.id) ?? 0 },
         ];
+      case "administration":
+      case "chef":
       case "directeur_etudes":
         return [
           { label: "Absences validées", value: absencesValideesParUser.get(s.id) ?? 0 },
@@ -195,7 +203,7 @@ export default async function PersonnelSupervision() {
     }
   }
 
-  const groupes = ["enseignant", "directeur_etudes", "comptable", "caissier", "secretaire", "educateur"]
+  const groupes = ["administration", "chef", "enseignant", "directeur_etudes", "comptable", "caissier", "secretaire", "educateur"]
     .map((role) => ({
       role,
       membres: (staff ?? []).filter((s) => s.role === role),

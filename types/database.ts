@@ -1,9 +1,12 @@
 export type UserRole =
   | "super_admin"
+  | "administration"
   | "chef"
   | "directeur_etudes"
   | "comptable"
   | "secretaire"
+  | "educateur"
+  | "caissier"
   | "enseignant"
   | "parent"
   | "eleve";

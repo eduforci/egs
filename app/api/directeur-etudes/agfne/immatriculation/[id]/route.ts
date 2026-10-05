@@ -12,7 +12,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     .eq('id', user.id)
     .single();
 
-  if (!profile || profile.role !== 'directeur_etudes') {
+  if (!profile || !['directeur_etudes', 'administration'].includes(profile.role)) {
     return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
   }
 
@@ -66,4 +66,4 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 
   return NextResponse.json({ demande: data });
-                            }
+}

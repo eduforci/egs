@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     .eq("id", user.id)
     .single();
 
-  const rolesAutorises = ["chef", "directeur_etudes", "secretaire", "super_admin"];
+  const rolesAutorises = ["administration", "chef", "directeur_etudes", "secretaire", "super_admin"];
   if (!profile || !rolesAutorises.includes(profile.role)) {
     return NextResponse.json(
       { error: "Vous n'êtes pas autorisé à importer des élèves." },

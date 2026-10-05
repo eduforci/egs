@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     .eq('id', user.id)
     .single();
 
-  if (!profile || profile.role !== 'directeur_etudes') {
+  if (!profile || !['directeur_etudes', 'administration'].includes(profile.role)) {
     return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
   }
 
@@ -38,7 +38,7 @@ export async function PATCH(req: NextRequest) {
     .eq('id', user.id)
     .single();
 
-  if (!profile || profile.role !== 'directeur_etudes') {
+  if (!profile || !['directeur_etudes', 'administration'].includes(profile.role)) {
     return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
   }
 

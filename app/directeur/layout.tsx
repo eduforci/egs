@@ -8,6 +8,15 @@ import { createClient } from '@/lib/supabase/client';
 type NavItem = { label: string; href: string; icon: string };
 type NavGroup = { titre: string; items: NavItem[] };
 
+// Visible uniquement pour le compte administration : création des comptes de l'école
+const GROUPE_COMPTES: NavGroup = {
+  titre: "COMPTES DE L'ÉCOLE",
+  items: [
+    { label: 'Nouveau membre du personnel', href: '/chef/personnel/nouveau', icon: '➕' },
+    { label: 'Nouvel élève', href: '/chef/eleves/nouveau', icon: '🎓' },
+  ],
+};
+
 const NAV_GROUPS: NavGroup[] = [
   {
     titre: 'TABLEAU DE BORD',
@@ -95,6 +104,11 @@ export default function DirecteurLayout({ children }: { children: React.ReactNod
   const [etablissementNom, setEtablissementNom] = useState('');
   const [role, setRole] = useState('');
 
+  const groupesAffiches =
+    role === 'administration'
+      ? [NAV_GROUPS[0], GROUPE_COMPTES, ...NAV_GROUPS.slice(1)]
+      : NAV_GROUPS;
+
   useEffect(() => {
     const charger = async () => {
       const { data: userData } = await supabase.auth.getUser();
@@ -144,7 +158,7 @@ export default function DirecteurLayout({ children }: { children: React.ReactNod
         </div>
 
         <nav className="flex-1 overflow-y-auto overscroll-contain py-4 px-2 space-y-5">
-          {NAV_GROUPS.map((groupe) => (
+          {groupesAffiches.map((groupe) => (
             <div key={groupe.titre}>
               <div className="px-3 mb-1 text-[10px] font-semibold text-neutral-500 tracking-wider">
                 {groupe.titre}

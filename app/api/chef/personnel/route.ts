@@ -59,7 +59,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { nom, prenom, role } = body as { nom?: string; prenom?: string; role?: RoleAutorise };
+    const { nom, prenom, role, fonction } = body as { nom?: string; prenom?: string; role?: RoleAutorise; fonction?: string };
 
     if (!nom || !prenom || !role) {
       return NextResponse.json({ error: "Nom, prénom et rôle sont obligatoires." }, { status: 400 });
@@ -121,6 +121,7 @@ export async function POST(request: Request) {
       nom: nom.trim(),
       prenom: prenom.trim(),
       identifiant,
+      fonction: fonction && fonction.trim() ? fonction.trim().slice(0, 100) : null,
       must_change_password: true,
     });
 

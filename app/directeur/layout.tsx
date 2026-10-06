@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import Avatar from '@/components/avatar';
 
 type NavItem = { label: string; href: string; icon: string };
 type NavGroup = { titre: string; items: NavItem[] };
@@ -107,6 +108,7 @@ export default function DirecteurLayout({ children }: { children: React.ReactNod
   const [etablissementNom, setEtablissementNom] = useState('');
   const [role, setRole] = useState('');
   const [fonction, setFonction] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   const groupesAffiches =
     role === 'administration'
@@ -131,10 +133,11 @@ export default function DirecteurLayout({ children }: { children: React.ReactNod
       // Fonction lue à part : sans effet sur le reste si la colonne n'existe pas encore
       const { data: f } = await supabase
         .from('profiles')
-        .select('fonction')
+        .select('fonction, avatar_url')
         .eq('id', userData.user.id)
         .single();
       setFonction((f as any)?.fonction || '');
+      setAvatarUrl((f as any)?.avatar_url || null);
 
       if (profil?.etablissement_id) {
         const { data: etab } = await supabase
@@ -199,9 +202,7 @@ export default function DirecteurLayout({ children }: { children: React.ReactNod
         </nav>
 
         <div className="p-3 border-t border-neutral-800 flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-neutral-700 flex items-center justify-center text-xs font-medium">
-            {prenom.charAt(0)}{nom.charAt(0)}
-          </div>
+          <Avatar url={avatarUrl} prenom={prenom} nom={nom} />
           <div className="text-xs">
             <div className="font-medium">{prenom} {nom}</div>
             <div className="text-neutral-400">

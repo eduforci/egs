@@ -24,6 +24,7 @@ export default function AjouterMembrePage() {
   const [nom, setNom] = useState('');
   const [prenom, setPrenom] = useState('');
   const [role, setRole] = useState('enseignant');
+  const [fonction, setFonction] = useState('');
   const [loading, setLoading] = useState(false);
   const [erreur, setErreur] = useState('');
   const [resultat, setResultat] = useState<Resultat | null>(null);
@@ -42,7 +43,7 @@ export default function AjouterMembrePage() {
       const res = await fetch('/api/chef/personnel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nom: nom.trim(), prenom: prenom.trim(), role }),
+        body: JSON.stringify({ nom: nom.trim(), prenom: prenom.trim(), role, fonction: fonction.trim() }),
       });
 
       const data = await res.json();
@@ -56,6 +57,7 @@ export default function AjouterMembrePage() {
       setResultat(data);
       setNom('');
       setPrenom('');
+      setFonction('');
       setLoading(false);
     } catch (e: any) {
       setErreur('Erreur réseau: ' + e.message);
@@ -99,6 +101,18 @@ export default function AjouterMembrePage() {
             className="w-full border rounded-lg p-2"
           />
         </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Fonction (facultatif)</label>
+        <input
+          type="text"
+          value={fonction}
+          onChange={(e) => setFonction(e.target.value)}
+          placeholder="Ex. Censeur, Économe, Surveillant général..."
+          className="w-full border rounded-lg p-2"
+        />
+        <p className="text-xs text-gray-500 mt-1">Titre affiché sous le nom de la personne. Si vide, le nom du rôle est affiché.</p>
       </div>
 
       {erreur && (

@@ -20,7 +20,10 @@ const GROUPE_COMPTES: NavGroup = {
 const NAV_GROUPS: NavGroup[] = [
   {
     titre: 'TABLEAU DE BORD',
-    items: [{ label: 'Accueil', href: '/directeur/dashboard', icon: '🏠' }],
+    items: [
+      { label: 'Accueil', href: '/directeur/dashboard', icon: '🏠' },
+      { label: 'Mon profil', href: '/directeur/profil', icon: '👤' },
+    ],
   },
   {
     titre: 'GESTION',
@@ -103,6 +106,7 @@ export default function DirecteurLayout({ children }: { children: React.ReactNod
   const [prenom, setPrenom] = useState('');
   const [etablissementNom, setEtablissementNom] = useState('');
   const [role, setRole] = useState('');
+  const [fonction, setFonction] = useState('');
 
   const groupesAffiches =
     role === 'administration'
@@ -123,6 +127,14 @@ export default function DirecteurLayout({ children }: { children: React.ReactNod
       setNom(profil?.nom || '');
       setPrenom(profil?.prenom || '');
       setRole(profil?.role || '');
+
+      // Fonction lue à part : sans effet sur le reste si la colonne n'existe pas encore
+      const { data: f } = await supabase
+        .from('profiles')
+        .select('fonction')
+        .eq('id', userData.user.id)
+        .single();
+      setFonction((f as any)?.fonction || '');
 
       if (profil?.etablissement_id) {
         const { data: etab } = await supabase
@@ -193,11 +205,12 @@ export default function DirecteurLayout({ children }: { children: React.ReactNod
           <div className="text-xs">
             <div className="font-medium">{prenom} {nom}</div>
             <div className="text-neutral-400">
-              {role === 'administration'
+              {fonction ||
+                (role === 'administration'
                 ? 'Administration'
                 : role === 'chef'
                 ? "Chef d'établissement"
-                : 'Directeur des études'}
+                : 'Directeur des études')}
             </div>
           </div>
         </div>

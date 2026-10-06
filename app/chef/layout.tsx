@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import Avatar from '@/components/avatar';
 
 type NavItem = { label: string; href: string; icon: string };
 type NavGroup = { titre: string; items: NavItem[] };
@@ -11,7 +12,10 @@ type NavGroup = { titre: string; items: NavItem[] };
 const NAV_GROUPS: NavGroup[] = [
   {
     titre: 'TABLEAU DE BORD',
-    items: [{ label: 'Accueil', href: '/chef/dashboard', icon: '🏠' }],
+    items: [
+      { label: 'Accueil', href: '/chef/dashboard', icon: '🏠' },
+      { label: 'Mon profil', href: '/chef/profil', icon: '👤' },
+    ],
   },
   {
     titre: 'GESTION',
@@ -71,6 +75,7 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
   const [nom, setNom] = useState('');
   const [prenom, setPrenom] = useState('');
   const [role, setRole] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [etablissementNom, setEtablissementNom] = useState('');
 
   useEffect(() => {
@@ -87,6 +92,13 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
       setNom(profil?.nom || '');
       setPrenom(profil?.prenom || '');
       setRole(profil?.role || '');
+
+      const { data: extra } = await supabase
+        .from('profiles')
+        .select('avatar_url')
+        .eq('id', userData.user.id)
+        .single();
+      setAvatarUrl((extra as any)?.avatar_url || null);
 
       if (profil?.etablissement_id) {
         const { data: etab } = await supabase
@@ -154,9 +166,7 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
         </nav>
 
         <div className="p-3 border-t border-neutral-800 flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-neutral-700 flex items-center justify-center text-xs font-medium">
-            {prenom.charAt(0)}{nom.charAt(0)}
-          </div>
+          <Avatar url={avatarUrl} prenom={prenom} nom={nom} />
           <div className="text-xs">
             <div className="font-medium">{prenom} {nom}</div>
             <div className="text-neutral-400">{ROLE_LABELS[role] || 'Chef d\'établissement'}</div>

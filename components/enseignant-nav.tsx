@@ -17,15 +17,28 @@ const LIENS = [
     libelle: 'Emploi du temps',
     prefixes: ['/enseignant/emploi-du-temps'],
   },
+  { href: '/prof/profil', libelle: 'Mon profil', prefixes: ['/prof/profil'] },
 ];
 
 export default function EnseignantNav() {
   const chemin = usePathname() || '';
 
+  // Un seul lien est actif : celui dont le préfixe correspond le mieux à la page
+  let meilleur = '';
+  let longueur = -1;
+  for (const l of LIENS) {
+    for (const p of l.prefixes) {
+      if (chemin.startsWith(p) && p.length > longueur) {
+        meilleur = l.href;
+        longueur = p.length;
+      }
+    }
+  }
+
   return (
     <nav className="flex flex-wrap gap-2 text-sm" aria-label="Espace enseignant">
       {LIENS.map((l) => {
-        const actif = l.prefixes.some((p) => chemin.startsWith(p));
+        const actif = l.href === meilleur;
         return actif ? (
           <span
             key={l.href}

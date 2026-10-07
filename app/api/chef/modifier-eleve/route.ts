@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { journaliser } from "@/lib/audit";
 
 export async function POST(request: Request) {
   const supabase = await createServerClient();
@@ -85,6 +86,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Accès refusé pour cet établissement." }, { status: 403 });
   }
 
+  // État avant modification (pour le journal d'audit)
+  const { data: avant } = await admin
+    .from("eleves")
+    .select("adresse, statut, date_naissance, lieu_naissance, statut_affecte, lv2, discipline_artistique, regime, photo_url")
+    .eq("id", eleveId)
+    .maybeSingle();
+  const { data: profilAvant } = await admin
+    .from("profiles")
+    .select("nom, prenom")
+    .eq("id", eleveId)
+    .maybeSingle();
+
   // Nom et prénom : stockés dans profiles (même id que l'élève)
   if (nomPropre !== undefined || prenomPropre !== undefined) {
     const majProfil: Record<string, string> = {};
@@ -113,6 +126,43 @@ export async function POST(request: Request) {
 
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });
+  }
+
+  // Journal d'audit : seulement ce qui a vraiment changé
+  const apres: Record<string, unknown> = {
+    adresse: adresse || null,
+    statut: statut || "actif",
+    date_naissance: dateNaissance || null,
+    lieu_naissance: lieuNaissance || null,
+    statut_affecte: statutAffecte === undefined ? null : statutAffecte,
+    lv2: lv2 || null,
+    discipline_artistique: disciplineArtistique || null,
+    regime: regime || "Non-boursier",
+  };
+  const diff: Record<string, { avant: unknown; apres: unknown }> = {};
+  for (const [cle, valeur] of Object.entries(apres)) {
+    const ancien = (avant as Record<string, unknown> | null)?.[cle] ?? null;
+    if (ancien !== valeur) diff[cle] = { avant: ancien, apres: valeur };
+  }
+  if ((avant?.photo_url ?? null) !== (photoUrl || null)) {
+    diff.photo = { avant: avant?.photo_url ? "oui" : "non", apres: photoUrl ? "oui" : "non" };
+  }
+  if (nomPropre !== undefined && profilAvant && profilAvant.nom !== nomPropre) {
+    diff.nom = { avant: profilAvant.nom, apres: nomPropre };
+  }
+  if (prenomPropre !== undefined && profilAvant && profilAvant.prenom !== prenomPropre) {
+    diff.prenom = { avant: profilAvant.prenom, apres: prenomPropre };
+  }
+  if (Object.keys(diff).length > 0) {
+    await journaliser(admin, {
+      etablissementId: profile.etablissement_id,
+      acteurId: user.id,
+      action: "eleve.modifie",
+      cibleType: "eleve",
+      cibleId: eleveId,
+      cibleLibelle: `${prenomPropre ?? profilAvant?.prenom ?? ""} ${nomPropre ?? profilAvant?.nom ?? ""}`.trim(),
+      details: diff,
+    });
   }
 
   return NextResponse.json({ success: true });

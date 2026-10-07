@@ -16,13 +16,15 @@ export async function POST(request: Request) {
     .eq("id", user.id)
     .single();
 
- const rolesAutorises = ["administration", "chef", "directeur_etudes", "secretaire", "educateur", "super_admin"];
+  const rolesAutorises = ["administration", "chef", "directeur_etudes", "secretaire", "educateur", "super_admin"];
   if (!profile || !rolesAutorises.includes(profile.role)) {
     return NextResponse.json({ error: "Accès réservé au personnel administratif." }, { status: 403 });
   }
 
   const {
     eleveId,
+    nom,
+    prenom,
     adresse,
     photoUrl,
     statut,
@@ -36,6 +38,12 @@ export async function POST(request: Request) {
 
   if (!eleveId) {
     return NextResponse.json({ error: "Identifiant élève manquant." }, { status: 400 });
+  }
+
+  const nomPropre = typeof nom === "string" ? nom.trim() : undefined;
+  const prenomPropre = typeof prenom === "string" ? prenom.trim() : undefined;
+  if ((nomPropre !== undefined && !nomPropre) || (prenomPropre !== undefined && !prenomPropre)) {
+    return NextResponse.json({ error: "Le nom et le prénom ne peuvent pas être vides." }, { status: 400 });
   }
 
   const statutsValides = ["actif", "inactif", "transfere", "diplome", "abandon"];
@@ -75,6 +83,17 @@ export async function POST(request: Request) {
 
   if (eleve.etablissement_id !== profile.etablissement_id) {
     return NextResponse.json({ error: "Accès refusé pour cet établissement." }, { status: 403 });
+  }
+
+  // Nom et prénom : stockés dans profiles (même id que l'élève)
+  if (nomPropre !== undefined || prenomPropre !== undefined) {
+    const majProfil: Record<string, string> = {};
+    if (nomPropre !== undefined) majProfil.nom = nomPropre;
+    if (prenomPropre !== undefined) majProfil.prenom = prenomPropre;
+    const { error: profilError } = await admin.from("profiles").update(majProfil).eq("id", eleveId);
+    if (profilError) {
+      return NextResponse.json({ error: profilError.message }, { status: 500 });
+    }
   }
 
   const { error: updateError } = await admin

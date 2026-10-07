@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { journaliser } from "@/lib/audit";
 
 // Chaque utilisateur connecté modifie SON propre profil.
 // Le rôle, l'établissement et l'identifiant ne sont jamais modifiables ici.
@@ -32,7 +33,7 @@ export async function PATCH(request: Request) {
 
   const { data: profil } = await admin
     .from("profiles")
-    .select("role")
+    .select("role, etablissement_id, nom, prenom, telephone, fonction, avatar_url")
     .eq("id", user.id)
     .single();
 
@@ -98,6 +99,28 @@ export async function PATCH(request: Request) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Journal d'audit : seulement ce qui a vraiment changé
+  const diff: Record<string, { avant: unknown; apres: unknown }> = {};
+  for (const cle of ["nom", "prenom", "telephone", "fonction"] as const) {
+    if (misAJour[cle] !== undefined && (profil[cle] ?? null) !== misAJour[cle]) {
+      diff[cle] = { avant: profil[cle] ?? null, apres: misAJour[cle] };
+    }
+  }
+  if (misAJour.avatar_url !== undefined && (profil.avatar_url ?? null) !== misAJour.avatar_url) {
+    diff.photo = { avant: profil.avatar_url ? "oui" : "non", apres: misAJour.avatar_url ? "oui" : "non" };
+  }
+  if (Object.keys(diff).length > 0) {
+    await journaliser(admin, {
+      etablissementId: profil.etablissement_id,
+      acteurId: user.id,
+      action: "profil.modifie",
+      cibleType: "profil",
+      cibleId: user.id,
+      cibleLibelle: `${misAJour.prenom ?? profil.prenom ?? ""} ${misAJour.nom ?? profil.nom ?? ""}`.trim(),
+      details: diff,
+    });
   }
 
   return NextResponse.json({ success: true });

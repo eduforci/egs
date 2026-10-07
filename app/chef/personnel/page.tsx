@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import PersonnelActions from "@/components/personnel-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,9 @@ type Staff = {
   nom: string;
   prenom: string;
   identifiant: string | null;
+  telephone?: string | null;
+  fonction?: string | null;
+  actif?: boolean | null;
 };
 
 type Metric = { label: string; value: number };
@@ -56,7 +60,7 @@ export default async function PersonnelSupervision() {
 
   const { data: chefProfil } = await supabase
     .from("profiles")
-    .select("etablissement_id")
+    .select("etablissement_id, role")
     .eq("id", user?.id ?? "")
     .maybeSingle();
 
@@ -91,7 +95,7 @@ export default async function PersonnelSupervision() {
 
   const { data: staff } = await supabase
     .from("profiles")
-    .select("id, role, nom, prenom, identifiant")
+    .select("id, role, nom, prenom, identifiant, telephone, fonction, actif")
     .eq("etablissement_id", etablissementId ?? "")
     .in("role", [
       "administration",
@@ -260,7 +264,8 @@ export default async function PersonnelSupervision() {
                   const initials = `${s.prenom?.charAt(0) ?? ""}${s.nom?.charAt(0) ?? ""}`.toUpperCase();
 
                   return (
-                    <li key={s.id} className="flex items-center justify-between gap-4 px-5 py-4">
+                    <li key={s.id}>
+                    <div className={`flex items-center justify-between gap-4 px-5 py-4 ${s.actif === false ? "opacity-60" : ""}`}>
                       <div className="flex min-w-0 items-center gap-3">
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-xs font-semibold text-neutral-700">
                           {initials || "?"}
@@ -268,6 +273,11 @@ export default async function PersonnelSupervision() {
                         <div className="min-w-0">
                           <p className="truncate font-medium text-neutral-900">
                             {s.prenom} {s.nom}
+                            {s.actif === false && (
+                              <span className="ml-2 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-700">
+                                Accès bloqué
+                              </span>
+                            )}
                           </p>
                           {s.identifiant && (
                             <p className="font-mono text-xs text-neutral-400">{s.identifiant}</p>
@@ -289,6 +299,22 @@ export default async function PersonnelSupervision() {
                           Suivi non disponible
                         </span>
                       )}
+                    </div>
+                    <PersonnelActions
+                      id={s.id}
+                      nom={s.nom ?? ""}
+                      prenom={s.prenom ?? ""}
+                      telephone={(s as Staff).telephone ?? null}
+                      fonction={(s as Staff).fonction ?? null}
+                      actif={s.actif !== false}
+                      estMoi={s.id === user?.id}
+                      peutGerer={
+                        chefProfil?.role === "administration" ||
+                        ((chefProfil?.role === "chef" || chefProfil?.role === "directeur_etudes") &&
+                          s.role !== "administration" &&
+                          s.role !== "chef")
+                      }
+                    />
                     </li>
                   );
                 })}

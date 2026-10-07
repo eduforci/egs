@@ -154,7 +154,7 @@ export default async function AdminDashboard() {
             label="Établissements"
             value={totalEtablissements}
             description={`${actifs} actif(s) actuellement`}
-            href="/admin/etablissements"
+            href="/admin/abonnements"
             accent="gold"
           />
 
@@ -192,7 +192,7 @@ export default async function AdminDashboard() {
               </div>
 
               <Link
-                href="/admin/etablissements"
+                href="/admin/abonnements"
                 className="text-sm font-medium text-[#0B3D2E] hover:underline"
               >
                 Voir tout →
@@ -321,7 +321,7 @@ export default async function AdminDashboard() {
 
               <div className="mt-3 grid gap-2">
                 <Link
-                  href="/admin/etablissements"
+                  href="/admin/abonnements"
                   className="rounded-lg border border-[#E7E2D6] bg-white px-3 py-2 text-sm text-[#1C1B18] hover:border-[#0B3D2E]/30"
                 >
                   Gérer les établissements →

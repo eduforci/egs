@@ -1,193 +1,227 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
 
-export const dynamic = "force-dynamic";
-
-const planLabels: Record<string, string> = {
-  essentiel: "Essentiel",
-  standard: "Standard",
-  premium: "Premium",
+type Etab = {
+  id: string;
+  nom: string;
+  ville: string | null;
+  code_etablissement: string | null;
+  code_drena: string | null;
+  statut: "actif" | "en_attente" | "suspendu" | "expire";
+  date_debut_abonnement: string | null;
+  date_fin_abonnement: string | null;
 };
 
-const planStyles: Record<string, string> = {
-  essentiel: "bg-neutral-100 text-neutral-700 border-neutral-200",
-  standard: "bg-blue-50 text-blue-700 border-blue-200",
-  premium: "bg-[#C9962B]/15 text-[#8A6A1A] border-[#C9962B]/30",
+const LABELS: Record<Etab["statut"], string> = {
+  actif: "Actif",
+  en_attente: "En attente",
+  suspendu: "Suspendu",
+  expire: "Expiré",
 };
 
-function PlanBadge({ plan }: { plan: string }) {
-  return (
-    <span
-      className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${
-        planStyles[plan] ?? "bg-neutral-100 text-neutral-600 border-neutral-200"
-      }`}
-    >
-      {planLabels[plan] ?? plan}
-    </span>
-  );
-}
+const STYLES: Record<Etab["statut"], string> = {
+  actif: "bg-green-50 text-green-700 border-green-200",
+  en_attente: "bg-amber-50 text-amber-700 border-amber-200",
+  suspendu: "bg-red-50 text-red-700 border-red-200",
+  expire: "bg-neutral-100 text-neutral-600 border-neutral-200",
+};
 
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    actif: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    en_attente: "bg-amber-50 text-amber-700 border-amber-200",
-    suspendu: "bg-red-50 text-red-700 border-red-200",
-    expire: "bg-neutral-100 text-neutral-600 border-neutral-200",
-  };
+export default function AbonnementsPage() {
+  const [liste, setListe] = useState<Etab[]>([]);
+  const [recherche, setRecherche] = useState("");
+  const [filtre, setFiltre] = useState<"tous" | Etab["statut"]>("tous");
+  const [chargement, setChargement] = useState(true);
+  const [occupe, setOccupe] = useState<string | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const [datesFin, setDatesFin] = useState<Record<string, string>>({});
 
-  const labels: Record<string, string> = {
-    actif: "Actif",
-    en_attente: "En attente",
-    suspendu: "Suspendu",
-    expire: "Expiré",
-  };
-
-  return (
-    <span
-      className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${
-        styles[status] ?? styles.expire
-      }`}
-    >
-      {labels[status] ?? status}
-    </span>
-  );
-}
-
-export default async function AbonnementsListe() {
-  const supabase = await createClient();
-
-  const { data: abonnements } = await supabase
-    .from("abonnements")
-    .select(
-      "id, etablissement_id, plan, statut, montant_mensuel, devise, date_debut, date_prochain_paiement"
-    )
-    .order("created_at", { ascending: false });
-
-  const etablissementIds = Array.from(
-    new Set((abonnements ?? []).map((a) => a.etablissement_id))
-  );
-
-  const { data: etablissements } =
-    etablissementIds.length > 0
-      ? await supabase
-          .from("etablissements")
-          .select("id, nom, ville")
-          .in("id", etablissementIds)
-      : { data: [] as { id: string; nom: string; ville: string }[] };
-
-  const etablissementMap = new Map(
-    (etablissements ?? []).map((e) => [e.id, e])
-  );
-
-  const total = abonnements?.length ?? 0;
-  const actifs = (abonnements ?? []).filter((a) => a.statut === "actif").length;
-  const revenuMensuel = (abonnements ?? [])
-    .filter((a) => a.statut === "actif")
-    .reduce((sum, a) => sum + Number(a.montant_mensuel ?? 0), 0);
-
-  return (
-    <div className="p-4 sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-7xl">
-        {/* EN-TÊTE */}
-        <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="mb-1 text-sm font-medium text-[#0B3D2E]">
-              Tableau de bord / Abonnements
-            </p>
-
-            <h1 className="font-display text-3xl font-semibold tracking-tight text-[#1C1B18] sm:text-4xl">
-              Abonnements
-            </h1>
-
-            <p className="mt-2 text-sm text-[#8A8272]">
-              {total} abonnement(s) enregistré(s)
-            </p>
-          </div>
-
-          <Link
-            href="/admin/abonnements/nouveau"
-            className="inline-flex items-center justify-center rounded-xl bg-[#0B3D2E] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#082C21]"
-          >
-            + Nouvel abonnement
-          </Link>
-        </header>
-
-        {/* STATS */}
-        <section className="mb-6 grid gap-4 sm:grid-cols-3">
-          <div className="rounded-2xl border border-[#E7E2D6] bg-white p-5 shadow-sm">
-            <p className="text-sm font-medium text-[#8A8272]">Total abonnements</p>
-            <p className="mt-2 text-3xl font-semibold tracking-tight text-[#1C1B18]">
-              {total}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-[#E7E2D6] bg-white p-5 shadow-sm">
-            <p className="text-sm font-medium text-[#8A8272]">Actifs</p>
-            <p className="mt-2 text-3xl font-semibold tracking-tight text-[#1C1B18]">
-              {actifs}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-[#E7E2D6] bg-white p-5 shadow-sm">
-            <p className="text-sm font-medium text-[#8A8272]">Revenu mensuel (actifs)</p>
-            <p className="mt-2 text-3xl font-semibold tracking-tight text-[#1C1B18]">
-              {revenuMensuel.toLocaleString("fr-FR")} XOF
-            </p>
-          </div>
-        </section>
-
-        {/* TABLEAU */}
-        <div className="overflow-hidden rounded-2xl border border-[#E7E2D6] bg-white shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-[#FAF8F3] text-left text-xs uppercase tracking-wide text-[#8A8272]">
-                <tr>
-                  <th className="px-5 py-3 font-medium">Établissement</th>
-                  <th className="px-5 py-3 font-medium">Plan</th>
-                  <th className="px-5 py-3 font-medium">Statut</th>
-                  <th className="px-5 py-3 font-medium">Montant</th>
-                  <th className="px-5 py-3 font-medium">Prochain paiement</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {abonnements?.map((a) => {
-                  const etab = etablissementMap.get(a.etablissement_id);
-
-                  return (
-                    <tr key={a.id} className="border-t border-[#F1EEE4]">
-                      <td className="px-5 py-4">
-                        <p className="font-medium text-[#1C1B18]">
-                          {etab?.nom ?? "—"}
-                        </p>
-                        <p className="text-xs text-[#8A8272]">{etab?.ville}</p>
-                      </td>
-                      <td className="px-5 py-4">
-                        <PlanBadge plan={a.plan} />
-                      </td>
-                      <td className="px-5 py-4">
-                        <StatusBadge status={a.statut} />
-                      </td>
-                      <td className="px-5 py-4 text-[#1C1B18]">
-                        {Number(a.montant_mensuel).toLocaleString("fr-FR")} {a.devise}
-                      </td>
-                      <td className="px-5 py-4 text-[#8A8272]">
-                        {a.date_prochain_paiement
-                          ? new Date(a.date_prochain_paiement).toLocaleDateString("fr-FR")
-                          : "—"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-
-            {(!abonnements || abonnements.length === 0) && (
-              <p className="px-5 py-10 text-center text-sm text-[#8A8272]">
-                Aucun abonnement pour le moment.
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  const charger = useCallback(async () => {
+    setErreur(null);
+    try {
+      const res = await fetch("/api/admin/etablissements");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erreur de chargement.");
+      setListe(data.etablissements);
+      const d: Record<string, string> = {};
+      for (const e of data.etablissements as Etab[]) d[e.id] = e.date_fin_abonnement ?? "";
+      setDatesFin(d);
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "Erreur.");
+    } finally {
+      setChargement(false);
     }
+  }, []);
+
+  useEffect(() => { charger(); }, [charger]);
+
+  async function modifier(id: string, corps: Record<string, unknown>, confirmation?: string) {
+    if (confirmation && !window.confirm(confirmation)) return;
+    setOccupe(id);
+    setErreur(null);
+    setInfo(null);
+    try {
+      const res = await fetch("/api/admin/etablissements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...corps }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erreur.");
+      setInfo("Modification enregistrée.");
+      await charger();
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "Erreur.");
+    } finally {
+      setOccupe(null);
+    }
+  }
+
+  const affichees = useMemo(() => {
+    const q = recherche.trim().toLowerCase();
+    return liste.filter((e) => {
+      if (filtre !== "tous" && e.statut !== filtre) return false;
+      if (!q) return true;
+      return [e.nom, e.ville, e.code_etablissement, e.code_drena]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q));
+    });
+  }, [liste, recherche, filtre]);
+
+  const compte = (s: Etab["statut"]) => liste.filter((e) => e.statut === s).length;
+
+  return (
+    <main className="mx-auto max-w-3xl p-4 sm:p-6">
+      <div className="mb-4 flex items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Abonnements</h1>
+          <p className="text-sm text-neutral-500">
+            {liste.length} établissement(s) · {compte("actif")} actif(s) · {compte("suspendu")} suspendu(s)
+          </p>
+        </div>
+        <Link
+          href="/admin/etablissements/nouveau"
+          className="shrink-0 rounded-lg bg-black px-3 py-2 text-sm font-medium text-white"
+        >
+          + Nouveau
+        </Link>
+      </div>
+
+      <input
+        value={recherche}
+        onChange={(e) => setRecherche(e.target.value)}
+        placeholder="Rechercher par code, nom ou ville…"
+        className="mb-3 w-full rounded-lg border p-2.5 text-sm"
+      />
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        {(["tous", "actif", "en_attente", "suspendu", "expire"] as const).map((f) => (
+          <button
+            key={f}
+            type="button"
+            onClick={() => setFiltre(f)}
+            className={`rounded-full border px-3 py-1 text-xs font-medium ${
+              filtre === f ? "border-black bg-black text-white" : "bg-white text-neutral-700"
+            }`}
+          >
+            {f === "tous" ? "Tous" : LABELS[f]}
+          </button>
+        ))}
+      </div>
+
+      {erreur && <div className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{erreur}</div>}
+      {info && <div className="mb-3 rounded-lg bg-green-50 p-3 text-sm text-green-700">{info}</div>}
+      {chargement && <p className="text-sm text-neutral-500">Chargement…</p>}
+
+      {!chargement && affichees.length === 0 && (
+        <p className="text-sm text-neutral-500">Aucun établissement trouvé.</p>
+      )}
+
+      <ul className="space-y-3">
+        {affichees.map((e) => (
+          <li key={e.id} className="rounded-xl border bg-white p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate font-semibold">{e.nom}</p>
+                <p className="text-xs text-neutral-500">
+                  {e.ville ?? "—"}
+                  {e.code_etablissement && <> · Code {e.code_etablissement}</>}
+                  {e.code_drena && <> · DRENA {e.code_drena}</>}
+                </p>
+              </div>
+              <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium ${STYLES[e.statut]}`}>
+                {LABELS[e.statut]}
+              </span>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {e.statut !== "actif" && (
+                <button
+                  type="button"
+                  disabled={occupe === e.id}
+                  onClick={() => modifier(e.id, { statut: "actif" }, `Activer l'abonnement de ${e.nom} ?`)}
+                  className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                >
+                  Activer
+                </button>
+              )}
+              {e.statut !== "en_attente" && (
+                <button
+                  type="button"
+                  disabled={occupe === e.id}
+                  onClick={() => modifier(e.id, { statut: "en_attente" })}
+                  className="rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+                >
+                  Mettre en attente
+                </button>
+              )}
+              {e.statut !== "suspendu" && (
+                <button
+                  type="button"
+                  disabled={occupe === e.id}
+                  onClick={() => modifier(e.id, { statut: "suspendu" }, `Suspendre l'abonnement de ${e.nom} ?`)}
+                  className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 disabled:opacity-50"
+                >
+                  Suspendre
+                </button>
+              )}
+              {e.statut !== "expire" && (
+                <button
+                  type="button"
+                  disabled={occupe === e.id}
+                  onClick={() => modifier(e.id, { statut: "expire" }, `Marquer l'abonnement de ${e.nom} comme expiré ?`)}
+                  className="rounded-lg border px-3 py-1.5 text-xs font-medium text-neutral-600 disabled:opacity-50"
+                >
+                  Expiré
+                </button>
+              )}
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-neutral-500">
+              <span>
+                Début : {e.date_debut_abonnement ? new Date(e.date_debut_abonnement).toLocaleDateString("fr-FR") : "—"}
+              </span>
+              <span>· Fin :</span>
+              <input
+                type="date"
+                value={datesFin[e.id] ?? ""}
+                onChange={(ev) => setDatesFin((d) => ({ ...d, [e.id]: ev.target.value }))}
+                className="rounded border p-1 text-xs"
+              />
+              <button
+                type="button"
+                disabled={occupe === e.id}
+                onClick={() => modifier(e.id, { dateFin: datesFin[e.id] || null })}
+                className="rounded border px-2 py-1 text-xs font-medium text-neutral-700 disabled:opacity-50"
+              >
+                Enregistrer la date
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </main>
+  );
+}

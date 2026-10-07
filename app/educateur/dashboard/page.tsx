@@ -5,10 +5,15 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 
 type Classe = { id: string; nom: string; niveau: string };
+type Jour = { label: string; date: string; total: number };
+
+const JOURS = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
 
 export default function DashboardEducateur() {
   const [classes, setClasses] = useState<Classe[]>([]);
   const [appelsFaits, setAppelsFaits] = useState<number | null>(null);
+  const [jours, setJours] = useState<Jour[]>([]);
+  const [totalAbs, setTotalAbs] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,6 +51,27 @@ export default function DashboardEducateur() {
           .eq('etablissement_id', profile.etablissement_id)
           .eq('date', aujourdhui);
         setAppelsFaits(count ?? 0);
+
+        // Absences des 7 derniers jours (non bloquant)
+        const base: Jour[] = [];
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          base.push({ label: JOURS[d.getDay()], date: d.toISOString().slice(0, 10), total: 0 });
+        }
+        const { data: abs } = await supabase
+          .from('absences')
+          .select('date')
+          .eq('etablissement_id', profile.etablissement_id)
+          .eq('type', 'absence')
+          .gte('date', base[0].date)
+          .lte('date', base[6].date);
+        (abs ?? []).forEach((a: { date: string }) => {
+          const j = base.find((b) => b.date === String(a.date).slice(0, 10));
+          if (j) j.total += 1;
+        });
+        setJours(base);
+        setTotalAbs(base.reduce((n, j) => n + j.total, 0));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Erreur inconnue');
       } finally {
@@ -81,6 +107,42 @@ export default function DashboardEducateur() {
           )}
         </div>
       </Link>
+
+      {jours.length > 0 && (() => {
+        const max = Math.max(5, ...jours.map((j) => j.total));
+        const haut = 120;
+        return (
+          <div className="border rounded-xl p-4 mb-6">
+            <div className="flex items-baseline justify-between mb-3">
+              <h2 className="text-sm font-semibold text-gray-700">Absences — 7 derniers jours</h2>
+              <span className="text-xs text-gray-500">{totalAbs} au total</span>
+            </div>
+            <svg viewBox="0 0 280 150" className="w-full" role="img" aria-label="Absences des 7 derniers jours">
+              {[0, 0.5, 1].map((p) => (
+                <g key={p}>
+                  <line x1="26" x2="276" y1={125 - p * haut} y2={125 - p * haut} stroke="#e5e7eb" strokeDasharray="3 3" />
+                  <text x="22" y={129 - p * haut} fontSize="9" textAnchor="end" fill="#6b7280">
+                    {Math.round(max * p)}
+                  </text>
+                </g>
+              ))}
+              {jours.map((j, i) => {
+                const h = (j.total / max) * haut;
+                const x = 34 + i * 35;
+                return (
+                  <g key={j.date}>
+                    {j.total > 0 && <rect x={x} y={125 - h} width="24" height={h} rx="3" fill="#dc2626" />}
+                    {j.total > 0 && (
+                      <text x={x + 12} y={120 - h} fontSize="9" textAnchor="middle" fill="#374151">{j.total}</text>
+                    )}
+                    <text x={x + 12} y="142" fontSize="9" textAnchor="middle" fill="#6b7280">{j.label}</text>
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
+        );
+      })()}
 
       <h2 className="text-sm font-semibold text-gray-700 mb-2">Notes de conduite par classe</h2>
 

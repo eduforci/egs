@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { journaliser } from "@/lib/audit";
 
 // Qui peut gérer qui :
 // - administration : tout le personnel de son école (sauf elle-même pour le blocage)
@@ -72,6 +73,20 @@ export async function POST(request: Request) {
       }
       const { error } = await admin.from("profiles").update(maj).eq("id", cibleId);
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      await journaliser(admin, {
+        etablissementId: moi.etablissement_id,
+        acteurId: user.id,
+        action: "compte.modifie",
+        cibleType: "profil",
+        cibleId,
+        cibleLibelle: `${prenom} ${nom}`,
+        details: {
+          nom: { avant: cible.nom, apres: nom },
+          prenom: { avant: cible.prenom, apres: prenom },
+          telephone: maj.telephone,
+          ...(maj.fonction !== undefined ? { fonction: maj.fonction } : {}),
+        },
+      });
       return NextResponse.json({ success: true });
     }
 
@@ -88,6 +103,15 @@ export async function POST(request: Request) {
 
       const { error } = await admin.from("profiles").update({ actif: !bloquer }).eq("id", cibleId);
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      await journaliser(admin, {
+        etablissementId: moi.etablissement_id,
+        acteurId: user.id,
+        action: bloquer ? "compte.bloque" : "compte.debloque",
+        cibleType: "profil",
+        cibleId,
+        cibleLibelle: `${cible.prenom} ${cible.nom}`,
+        details: { role: cible.role },
+      });
       return NextResponse.json({ success: true });
     }
 
@@ -99,6 +123,15 @@ export async function POST(request: Request) {
       });
       if (pwError) return NextResponse.json({ error: pwError.message }, { status: 500 });
       await admin.from("profiles").update({ must_change_password: true }).eq("id", cibleId);
+      await journaliser(admin, {
+        etablissementId: moi.etablissement_id,
+        acteurId: user.id,
+        action: "compte.mdp_reinitialise",
+        cibleType: "profil",
+        cibleId,
+        cibleLibelle: `${cible.prenom} ${cible.nom}`,
+        details: { role: cible.role },
+      });
       return NextResponse.json({ success: true, motDePasseProvisoire });
     }
 

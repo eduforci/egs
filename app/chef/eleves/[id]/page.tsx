@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-
+import IdentiteEleve from "@/components/identite-eleve";
 type Inscription = {
   id: string;
   classe_id: string;
@@ -290,7 +290,7 @@ export default function FicheElevePage() {
 
       {error && <div className="bg-red-50 text-red-700 text-sm p-3 rounded-lg">{error}</div>}
       {message && <div className="bg-green-50 text-green-700 text-sm p-3 rounded-lg">{message}</div>}
-
+<IdentiteEleve eleveId={eleveId} />
       {/* Fiche */}
       <section className="bg-white border rounded-xl p-5 space-y-3">
         <h2 className="font-semibold">Informations</h2>

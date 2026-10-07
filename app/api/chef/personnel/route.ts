@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { journaliser } from "@/lib/audit";
 
 const ROLES_AUTORISES = [
   "chef",
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { nom, prenom, role, fonction } = body as { nom?: string; prenom?: string; role?: RoleAutorise; fonction?: string };
+    const { nom, prenom, role } = body as { nom?: string; prenom?: string; role?: RoleAutorise };
 
     if (!nom || !prenom || !role) {
       return NextResponse.json({ error: "Nom, prénom et rôle sont obligatoires." }, { status: 400 });
@@ -121,7 +122,6 @@ export async function POST(request: Request) {
       nom: nom.trim(),
       prenom: prenom.trim(),
       identifiant,
-      fonction: fonction && fonction.trim() ? fonction.trim().slice(0, 100) : null,
       must_change_password: true,
     });
 
@@ -129,6 +129,16 @@ export async function POST(request: Request) {
       await admin.auth.admin.deleteUser(nouvelUser.user.id);
       return NextResponse.json({ error: profileError.message }, { status: 500 });
     }
+
+    await journaliser(admin, {
+      etablissementId: createurProfile.etablissement_id,
+      acteurId: user.id,
+      action: "compte.cree",
+      cibleType: "profil",
+      cibleId: nouvelUser.user.id,
+      cibleLibelle: `${prenom.trim()} ${nom.trim()}`,
+      details: { role, identifiant },
+    });
 
     if (role === "enseignant") {
       await admin.from("enseignants").insert({

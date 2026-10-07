@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { journaliser } from "@/lib/audit";
 
 function genererMotDePasseTemporaire() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
@@ -217,6 +218,16 @@ export async function POST(request: NextRequest) {
       await admin.auth.admin.deleteUser(userId);
       return NextResponse.json({ error: eleveError.message }, { status: 500 });
     }
+
+    await journaliser(admin, {
+      etablissementId: profile.etablissement_id,
+      acteurId: user.id,
+      action: "eleve.cree",
+      cibleType: "eleve",
+      cibleId: userId,
+      cibleLibelle: `${prenom} ${nom}`,
+      details: { identifiant, provisoire: !aUnMatricule },
+    });
 
     // 11. Réponse finale
     return NextResponse.json({

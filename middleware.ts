@@ -113,7 +113,7 @@ export async function middleware(request: NextRequest) {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role, must_change_password")
+      .select("role, must_change_password, etablissement_id, actif")
       .eq("id", user.id)
       .single();
 
@@ -130,6 +130,26 @@ export async function middleware(request: NextRequest) {
       // Connecté, mais mauvais espace : renvoyé vers son propre tableau de bord
       const dashboard = profile?.role ? DASHBOARD_PAR_ROLE[profile.role] : undefined;
       return NextResponse.redirect(new URL(dashboard || "/login", request.url));
+    }
+
+    // Compte bloqué par l'école (départ, décès...) : accès coupé immédiatement
+    if (profile.actif === false) {
+      return NextResponse.redirect(new URL("/abonnement-suspendu?motif=compte", request.url));
+    }
+
+    // Abonnement de l'école suspendu ou expiré : accès coupé (sauf super admin)
+    if (profile.role !== "super_admin" && profile.etablissement_id) {
+      const { data: etab } = await supabase
+        .from("etablissements")
+        .select("statut")
+        .eq("id", profile.etablissement_id)
+        .maybeSingle();
+
+      if (etab?.statut === "suspendu" || etab?.statut === "expire") {
+        return NextResponse.redirect(
+          new URL(`/abonnement-suspendu?motif=${etab.statut}`, request.url)
+        );
+      }
     }
 
     if (profile?.must_change_password) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { journaliser } from "@/lib/audit";
 
 // Crée le compte principal « administration » d'un établissement.
 // (Le chemin de la route est conservé pour ne pas casser les écrans existants.)
@@ -91,6 +92,16 @@ export async function POST(request: Request) {
     await admin.auth.admin.deleteUser(nouvelUser.user.id);
     return NextResponse.json({ error: profileError.message }, { status: 500 });
   }
+
+  await journaliser(admin, {
+    etablissementId,
+    acteurId: user.id,
+    action: "compte.cree",
+    cibleType: "profil",
+    cibleId: nouvelUser.user.id,
+    cibleLibelle: `${String(prenom).trim()} ${String(nom).trim()}`,
+    details: { role: "administration", identifiant },
+  });
 
   return NextResponse.json({ identifiant, motDePasseProvisoire });
 }

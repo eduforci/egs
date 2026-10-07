@@ -15,6 +15,7 @@ const GROUPE_COMPTES: NavGroup = {
   items: [
     { label: 'Nouveau membre du personnel', href: '/chef/personnel/nouveau', icon: '➕' },
     { label: 'Nouvel élève', href: '/chef/eleves/nouveau', icon: '🎓' },
+    { label: "Journal d'audit", href: '/directeur/journal', icon: '🧾' },
   ],
 };
 

@@ -205,7 +205,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-blue-100 px-4 py-10 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-sky-200 via-sky-100 to-blue-300 px-4 py-10 relative overflow-hidden">
       {/* Decorative soft blobs */}
       <div className="pointer-events-none absolute -top-24 -left-24 w-72 h-72 bg-blue-300/30 rounded-full blur-3xl" />
       <div className="pointer-events-none absolute -bottom-24 -right-24 w-72 h-72 bg-blue-400/20 rounded-full blur-3xl" />
@@ -370,7 +370,29 @@ export default function LoginPage() {
           )}
         </Card>
 
-        <p className="text-center text-xs text-chalk/40 mt-6">
+        <div className="mt-6 text-center text-sm text-chalk/80 space-y-1">
+          <div className="font-semibold text-chalk">EGS · Besoin d&apos;aide ?</div>
+          <div>
+            WhatsApp :{" "}
+            <a
+              href="https://wa.me/2250575516214"
+              className="underline underline-offset-2 font-medium text-chalk"
+            >
+              05 75 51 62 14
+            </a>
+          </div>
+          <div>
+            Téléphone :{" "}
+            <a
+              href="tel:+2250153109586"
+              className="underline underline-offset-2 font-medium text-chalk"
+            >
+              01 53 10 95 86
+            </a>
+          </div>
+        </div>
+
+        <p className="text-center text-xs text-chalk/50 mt-4">
           Version 1.0 · © EGS
         </p>
       </div>

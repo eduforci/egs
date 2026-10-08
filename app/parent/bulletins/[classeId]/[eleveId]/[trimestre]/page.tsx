@@ -171,7 +171,7 @@ export default function BulletinParentPage() {
 
   const matieresLettres = matieres.filter((m) => m.groupe_bilan === 'Lettres');
   const matieresSciences = matieres.filter((m) => m.groupe_bilan === 'Sciences');
-  const matieresAutres = matieres.filter((m) => !m.groupe_bilan);
+  const matieresAutres = matieres.filter((m) => !m.groupe_bilan || m.groupe_bilan === 'Autres');
 
   const bilanLettres = bilans.find((b) => b.groupe === 'Lettres');
   const bilanSciences = bilans.find((b) => b.groupe === 'Sciences');

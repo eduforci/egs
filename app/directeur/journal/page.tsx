@@ -12,6 +12,7 @@ const ACTIONS: Record<string, string> = {
   "eleve.cree": "Élève inscrit",
   "eleve.modifie": "Fiche élève modifiée",
   "eleve.identite_modifiee": "Nom de l'élève modifié",
+  "eleve.classe_changee": "Changement de classe",
   "note.modifiee": "Note modifiée",
   "note.supprimee": "Note supprimée",
   "note.saisie": "Saisie de notes",
@@ -31,11 +32,61 @@ const ACTIONS: Record<string, string> = {
   "abonnement.date_fin": "Abonnement : date de fin changée",
 };
 
+const TABLES: Record<string, string> = {
+  examens: "Examens",
+  caisses: "Caisses",
+  depenses: "Dépenses",
+  recettes: "Recettes",
+  comptes_bancaires: "Comptes bancaires",
+  types_remises: "Remises et bourses",
+  relances_paiement: "Relances de paiement",
+  grille_frais: "Frais de scolarité",
+  echeanciers: "Échéanciers",
+  abonnements: "Abonnement",
+  classes: "Classes",
+  emploi_du_temps: "Emploi du temps",
+  matieres: "Matières",
+  trimestres: "Trimestres",
+  annees_scolaires: "Années scolaires",
+  parametres_pedagogiques: "Paramètres pédagogiques",
+  documents_administratifs: "Documents administratifs",
+  documents_enseignants: "Documents enseignants",
+  annonces: "Annonces",
+  demandes_immatriculation: "Immatriculation",
+  demandes_transfert: "Transferts",
+  desps_remontees: "Remontées DESPS",
+  archives_annuelles: "Archives annuelles",
+  codes_invitation: "Codes d'invitation",
+  pointage_configurations: "Pointage : configuration",
+  pointage_devices: "Pointage : appareils",
+  pointage_periodes: "Pointage : périodes",
+  pointage_justifications: "Pointage : justifications",
+  absences: "Absences",
+};
+
+const OPERATIONS: Record<string, string> = {
+  insert: "ajout",
+  update: "modification",
+  delete: "suppression",
+};
+
+function libelleAction(action: string): string {
+  if (ACTIONS[action]) return ACTIONS[action];
+  const [, table, op] = action.split(".");
+  if (table && op) return `${TABLES[table] ?? table} : ${OPERATIONS[op] ?? op}`;
+  return action;
+}
+
 const COULEURS: Record<string, string> = {
   compte: "bg-blue-50 text-blue-700 border-blue-200",
   eleve: "bg-violet-50 text-violet-700 border-violet-200",
   note: "bg-amber-50 text-amber-700 border-amber-200",
   appel: "bg-orange-50 text-orange-700 border-orange-200",
+  examen: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  caisse: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  pointage: "bg-cyan-50 text-cyan-700 border-cyan-200",
+  ecole: "bg-sky-50 text-sky-700 border-sky-200",
+  document: "bg-rose-50 text-rose-700 border-rose-200",
   cahier: "bg-pink-50 text-pink-700 border-pink-200",
   profil: "bg-neutral-100 text-neutral-700 border-neutral-200",
   paiement: "bg-teal-50 text-teal-700 border-teal-200",
@@ -60,6 +111,11 @@ const CATEGORIES = [
   { id: "eleve", label: "Élèves" },
   { id: "note", label: "Notes" },
   { id: "appel", label: "Appels" },
+  { id: "examen", label: "Examens" },
+  { id: "caisse", label: "Caisse" },
+  { id: "pointage", label: "Pointage" },
+  { id: "ecole", label: "École" },
+  { id: "document", label: "Documents" },
   { id: "cahier", label: "Cahier de texte" },
   { id: "profil", label: "Profils" },
   { id: "paiement", label: "Paiements" },
@@ -93,7 +149,7 @@ function lignesDetails(details: unknown): string[] {
       out.push(`${cle.replace(/_/g, " ")} : ${valeur(v)}`);
     }
   }
-  return out;
+  return out.length > 10 ? [...out.slice(0, 10), `… et ${out.length - 10} autre(s)`] : out;
 }
 
 function lien(params: { cat?: string; periode?: string; q?: string; n?: number }) {
@@ -227,7 +283,7 @@ export default async function JournalAudit({
                     COULEURS[famille] ?? "bg-neutral-100 text-neutral-600 border-neutral-200"
                   }`}
                 >
-                  {ACTIONS[l.action] ?? l.action}
+                  {libelleAction(l.action)}
                 </span>
                 <span className="shrink-0 text-xs text-neutral-400">
                   {new Date(l.created_at).toLocaleString("fr-FR", {

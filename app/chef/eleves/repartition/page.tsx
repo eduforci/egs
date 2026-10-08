@@ -16,7 +16,20 @@ type Classe = {
   id: string;
   nom: string;
   niveau: string;
+  cycle: string | null;
+  serie: string | null;
 };
+
+// Déduit le cycle à partir du niveau (même règle que la page Classes)
+function inferCycle(niveauBrut: string): string {
+  const n = niveauBrut.trim().toLowerCase();
+  if (!n) return '';
+  if (/(6\s*e|6ème|5\s*e|5ème|4\s*e|4ème|3\s*e|3ème)/.test(n)) return 'college';
+  if (/(seconde|premi[eè]re|terminale|tle)/.test(n)) return 'lycee';
+  if (/(cp|ce1|ce2|cm1|cm2)/.test(n)) return 'primaire';
+  if (/(petite section|moyenne section|grande section|maternelle)/.test(n)) return 'maternelle';
+  return '';
+}
 
 export default function RepartitionElevesPage() {
   const supabase = createClient();
@@ -93,7 +106,7 @@ export default function RepartitionElevesPage() {
 
     const { data: classesData } = await supabase
       .from('classes')
-      .select('id, nom, niveau')
+      .select('id, nom, niveau, cycle, serie')
       .eq('etablissement_id', etablissementId)
       .eq('annee_scolaire', anneeActive)
       .eq('niveau', niveau)
@@ -173,12 +186,20 @@ export default function RepartitionElevesPage() {
           return;
         }
 
+        // Le cycle (et la série) sont repris d'une classe existante du même niveau,
+        // sinon déduits du niveau
+        const classeModele = classesDuNiveau.find((c) => c.cycle) ?? classesDuNiveau[0];
+        const cycleNouvelleClasse = classeModele?.cycle || inferCycle(niveauChoisi) || null;
+        const serieNouvelleClasse = classeModele?.serie || null;
+
         const { data: nouvelleClasse, error: creationError } = await supabase
           .from('classes')
           .insert({
             etablissement_id: etablissementId,
             nom: nouvelleClasseNom.trim(),
             niveau: niveauChoisi,
+            cycle: cycleNouvelleClasse,
+            serie: serieNouvelleClasse,
             annee_scolaire: anneeActive,
           })
           .select('id')

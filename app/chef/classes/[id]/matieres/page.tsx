@@ -17,7 +17,7 @@ type MatiereDisponible = {
   nom: string;
 };
 
-const GROUPES = ['Lettres', 'Sciences', 'Aucun'];
+const GROUPES = ['Lettres', 'Sciences', 'Autres'];
 
 export default function GestionMatieresPage() {
   const params = useParams();
@@ -31,7 +31,7 @@ export default function GestionMatieresPage() {
   const [nouvelleMatiereExistante, setNouvelleMatiereExistante] = useState('');
   const [nouvelleMatiereNom, setNouvelleMatiereNom] = useState('');
   const [nouveauCoefficient, setNouveauCoefficient] = useState('1');
-  const [nouveauGroupe, setNouveauGroupe] = useState('Aucun');
+  const [nouveauGroupe, setNouveauGroupe] = useState('Autres');
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -135,7 +135,7 @@ export default function GestionMatieresPage() {
     setError(null);
     setSucces(null);
 
-    const groupeFinal = nouveauGroupe === 'Aucun' ? null : nouveauGroupe;
+    const groupeFinal = nouveauGroupe;
 
     const { data: matiereCreee, error: creationError } = await supabase
       .from('matieres')
@@ -170,7 +170,7 @@ export default function GestionMatieresPage() {
     setSucces(`Matière "${nouvelleMatiereNom}" créée et ajoutée à la classe.`);
     setNouvelleMatiereNom('');
     setNouveauCoefficient('1');
-    setNouveauGroupe('Aucun');
+    setNouveauGroupe('Autres');
     charger();
   }
 
@@ -252,7 +252,7 @@ export default function GestionMatieresPage() {
             {matieresAttachees.map((m) => (
               <tr key={m.id} className="border-t">
                 <td className="px-3 py-2">{m.nom}</td>
-                <td className="px-3 py-2 text-gray-500 text-xs">{m.groupe_bilan ?? '-'}</td>
+                <td className="px-3 py-2 text-gray-500 text-xs">{m.groupe_bilan ?? 'Autres'}</td>
                 <td className="px-3 py-2">
                   <input
                     type="number"

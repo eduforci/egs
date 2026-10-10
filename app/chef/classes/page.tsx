@@ -116,6 +116,7 @@ export default function ClassesPage() {
   }, [supabase]);
 
   useEffect(() => { charger(); }, [charger]);
+
   useEffect(() => {
     if (cycle!== 'college' && cycle!== 'lycee') return;
     const conduite = matieresEtablissement.find((m) => m.nom === 'Conduite');
@@ -123,7 +124,12 @@ export default function ClassesPage() {
     setSelection((prev) => ({...prev, [conduite.id]: { checked: true, coefficient: 1 } }));
   }, [cycle, matieresEtablissement]);
 
-  function handleNiveauChange(valeur: string) { setNiveau(valeur); const cycleDeduit = inferCycle(valeur); if (cycleDeduit) { setCycle(cycleDeduit); } }
+  function handleNiveauChange(valeur: string) {
+    setNiveau(valeur);
+    const cycleDeduit = inferCycle(valeur);
+    if (cycleDeduit) { setCycle(cycleDeduit); }
+  }
+
   function toggleMatiere(matiereId: string) { setSelection((prev) => ({...prev, [matiereId]: {...prev[matiereId], checked:!prev[matiereId]?.checked } })); }
   function modifierCoefficientSelection(matiereId: string, coefficient: number) { setSelection((prev) => ({...prev, [matiereId]: {...prev[matiereId], coefficient } })); }
 
@@ -141,14 +147,16 @@ export default function ClassesPage() {
   async function creerClasse() {
     if (!nom.trim() ||!niveau.trim() ||!etablissementId) { setError('Nom et niveau sont obligatoires.'); return; }
     setSaving(true); setError(null); setSucces(null);
+    // CORRIGÉ : on déduit le cycle automatiquement si vide
+    const cycleFinal = cycle || inferCycle(niveau) || null;
     const { data: classeCreee, error: insertError } = await supabase.from('classes').insert({
         etablissement_id: etablissementId,
         nom: nom.trim(),
         niveau: niveau.trim(),
-        cycle: cycle || null,
+        cycle: cycleFinal,
         serie: serie.trim() || null,
         annee_scolaire: anneeActive,
-       ...(typeEnseignement!== 'general'? { type_enseignement: typeEnseignement } : {}),
+      ...(typeEnseignement!== 'general'? { type_enseignement: typeEnseignement } : {}),
       }).select('id').single();
     if (insertError ||!classeCreee) { setSaving(false); setError(`Erreur création : ${insertError?.message}`); return; }
     const matieresACreer = Object.entries(selection).filter(([, sel]) => sel.checked).map(([matiereId, sel]) => ({ classe_id: classeCreee.id, matiere_id: matiereId, coefficient: sel.coefficient }));
@@ -171,7 +179,7 @@ export default function ClassesPage() {
 
   const cyclesProposes = CYCLES.filter((c) => c.value === '' || cyclesActifs.length === 0 || cyclesActifs.includes(c.value) || c.value === cycle);
   const estGroupe = cyclesActifs.length > 1 || typesActifs.length > 1;
-  const classesAffichees = filtreCycle? classes.filter((c) => c.cycle === filtreCycle) : classes;
+  const classesAffichees = filtreCycle? classes.filter((c) => (c.cycle || inferCycle(c.niveau)) === filtreCycle) : classes;
   const nbSelectionnees = Object.values(selection).filter((s) => s.checked).length;
   if (loading) return <p className="p-6 text-sm text-gray-500">Chargement...</p>;
 
@@ -196,7 +204,9 @@ export default function ClassesPage() {
             {classesAffichees.length === 0? (
               <tr><td colSpan={4} className="px-3 py-4 text-center text-gray-400">Aucune classe créée.</td></tr>
             ) : (
-              classesAffichees.map((c) => (
+              classesAffichees.map((c) => {
+                const cycleAffiche = c.cycle || inferCycle(c.niveau);
+                return (
                 <tr key={c.id} className="border-t">
                   <td className="px-3 py-2 font-medium">
                     {c.nom}
@@ -207,7 +217,7 @@ export default function ClassesPage() {
                     )}
                   </td>
                   <td className="px-3 py-2 text-gray-600">{c.niveau}</td>
-                  <td className="px-3 py-2 text-gray-500 text-xs">{CYCLES.find((cy) => cy.value === c.cycle)?.label?? '-'}</td>
+                  <td className="px-3 py-2 text-gray-500 text-xs">{CYCLES.find((cy) => cy.value === cycleAffiche)?.label?? '-'}</td>
                   <td className="px-3 py-2 flex gap-3 justify-end whitespace-nowrap">
                     <Link href={`/chef/bulletins/classe/${c.id}`} className="text-blue-600 text-xs">Bulletins</Link>
                     <Link href={`/chef/classes/${c.id}/eleves`} className="text-blue-600 text-xs">Élèves</Link>
@@ -216,7 +226,7 @@ export default function ClassesPage() {
                     <button onClick={() => supprimerClasse(c.id, c.nom)} className="text-red-600 text-xs">Suppr.</button>
                   </td>
                 </tr>
-              ))
+              )})
             )}
           </tbody>
         </table>
@@ -268,4 +278,4 @@ export default function ClassesPage() {
       </div>
     </main>
   );
-                                                    }
+}

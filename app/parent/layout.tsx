@@ -19,7 +19,12 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Bulletins', href: '/parent/bulletins', icon: '📄' },
       { label: 'Absences', href: '/absences', icon: '📋' },
       { label: 'Emploi du temps', href: '/emploi-du-temps', icon: '📅' },
+      { label: "Résultats d'examens", href: '/parent/examens', icon: '🎓' },
     ],
+  },
+  {
+    titre: 'COMMUNICATION',
+    items: [{ label: 'Annonces de l\'école', href: '/parent/messagerie', icon: '📢' }],
   },
 ];
 

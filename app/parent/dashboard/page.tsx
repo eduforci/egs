@@ -13,11 +13,34 @@ type Enfant = {
   absencesNonJustifiees: number;
   moyenneGenerale: number | null;
   soldeAPayer: number;
+  notes: NoteRecente[];
 };
+
+type NoteRecente = {
+  matiere: string;
+  libelle: string;
+  valeur: number;
+  sur: number;
+  date: string | null;
+  saisie_le: string | null;
+};
+
+function estRecente(iso: string | null): boolean {
+  if (!iso) return false;
+  const age = Date.now() - new Date(iso).getTime();
+  return age >= 0 && age < 3 * 24 * 3600 * 1000;
+}
+
+function formaterDate(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+}
 
 function trimestreActuel(): number {
   const mois = new Date().getMonth() + 1; // 1-12
-  if (mois >= 9 || mois <= 12) return 1;
+  if (mois >= 9 && mois <= 12) return 1;
   if (mois >= 1 && mois <= 3) return 2;
   return 3;
 }
@@ -76,6 +99,19 @@ export default function DashboardParent() {
         : { data: [] };
       const profsParId = new Map((profs || []).map((p) => [p.id, p]));
 
+      // Noms des enfants et dernières notes : lus côté serveur (un parent ne peut pas
+      // lire directement la fiche de son enfant).
+      let infosApi = new Map<string, any>();
+      try {
+        const reponse = await fetch('/api/parent/enfants', { cache: 'no-store' });
+        if (reponse.ok) {
+          const donnees = await reponse.json();
+          infosApi = new Map((donnees.enfants || []).map((x: any) => [x.id, x]));
+        }
+      } catch {
+        /* on garde l'affichage de base si le serveur ne répond pas */
+      }
+
       const { data: absencesData } = idsEleves.length > 0
         ? await supabase
             .from('absences')
@@ -125,12 +161,14 @@ export default function DashboardParent() {
 
       const liste: Enfant[] = (liens || []).map((l: any) => {
         const p = profsParId.get(l.eleve_id);
+        const info = infosApi.get(l.eleve_id);
         return {
           id: l.eleve_id,
-          nom: p?.nom || '',
-          prenom: p?.prenom || '',
-          matricule: l.eleves?.matricule || '',
-          classe_nom: l.eleves?.classes?.nom || '',
+          nom: info?.nom || p?.nom || '',
+          prenom: info?.prenom || p?.prenom || '',
+          matricule: info?.matricule || l.eleves?.matricule || '',
+          classe_nom: info?.classe_nom || l.eleves?.classes?.nom || '',
+          notes: (info?.notes || []) as NoteRecente[],
           absencesNonJustifiees: compteurAbsences.get(l.eleve_id) || 0,
           moyenneGenerale: moyenneParEleve.get(l.eleve_id) ?? null,
           soldeAPayer: soldeParEleve.get(l.eleve_id) || 0,
@@ -141,6 +179,18 @@ export default function DashboardParent() {
       setLoading(false);
     };
     charger();
+
+    // Les notes saisies par les enseignants apparaissent sans recharger la page :
+    // mise à jour toutes les 60 secondes et dès que le parent revient sur l'application.
+    const minuteur = setInterval(charger, 60000);
+    const auRetour = () => {
+      if (document.visibilityState === 'visible') charger();
+    };
+    document.addEventListener('visibilitychange', auRetour);
+    return () => {
+      clearInterval(minuteur);
+      document.removeEventListener('visibilitychange', auRetour);
+    };
   }, [supabase]);
 
   if (loading) return <p className="p-4 text-gray-500">Chargement...</p>;
@@ -167,8 +217,13 @@ export default function DashboardParent() {
         {enfants.map((e) => (
           <div key={e.id} className="border rounded-xl p-4 space-y-3">
             <div>
-              <div className="font-semibold text-lg">{e.nom} {e.prenom}</div>
-              <div className="text-sm text-gray-500">{e.classe_nom} — {e.matricule}</div>
+              <div className="font-semibold text-lg">
+                {e.nom || e.prenom ? `${e.nom} ${e.prenom}`.trim() : 'Élève'}
+              </div>
+              <div className="text-sm text-gray-500">
+                {e.classe_nom}
+                {e.matricule ? ` — ${e.matricule}` : ''}
+              </div>
               {e.absencesNonJustifiees > 0 && (
                 <div className="mt-1 inline-block text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">
                   {e.absencesNonJustifiees} absence(s) non justifiée(s)
@@ -189,6 +244,37 @@ export default function DashboardParent() {
                   {e.soldeAPayer.toLocaleString('fr-FR')} F
                 </p>
               </div>
+            </div>
+
+            <div className="border rounded-lg p-2.5">
+              <p className="text-sm font-medium mb-1">Dernières notes</p>
+              {e.notes.length === 0 ? (
+                <p className="text-xs text-gray-500">Aucune note enregistrée pour le moment.</p>
+              ) : (
+                <ul className="divide-y">
+                  {e.notes.map((n, i) => (
+                    <li key={i} className="py-1.5 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm truncate">
+                          {n.matiere}
+                          {estRecente(n.saisie_le) && (
+                            <span className="ml-2 text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">
+                              Nouveau
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {n.libelle ? `${n.libelle} · ` : ''}
+                          {formaterDate(n.date || n.saisie_le)}
+                        </p>
+                      </div>
+                      <p className="text-sm font-semibold whitespace-nowrap">
+                        {n.valeur.toString().replace('.', ',')}/{n.sur}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             <div className="grid grid-cols-3 gap-2">

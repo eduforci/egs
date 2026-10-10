@@ -39,6 +39,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Emploi du temps', href: '/direction/emploi-du-temps', icon: '📅' },
       { label: 'Grille horaire', href: '/direction/emploi-du-temps/grille', icon: '⏰' },
       { label: 'Établissement', href: '/direction/etablissement', icon: '🏛️' },
+      { label: "Structure de l'école", href: '/direction/structure', icon: '🧭' },
       { label: 'Examens', href: '/chef/examens', icon: '📝' },
       { label: 'Bulletins', href: '/chef/bulletins', icon: '📄' },
     ],

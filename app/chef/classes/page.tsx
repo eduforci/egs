@@ -30,7 +30,21 @@ const CYCLES = [
   { value: 'primaire', label: 'Primaire' },
   { value: 'college', label: 'Collège' },
   { value: 'lycee', label: 'Lycée' },
+  { value: 'superieur', label: 'Supérieur' },
 ];
+
+const TYPES_ENSEIGNEMENT = [
+  { value: 'general', label: 'Enseignement général' },
+  { value: 'technique', label: 'Enseignement technique' },
+  { value: 'professionnel', label: 'Enseignement professionnel' },
+];
+
+// Suggestions de séries / filières (on peut toujours taper autre chose)
+const FILIERES: Record<string, string[]> = {
+  general: ['A', 'A1', 'A2', 'C', 'D'],
+  technique: ['E', 'F1', 'F2', 'F3', 'F4', 'G1', 'G2', 'G3'],
+  professionnel: ['CAP', 'BEP', 'BT', 'Bac pro'],
+};
 
 function inferCycle(niveauBrut: string): string {
   const n = niveauBrut.trim().toLowerCase();
@@ -56,6 +70,11 @@ export default function ClassesPage() {
   const [niveau, setNiveau] = useState('');
   const [cycle, setCycle] = useState('');
   const [serie, setSerie] = useState('');
+  const [typeEnseignement, setTypeEnseignement] = useState('general');
+  const [cyclesActifs, setCyclesActifs] = useState<string[]>([]);
+  const [typesActifs, setTypesActifs] = useState<string[]>(['general']);
+  const [typeParClasse, setTypeParClasse] = useState<Record<string, string>>({});
+  const [filtreCycle, setFiltreCycle] = useState('');
 
   const [selection, setSelection] = useState<Record<string, Selection>>({});
   const [classeModele, setClasseModele] = useState('');
@@ -100,6 +119,31 @@ export default function ClassesPage() {
 
       if (classesError) throw new Error(`Erreur classes : ${classesError.message}`);
       setClasses(classesData ?? []);
+
+      // Structure de l'école et type d'enseignement des classes (sans jamais bloquer la page
+      // si le script SQL « groupe_scolaire » n'est pas encore installé).
+      const { data: structure, error: erreurStructure } = await supabase
+        .from('etablissements')
+        .select('cycles_actifs, types_enseignement')
+        .eq('id', profile.etablissement_id)
+        .single();
+      if (!erreurStructure && structure) {
+        setCyclesActifs(((structure as any).cycles_actifs as string[] | null) ?? []);
+        const t = (structure as any).types_enseignement as string[] | null;
+        setTypesActifs(Array.isArray(t) && t.length > 0 ? t : ['general']);
+      }
+      const { data: typesData, error: erreurTypes } = await supabase
+        .from('classes')
+        .select('id, type_enseignement')
+        .eq('etablissement_id', profile.etablissement_id)
+        .eq('annee_scolaire', etab.annee_scolaire_active);
+      if (!erreurTypes) {
+        const table: Record<string, string> = {};
+        (typesData ?? []).forEach((c: any) => {
+          table[c.id] = c.type_enseignement || 'general';
+        });
+        setTypeParClasse(table);
+      }
 
       const { data: matieresData, error: matieresError } = await supabase
         .from('matieres')
@@ -204,6 +248,8 @@ export default function ClassesPage() {
         cycle: cycle || null,
         serie: serie.trim() || null,
         annee_scolaire: anneeActive,
+        // Envoyé seulement s'il n'est pas « général » : rien ne change tant que le SQL n'est pas installé
+        ...(typeEnseignement !== 'general' ? { type_enseignement: typeEnseignement } : {}),
       })
       .select('id')
       .single();
@@ -245,6 +291,7 @@ export default function ClassesPage() {
     setNiveau('');
     setCycle('');
     setSerie('');
+    setTypeEnseignement('general');
     setClasseModele('');
     charger();
   }
@@ -262,6 +309,12 @@ export default function ClassesPage() {
     }
     charger();
   }
+
+  const cyclesProposes = CYCLES.filter(
+    (c) => c.value === '' || cyclesActifs.length === 0 || cyclesActifs.includes(c.value) || c.value === cycle
+  );
+  const estGroupe = cyclesActifs.length > 1 || typesActifs.length > 1;
+  const classesAffichees = filtreCycle ? classes.filter((c) => c.cycle === filtreCycle) : classes;
 
   const nbSelectionnees = Object.values(selection).filter((s) => s.checked).length;
 
@@ -283,6 +336,26 @@ export default function ClassesPage() {
         </div>
       )}
 
+      {estGroupe && cyclesActifs.length > 1 && (
+        <div className="flex flex-wrap gap-2 mb-3">
+          <button
+            onClick={() => setFiltreCycle('')}
+            className={`text-xs px-3 py-1.5 rounded-full border ${!filtreCycle ? 'bg-black text-white' : ''}`}
+          >
+            Tous les cycles
+          </button>
+          {CYCLES.filter((c) => c.value && cyclesActifs.includes(c.value)).map((c) => (
+            <button
+              key={c.value}
+              onClick={() => setFiltreCycle(c.value)}
+              className={`text-xs px-3 py-1.5 rounded-full border ${filtreCycle === c.value ? 'bg-black text-white' : ''}`}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Liste des classes */}
       <div className="border rounded-lg overflow-x-auto mb-6">
         <table className="w-full text-sm">
@@ -295,18 +368,23 @@ export default function ClassesPage() {
             </tr>
           </thead>
           <tbody>
-            {classes.length === 0 ? (
+            {classesAffichees.length === 0 ? (
               <tr>
                 <td colSpan={4} className="px-3 py-4 text-center text-gray-400">
                   Aucune classe créée.
                 </td>
               </tr>
             ) : (
-              classes.map((c) => (
+              classesAffichees.map((c) => (
                 <tr key={c.id} className="border-t">
                   <td className="px-3 py-2 font-medium">
                     {c.nom}
                     {c.serie && <span className="text-gray-400 text-xs ml-1">({c.serie})</span>}
+                    {typeParClasse[c.id] && typeParClasse[c.id] !== 'general' && (
+                      <span className="ml-1 text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full">
+                        {typeParClasse[c.id] === 'technique' ? 'Technique' : 'Professionnel'}
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-gray-600">{c.niveau}</td>
                   <td className="px-3 py-2 text-gray-500 text-xs">
@@ -364,19 +442,41 @@ export default function ClassesPage() {
               onChange={(e) => setCycle(e.target.value)}
               className="w-full border rounded-md px-3 py-2 text-sm"
             >
-              {CYCLES.map((c) => (
+              {cyclesProposes.map((c) => (
                 <option key={c.value} value={c.value}>{c.label}</option>
               ))}
             </select>
           </div>
 
+          {typesActifs.length > 1 && (
+            <select
+              value={typeEnseignement}
+              onChange={(e) => setTypeEnseignement(e.target.value)}
+              className="w-full border rounded-md px-3 py-2 text-sm"
+            >
+              {TYPES_ENSEIGNEMENT.filter((t) => typesActifs.includes(t.value)).map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+          )}
+
           <input
             type="text"
+            list="filieres-suggestions"
             value={serie}
             onChange={(e) => setSerie(e.target.value)}
-            placeholder="Série (optionnel, ex: A2, C, D)"
+            placeholder={
+              typeEnseignement === 'general'
+                ? 'Série (optionnel, ex: A2, C, D)'
+                : 'Série ou filière (ex: F4, G2, CAP...)'
+            }
             className="w-full border rounded-md px-3 py-2 text-sm"
           />
+          <datalist id="filieres-suggestions">
+            {(FILIERES[typeEnseignement] ?? []).map((f) => (
+              <option key={f} value={f} />
+            ))}
+          </datalist>
 
           {/* Sélection des matières */}
           <div className="border-t pt-3">

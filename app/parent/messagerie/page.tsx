@@ -60,6 +60,16 @@ export default function MessagerieParentPage() {
 
   useEffect(() => {
     charger();
+    // Les nouvelles annonces de l'école apparaissent sans recharger la page.
+    const minuteur = setInterval(charger, 60000);
+    const auRetour = () => {
+      if (document.visibilityState === 'visible') charger();
+    };
+    document.addEventListener('visibilitychange', auRetour);
+    return () => {
+      clearInterval(minuteur);
+      document.removeEventListener('visibilitychange', auRetour);
+    };
   }, [charger]);
 
   const marquerLu = async (annonceId: string) => {
@@ -77,14 +87,14 @@ export default function MessagerieParentPage() {
   return (
     <div className="max-w-lg mx-auto p-4 space-y-4">
       <div>
-        <h1 className="text-2xl font-bold">Messages de l'établissement</h1>
+        <h1 className="text-2xl font-bold">Annonces de l'école</h1>
         {nbNonLues > 0 && (
           <p className="text-sm text-orange-600">{nbNonLues} message(s) non lu(s)</p>
         )}
       </div>
 
       {annonces.length === 0 && (
-        <p className="text-gray-500 text-sm">Aucun message pour le moment.</p>
+        <p className="text-gray-500 text-sm">Aucune annonce pour le moment.</p>
       )}
 
       <div className="space-y-2">

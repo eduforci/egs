@@ -52,6 +52,8 @@ export default function DashboardParent() {
   const [enfants, setEnfants] = useState<Enfant[]>([]);
   const [loading, setLoading] = useState(true);
   const [erreur, setErreur] = useState('');
+  const [nbAnnoncesNonLues, setNbAnnoncesNonLues] = useState(0);
+  const [nbResultatsExamens, setNbResultatsExamens] = useState(0);
 
   useEffect(() => {
     const charger = async () => {
@@ -159,6 +161,34 @@ export default function DashboardParent() {
         })
       );
 
+      // Annonces de l'école non lues + résultats d'examens publiés (sans jamais bloquer la page)
+      try {
+        const { data: annoncesData } = await supabase.from('annonces').select('id');
+        const idsAnnonces = (annoncesData || []).map((a: any) => a.id);
+        if (idsAnnonces.length > 0) {
+          const { data: lectures } = await supabase
+            .from('annonces_lectures')
+            .select('annonce_id')
+            .eq('parent_id', userData.user.id)
+            .in('annonce_id', idsAnnonces);
+          const lues = new Set((lectures || []).map((l: any) => l.annonce_id));
+          setNbAnnoncesNonLues(idsAnnonces.filter((id: string) => !lues.has(id)).length);
+        } else {
+          setNbAnnoncesNonLues(0);
+        }
+      } catch {
+        /* sans importance : le compteur reste à 0 */
+      }
+      try {
+        const reponseExamens = await fetch('/api/parent/examens', { cache: 'no-store' });
+        if (reponseExamens.ok) {
+          const donneesExamens = await reponseExamens.json();
+          setNbResultatsExamens(Number(donneesExamens.total) || 0);
+        }
+      } catch {
+        /* sans importance */
+      }
+
       const liste: Enfant[] = (liens || []).map((l: any) => {
         const p = profsParId.get(l.eleve_id);
         const info = infosApi.get(l.eleve_id);
@@ -201,6 +231,31 @@ export default function DashboardParent() {
         <h1 className="text-2xl font-bold">Bonjour, {prenom} 👋</h1>
         <p className="text-gray-600">Espace parent</p>
         <p className="text-sm text-gray-500">{etablissementNom}</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <Link
+          href="/parent/messagerie"
+          className="border rounded-xl p-3 text-center text-sm hover:bg-gray-50 relative"
+        >
+          📢<br />Annonces de l'école
+          {nbAnnoncesNonLues > 0 && (
+            <span className="absolute top-2 right-2 text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded-full">
+              {nbAnnoncesNonLues} nouvelle(s)
+            </span>
+          )}
+        </Link>
+        <Link
+          href="/parent/examens"
+          className="border rounded-xl p-3 text-center text-sm hover:bg-gray-50 relative"
+        >
+          🎓<br />Résultats d'examens
+          {nbResultatsExamens > 0 && (
+            <span className="absolute top-2 right-2 text-[10px] bg-green-600 text-white px-1.5 py-0.5 rounded-full">
+              {nbResultatsExamens} publié(s)
+            </span>
+          )}
+        </Link>
       </div>
 
       {erreur && (

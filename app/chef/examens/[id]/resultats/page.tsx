@@ -64,6 +64,10 @@ export default function ResultatsExamenPage() {
   const [parSerie, setParSerie] = useState<MoyenneGroupe[]>([]);
   const [parMatiere, setParMatiere] = useState<MoyenneMatiere[]>([]);
 
+  const [publieLe, setPublieLe] = useState<string | null>(null);
+  const [publicationEnCours, setPublicationEnCours] = useState(false);
+  const [messagePublication, setMessagePublication] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   const [onglet, setOnglet] = useState('individuels');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +88,14 @@ export default function ResultatsExamenPage() {
       // "Ajourné" est réservé au cycle universitaire (pas encore disponible dans EGS) ;
       // primaire, collège et lycée utilisent tous "Refusé", conformément aux normes nationales.
       setLibelleEchec(examen.cycle === 'universite' ? 'Ajournés' : 'Refusés');
+
+      // État de publication aux parents (ne bloque jamais la page si le script SQL n'est pas encore installé)
+      const { data: etatPublication } = await supabase
+        .from('examens')
+        .select('resultats_publies_le')
+        .eq('id', examenId)
+        .maybeSingle();
+      setPublieLe((etatPublication as any)?.resultats_publies_le ?? null);
 
       const [resResultats, resStats, resClasse, resSerie, resMatiere] = await Promise.all([
         supabase.rpc('calculer_resultats_examen', { p_examen_id: examenId }),
@@ -115,6 +127,39 @@ export default function ResultatsExamenPage() {
     charger();
   }, [charger]);
 
+  const publierResultats = async (publier: boolean) => {
+    const question = publier
+      ? "Publier ces résultats ? Les parents verront immédiatement le résultat de leur enfant dans leur espace."
+      : 'Retirer la publication ? Les parents ne verront plus ces résultats.';
+    if (!window.confirm(question)) return;
+
+    setPublicationEnCours(true);
+    setMessagePublication(null);
+    try {
+      const reponse = await fetch('/api/examens/publier', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ examenId, publier }),
+      });
+      const data = await reponse.json();
+      if (!reponse.ok) {
+        setMessagePublication({ type: 'error', text: data?.error || 'Une erreur est survenue.' });
+      } else if (publier) {
+        setPublieLe(data.publieLe ?? new Date().toISOString());
+        setMessagePublication({
+          type: 'success',
+          text: `Résultats publiés : ${data.nbResultats} élève(s) peuvent maintenant les consulter.`,
+        });
+      } else {
+        setPublieLe(null);
+        setMessagePublication({ type: 'success', text: 'Publication retirée.' });
+      }
+    } catch {
+      setMessagePublication({ type: 'error', text: 'Erreur réseau. Réessayez.' });
+    }
+    setPublicationEnCours(false);
+  };
+
   const classes = resultats.filter((r) => r.decision === 'Admis' || r.decision === 'Ajourné' || r.decision === 'Refusé');
   const major = classes[0];
   const top10 = classes.slice(0, 10);
@@ -133,10 +178,50 @@ export default function ResultatsExamenPage() {
             </p>
           )}
         </div>
-        <button onClick={() => window.print()} className="bg-blue-600 text-white text-sm px-4 py-2 rounded-md">
-          Imprimer / PDF
-        </button>
+        <div className="flex flex-col gap-2 items-end">
+          <button onClick={() => window.print()} className="bg-blue-600 text-white text-sm px-4 py-2 rounded-md">
+            Imprimer / PDF
+          </button>
+          <button
+            onClick={() => publierResultats(true)}
+            disabled={publicationEnCours}
+            className="bg-green-600 text-white text-sm px-4 py-2 rounded-md disabled:opacity-50"
+          >
+            {publicationEnCours ? 'Publication...' : publieLe ? 'Republier aux parents' : 'Publier aux parents'}
+          </button>
+          {publieLe && (
+            <button
+              onClick={() => publierResultats(false)}
+              disabled={publicationEnCours}
+              className="text-xs text-red-600 underline disabled:opacity-50"
+            >
+              Retirer la publication
+            </button>
+          )}
+        </div>
       </div>
+
+      {(publieLe || messagePublication) && (
+        <div className="mb-4 space-y-2 print:hidden">
+          {publieLe && (
+            <p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-md p-2">
+              Publié aux parents le {new Date(publieLe).toLocaleDateString('fr-FR')}. Si vous corrigez des notes,
+              appuyez sur « Republier aux parents ».
+            </p>
+          )}
+          {messagePublication && (
+            <p
+              className={`text-sm p-2 rounded-md border ${
+                messagePublication.type === 'success'
+                  ? 'bg-green-50 text-green-700 border-green-200'
+                  : 'bg-red-50 text-red-700 border-red-200'
+              }`}
+            >
+              {messagePublication.text}
+            </p>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="bg-red-50 border border-red-300 text-red-700 text-sm rounded-md p-3 mb-4">{error}</div>

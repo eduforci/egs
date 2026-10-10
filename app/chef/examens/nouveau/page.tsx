@@ -32,6 +32,7 @@ const NIVEAU_IMPOSE: Record<string, string> = {
 };
 
 const SERIES_BAC = ['A1', 'A2', 'C', 'D'];
+const TOUTES = 'toutes';
 
 const CYCLES = [
   { value: 'maternelle', label: 'Maternelle', niveaux: ['Petite Section', 'Moyenne Section', 'Grande Section'] },
@@ -48,6 +49,7 @@ export default function ExamenCreatePage() {
   const [etablissementNom, setEtablissementNom] = useState('');
   const [anneeActive, setAnneeActive] = useState('');
   const [seriesDisponibles, setSeriesDisponibles] = useState<string[]>([]);
+  const [seriesGeneriques, setSeriesGeneriques] = useState(false);
   const [classesCorrespondantes, setClassesCorrespondantes] = useState<{ id: string; nom: string }[]>([]);
 
   const [nom, setNom] = useState('');
@@ -139,6 +141,7 @@ export default function ExamenCreatePage() {
     async function chargerSeries() {
       if (!etablissementId || niveauFinal !== 'Terminale') {
         setSeriesDisponibles([]);
+        setSeriesGeneriques(false);
         return;
       }
       const { data } = await supabase
@@ -149,7 +152,9 @@ export default function ExamenCreatePage() {
         .not('serie', 'is', null);
 
       const uniques = Array.from(new Set((data ?? []).map((c) => c.serie).filter(Boolean))) as string[];
-      setSeriesDisponibles(uniques.length > 0 ? uniques : SERIES_BAC);
+      setSeriesGeneriques(uniques.length === 0);
+      setSeriesDisponibles(uniques.length > 0 ? uniques.sort() : SERIES_BAC);
+      setSerie((prev) => prev || TOUTES);
     }
     chargerSeries();
   }, [etablissementId, niveauFinal, supabase]);
@@ -167,7 +172,7 @@ export default function ExamenCreatePage() {
         .eq('etablissement_id', etablissementId)
         .eq('niveau', niveauFinal);
 
-      if (estBac && serie) {
+      if (estBac && serie && serie !== TOUTES) {
         query = query.eq('serie', serie);
       }
 
@@ -206,7 +211,7 @@ export default function ExamenCreatePage() {
           organisateur: organisateur.trim() || null,
           cycle,
           niveau: niveauFinal,
-          serie: estBac ? serie || null : null,
+          serie: estBac && serie && serie !== TOUTES ? serie : null,
           statut: 'preparation',
         })
         .select('id')
@@ -392,11 +397,12 @@ export default function ExamenCreatePage() {
                 className="w-full border rounded-md px-3 py-2 text-sm"
               >
                 <option value="">Choisir une série</option>
+                <option value={TOUTES}>Toutes les séries</option>
                 {seriesDisponibles.map((s) => (
                   <option key={s} value={s}>{s}</option>
                 ))}
               </select>
-              {seriesDisponibles.length === SERIES_BAC.length && (
+              {seriesGeneriques && (
                 <p className="text-xs text-amber-600 mt-1">
                   Aucune série n'est encore renseignée sur tes classes de Terminale — la liste ci-dessus
                   est générique. Renseigne le champ "série" sur tes classes pour un filtrage précis.
@@ -416,7 +422,7 @@ export default function ExamenCreatePage() {
                 </ul>
               ) : (
                 <p className="font-medium">
-                  ⚠️ Aucune classe "{niveauFinal}"{estBac && serie ? ` série ${serie}` : ''} n'existe dans cet
+                  ⚠️ Aucune classe "{niveauFinal}"{estBac && serie && serie !== TOUTES ? ` série ${serie}` : ''} n'existe dans cet
                   établissement. Crée d'abord cette classe, ou choisis un autre niveau — sinon aucun candidat
                   ne pourra être ajouté à cet examen.
                 </p>
@@ -458,4 +464,4 @@ export default function ExamenCreatePage() {
       </div>
     </main>
   );
-}
+              }

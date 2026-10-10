@@ -10,6 +10,7 @@ type EpreuveCol = {
   bareme: number;
   role_langue: string | null;
   matiere_id: string;
+  serie: string | null;
 };
 
 type Candidat = {
@@ -18,6 +19,7 @@ type Candidat = {
   prenom: string;
   lv1_matiere_id: string | null;
   lv2_matiere_id: string | null;
+  serie: string | null;
 };
 
 type MatiereOption = { id: string; nom: string };
@@ -92,12 +94,14 @@ export default function ExamenNotesPage() {
     try {
       const { data: emData, error: emError } = await supabase
         .from('examens_matieres')
-        .select('id, nom, bareme, role_langue, matiere_id')
+        .select('id, nom, bareme, role_langue, matiere_id, serie')
         .eq('examen_id', examenId)
         .eq('matiere_id', matiereId);
 
       if (emError) throw new Error(`Erreur épreuves : ${emError.message}`);
-      const epreuvesTriees = (emData ?? []).sort((a, b) => a.nom.localeCompare(b.nom));
+      const epreuvesTriees = (emData ?? []).sort(
+        (a, b) => a.nom.localeCompare(b.nom) || (a.serie ?? '').localeCompare(b.serie ?? '')
+      );
       setEpreuves(epreuvesTriees);
 
       const { data: candData, error: candError } = await supabase
@@ -116,6 +120,34 @@ export default function ExamenNotesPage() {
       if (profilesError) throw new Error(`Erreur profils : ${profilesError.message}`);
       const profilesMap = new Map((profilesData ?? []).map((p) => [p.id, p]));
 
+      // Série de chaque candidat = série de sa classe actuelle
+      const { data: elevesData, error: elevesError } = await supabase
+        .from('eleves')
+        .select('id, classe_id')
+        .in('id', eleveIds.length > 0 ? eleveIds : ['00000000-0000-0000-0000-000000000000']);
+
+      if (elevesError) throw new Error(`Erreur élèves : ${elevesError.message}`);
+
+      const classeIds = Array.from(
+        new Set((elevesData ?? []).map((el) => el.classe_id).filter(Boolean))
+      ) as string[];
+      const { data: classesData, error: classesError } = await supabase
+        .from('classes')
+        .select('id, serie')
+        .in('id', classeIds.length > 0 ? classeIds : ['00000000-0000-0000-0000-000000000000']);
+
+      if (classesError) throw new Error(`Erreur classes : ${classesError.message}`);
+
+      const serieParClasse = new Map(
+        (classesData ?? []).map((cl): [string, string | null] => [cl.id, cl.serie ?? null])
+      );
+      const serieParEleve = new Map(
+        (elevesData ?? []).map((el): [string, string | null] => [
+          el.id,
+          el.classe_id ? serieParClasse.get(el.classe_id) ?? null : null,
+        ])
+      );
+
       const listeCandidats: Candidat[] = (candData ?? []).map((c) => {
         const profil = profilesMap.get(c.eleve_id);
         return {
@@ -124,6 +156,7 @@ export default function ExamenNotesPage() {
           prenom: profil?.prenom ?? '',
           lv1_matiere_id: c.lv1_matiere_id,
           lv2_matiere_id: c.lv2_matiere_id,
+          serie: serieParEleve.get(c.eleve_id) ?? null,
         };
       });
       listeCandidats.sort((a, b) => a.nom.localeCompare(b.nom));
@@ -180,6 +213,8 @@ export default function ExamenNotesPage() {
   }, [matiereActuelle, chargerMatiereActuelle]);
 
   function epreuveApplicable(epreuve: EpreuveCol, candidat: Candidat): boolean {
+    // Une épreuve propre à une série ne concerne que les candidats de cette série
+    if (epreuve.serie && epreuve.serie !== candidat.serie) return false;
     if (!epreuve.role_langue) return true;
     if (epreuve.role_langue === 'LV1') return epreuve.matiere_id === candidat.lv1_matiere_id;
     if (epreuve.role_langue === 'LV2') return epreuve.matiere_id === candidat.lv2_matiere_id;
@@ -317,6 +352,9 @@ export default function ExamenNotesPage() {
     return null;
   }
 
+  // Seuls les candidats concernés par au moins une épreuve de cette matière sont affichés
+  const candidatsVisibles = candidats.filter((c) => epreuves.some((e) => epreuveApplicable(e, c)));
+
   if (loading && matieres.length === 0) return <p className="p-6 text-sm text-gray-500">Chargement...</p>;
 
   if (matieres.length === 0) {
@@ -365,9 +403,11 @@ export default function ExamenNotesPage() {
 
       {loading ? (
         <p className="text-sm text-gray-500">Chargement de la matière...</p>
-      ) : candidats.length === 0 ? (
+      ) : candidatsVisibles.length === 0 ? (
         <p className="text-sm text-gray-400">
-          Aucun candidat. Va sur la page Candidats pour en ajouter.
+          {candidats.length === 0
+            ? 'Aucun candidat. Va sur la page Candidats pour en ajouter.'
+            : "Aucun candidat n'est concerné par les épreuves de cette matière. Vérifie la série de chaque épreuve et la série des classes des candidats."}
         </p>
       ) : (
         <>
@@ -379,6 +419,9 @@ export default function ExamenNotesPage() {
                   {epreuves.map((e) => (
                     <th key={e.id} className="px-2 py-2 w-24">
                       {e.nom}
+                      {e.serie && (
+                        <span className="block text-[9px] text-blue-600">Série {e.serie}</span>
+                      )}
                       {e.role_langue && (
                         <span className="block text-[9px] text-amber-600">{e.role_langue}</span>
                       )}
@@ -387,10 +430,11 @@ export default function ExamenNotesPage() {
                 </tr>
               </thead>
               <tbody>
-                {candidats.map((c) => (
+                {candidatsVisibles.map((c) => (
                   <tr key={c.eleve_id} className="border-t">
                     <td className="px-3 py-1.5 sticky left-0 bg-white whitespace-nowrap">
                       {c.nom} {c.prenom}
+                      {c.serie && <span className="ml-1 text-[10px] text-gray-400">{c.serie}</span>}
                     </td>
                     {epreuves.map((e) => {
                       const applicable = epreuveApplicable(e, c);
@@ -471,4 +515,5 @@ export default function ExamenNotesPage() {
       )}
     </main>
   );
-    }
+        }
+      

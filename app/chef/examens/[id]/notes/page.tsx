@@ -36,6 +36,11 @@ type Historique = {
 
 type EtatCellule = 'idle' | 'saving' | 'saved' | 'error';
 
+// Langues vivantes : chaque candidat de Terminale en choisit une comme LV1 et une comme LV2
+const NOMS_LV = ['allemand', 'anglais', 'espagnol'];
+// Seules les séries A1 et A2 ont un choix de LV1 / LV2 ; en C et D, l'anglais est passé par tous
+const SERIES_AVEC_LV = ['A1', 'A2'];
+
 export default function ExamenNotesPage() {
   const params = useParams();
   const examenId = params?.id as string;
@@ -48,6 +53,7 @@ export default function ExamenNotesPage() {
   const [notes, setNotes] = useState<Record<string, string>>({}); // clé = `${eleve_id}_${epreuve_id}`
   const [etatsCellules, setEtatsCellules] = useState<Record<string, EtatCellule>>({});
   const [verrouille, setVerrouille] = useState(false);
+  const [estBac, setEstBac] = useState(false);
 
   const [historique, setHistorique] = useState<Historique[]>([]);
   const [afficherHistorique, setAfficherHistorique] = useState(false);
@@ -92,6 +98,13 @@ export default function ExamenNotesPage() {
     setError(null);
 
     try {
+      const { data: examenData } = await supabase
+        .from('examens')
+        .select('niveau')
+        .eq('id', examenId)
+        .maybeSingle();
+      setEstBac(examenData?.niveau === 'Terminale');
+
       const { data: emData, error: emError } = await supabase
         .from('examens_matieres')
         .select('id, nom, bareme, role_langue, matiere_id, serie')
@@ -215,7 +228,14 @@ export default function ExamenNotesPage() {
   function epreuveApplicable(epreuve: EpreuveCol, candidat: Candidat): boolean {
     // Une épreuve propre à une série ne concerne que les candidats de cette série
     if (epreuve.serie && epreuve.serie !== candidat.serie) return false;
-    if (!epreuve.role_langue) return true;
+    if (!epreuve.role_langue) {
+      // Épreuve d'une langue vivante (examen de Terminale, séries A1 et A2) : seulement pour les candidats qui l'ont choisie en LV1 ou LV2
+      const nomMatiere = (matieres.find((m) => m.id === epreuve.matiere_id)?.nom ?? '').trim().toLowerCase();
+      if (estBac && SERIES_AVEC_LV.includes(candidat.serie ?? '') && NOMS_LV.includes(nomMatiere)) {
+        return epreuve.matiere_id === candidat.lv1_matiere_id || epreuve.matiere_id === candidat.lv2_matiere_id;
+      }
+      return true;
+    }
     if (epreuve.role_langue === 'LV1') return epreuve.matiere_id === candidat.lv1_matiere_id;
     if (epreuve.role_langue === 'LV2') return epreuve.matiere_id === candidat.lv2_matiere_id;
     return true;
@@ -352,6 +372,12 @@ export default function ExamenNotesPage() {
     return null;
   }
 
+  const nomMatiereActuelle = (matieres.find((m) => m.id === matiereActuelle)?.nom ?? '').trim().toLowerCase();
+  const candidatsSansLV =
+    estBac && NOMS_LV.includes(nomMatiereActuelle)
+      ? candidats.filter((c) => SERIES_AVEC_LV.includes(c.serie ?? '') && !c.lv1_matiere_id && !c.lv2_matiere_id).length
+      : 0;
+
   // Seuls les candidats concernés par au moins une épreuve de cette matière sont affichés
   const candidatsVisibles = candidats.filter((c) => epreuves.some((e) => epreuveApplicable(e, c)));
 
@@ -401,13 +427,20 @@ export default function ExamenNotesPage() {
         </div>
       )}
 
+      {candidatsSansLV > 0 && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-800 text-sm rounded-md p-3 mb-4">
+          {candidatsSansLV} candidat(s) de série A1/A2 n'ont pas encore de LV1 ni de LV2 : ils n'apparaissent pas pour cette langue
+          vivante. Choisis leurs langues dans la liste des candidats.
+        </div>
+      )}
+
       {loading ? (
         <p className="text-sm text-gray-500">Chargement de la matière...</p>
       ) : candidatsVisibles.length === 0 ? (
         <p className="text-sm text-gray-400">
           {candidats.length === 0
             ? 'Aucun candidat. Va sur la page Candidats pour en ajouter.'
-            : "Aucun candidat n'est concerné par les épreuves de cette matière. Vérifie la série de chaque épreuve et la série des classes des candidats."}
+            : "Aucun candidat n'est concerné par les épreuves de cette matière. Vérifie la série de chaque épreuve et la série des classes des candidats ; pour une langue vivante, vérifie la LV1 / LV2 choisie par chaque candidat."}
         </p>
       ) : (
         <>
@@ -515,5 +548,4 @@ export default function ExamenNotesPage() {
       )}
     </main>
   );
-        }
-      
+}

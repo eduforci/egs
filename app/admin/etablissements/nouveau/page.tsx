@@ -3,15 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import EspacesCheckboxes, { typeHistorique } from "@/components/espaces-checkboxes";
+import type { EspaceCode } from "@/lib/espaces";
 
 const STATUTS = ["actif", "en_attente", "suspendu", "expire"] as const;
-const TYPES = [
-  { value: "maternelle", label: "Maternelle" },
-  { value: "primaire", label: "Primaire" },
-  { value: "college", label: "Collège" },
-  { value: "lycee", label: "Lycée" },
-  { value: "college_lycee", label: "Collège-Lycée" },
-] as const;
 const SYSTEMES = [{ value: "ivoirien", label: "Ivoirien" }];
 
 export default function NouvelEtablissement() {
@@ -23,7 +18,7 @@ export default function NouvelEtablissement() {
   const [telephone, setTelephone] = useState("");
   const [statut, setStatut] = useState<(typeof STATUTS)[number]>("en_attente");
   const [dateDebut, setDateDebut] = useState("");
-  const [typeEtablissement, setTypeEtablissement] = useState<(typeof TYPES)[number]["value"]>("college");
+  const [espaces, setEspaces] = useState<EspaceCode[]>(["secondaire"]);
   const [systeme, setSysteme] = useState("ivoirien");
   const [anneeScolaire, setAnneeScolaire] = useState("2025-2026");
   const [nomChef, setNomChef] = useState("");
@@ -46,6 +41,10 @@ export default function NouvelEtablissement() {
       setErreur("Le nom de l'établissement est obligatoire.");
       return;
     }
+    if (espaces.length === 0) {
+      setErreur("Coche au moins un espace de travail.");
+      return;
+    }
     if (!nomChef.trim() || !prenomChef.trim()) {
       setErreur("Le nom et le prénom du chef d'établissement sont obligatoires.");
       return;
@@ -62,7 +61,7 @@ export default function NouvelEtablissement() {
         telephone: telephone.trim() || null,
         statut,
         date_debut_abonnement: dateDebut || null,
-        type_etablissement: typeEtablissement,
+        type_etablissement: typeHistorique(espaces),
         systeme_enseignement: systeme,
         annee_scolaire_active: anneeScolaire,
       })
@@ -74,6 +73,9 @@ export default function NouvelEtablissement() {
       setChargement(false);
       return;
     }
+
+    // Espaces de travail ouverts (si le SQL « espaces » n'est pas encore exécuté, on continue sans bloquer)
+    await supabase.from("etablissements").update({ espaces_actifs: espaces }).eq("id", nouvelEtab.id);
 
     // Initialisation automatique : classes, matières, barèmes, paramètres, trimestres
     const { data: initData, error: initError } = await supabase.rpc(
@@ -186,21 +188,15 @@ export default function NouvelEtablissement() {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Type d'établissement *</label>
-            <select
-              value={typeEtablissement}
-              onChange={(e) => setTypeEtablissement(e.target.value as any)}
-              className="w-full border rounded-lg p-2"
-              required
-            >
-              {TYPES.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
-          </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Espaces de travail de l'école *</label>
+          <p className="text-xs text-gray-500 mb-2">
+            Coche les cycles que cette école gère. Le promoteur les verra, sans pouvoir les modifier.
+          </p>
+          <EspacesCheckboxes value={espaces} onChange={setEspaces} />
+        </div>
 
+        <div className="grid grid-cols-1 gap-4">
           <div>
             <label className="block text-sm font-medium mb-1">Système d'enseignement *</label>
             <select
@@ -319,4 +315,5 @@ export default function NouvelEtablissement() {
     </main>
   );
         }
-      
+
+        

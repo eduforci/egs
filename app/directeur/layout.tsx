@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import EspaceSelecteur from '@/components/espace-selecteur';
 import Avatar from '@/components/avatar';
 
 type NavItem = { label: string; href: string; icon: string };
@@ -39,7 +40,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Emploi du temps', href: '/direction/emploi-du-temps', icon: '📅' },
       { label: 'Grille horaire', href: '/direction/emploi-du-temps/grille', icon: '⏰' },
       { label: 'Établissement', href: '/direction/etablissement', icon: '🏛️' },
-      { label: "Structure de l'école", href: '/direction/structure', icon: '🧭' },
+      { label: "Espaces de l'école", href: '/direction/structure', icon: '🧭' },
       { label: 'Examens', href: '/chef/examens', icon: '📝' },
       { label: 'Bulletins', href: '/chef/bulletins', icon: '📄' },
     ],
@@ -238,10 +239,12 @@ export default function DirecteurLayout({ children }: { children: React.ReactNod
           <div className="flex-1 min-w-0">
             <div className="text-xs text-neutral-400 truncate">{etablissementNom}</div>
           </div>
+          <EspaceSelecteur />
         </header>
 
         <main className="flex-1">{children}</main>
       </div>
     </div>
   );
-}
+    }
+            

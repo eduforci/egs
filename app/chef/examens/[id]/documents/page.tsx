@@ -1,213 +1,139 @@
 'use client';
-
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
-type Examen = {
-  nom: string; categorie: string; type: string; niveau: string; serie: string | null;
-  annee_scolaire: string; session: string | null; date_debut: string | null; date_fin: string | null;
-  organisateur: string | null; etablissement_id: string;
-};
-type Centre = { nom_centre: string | null; code_centre: string | null; ville: string | null; drena: string | null; president_jury: string | null; secretaire: string | null; };
-type Candidat = { eleve_id: string; nom: string; prenom: string; matricule: string; classe_nom: string; numero_table: string | null };
-type Resultat = { eleve_id: string; nom: string; prenom: string; matricule: string; classe_nom: string; moyenne: number; mention: string; rang: number | null; decision: string; };
-type Stats = { inscrits: number; presents: number; absents: number; exclus: number; admis: number; ajournes: number; pourcentage_admis: number; moyenne_generale: number; };
-type MoyenneGroupe = { classe_nom?: string; serie?: string; nb_candidats: number; moyenne: number; taux_admission: number };
-type MoyenneMatiere = { matiere_nom: string; epreuve_nom: string; moyenne: number; nb_notes: number };
+type Examen = { nom: string; niveau: string; serie: string | null; annee_scolaire: string; organisateur: string | null; etablissement_id: string; };
+type Candidat = { eleve_id: string; nom: string; prenom: string; matricule: string; classe_nom: string; numero_table: string | null; serie: string | null; };
 
-const DOCUMENTS = [
-  { value: 'liste', label: 'Liste des candidats' },
-  { value: 'emargement', label: "Émargement simple" },
-  { value: 'emargement_epreuves', label: 'Émargement par matière (15/salle)' },
-  { value: 'convocations', label: 'Convocations' },
-  { value: 'etiquettes', label: 'Étiquettes tables' },
-  { value: 'pv', label: 'Procès-verbal' },
-  { value: 'releves', label: 'Relevés de notes' },
-  { value: 'palmares', label: 'Palmarès' },
-  { value: 'rapport', label: 'Rapport statistique' },
-];
-
-const MATIERES_BEPC_DEFAULT = ["Anglais","Orthographe","Hist-Géo","SVT","Allemand","Espagnol","EDHC","Maths","Phys-Chimie"];
-const MATIERES_BAC_DEFAULT = ["Français","Philosophie","Hist-Géo","LV1","LV2","Anglais","Mathématiques","Phys-Chimie","SVT"];
-const TAILLE_SALLE = 15;
-
-function chunk<T>(arr: T[], size: number): T[][] {
-  const res: T[][] = [];
-  for(let i=0; i<arr.length; i+=size) res.push(arr.slice(i, i+size));
-  return res;
+const MATIERES_PAR_SERIE: Record<string,string[]> = {
+  A1: ["Français","Philosophie","Hist-Géo","LV1","LV2","Mathématiques","Anglais","",""],
+  A2: ["Français","Philosophie","Hist-Géo","LV1","LV2","Anglais","Mathématiques","",""],
+  C: ["Mathématiques","Phys-Chimie","SVT","Français","Philosophie","Hist-Géo","LV1","Anglais",""],
+  D: ["Mathématiques","Phys-Chimie","SVT","Français","Philosophie","Hist-Géo","LV1","Anglais",""],
 }
+const MATIERES_BEPC = ["Anglais","Orthographe","Hist-Géo","SVT","Allemand","Espagnol","EDHC","Maths","Phys-Chimie"];
+const TAILLE_SALLE = 15;
+const ORDRE_SERIES = ["A1","A2","C","D"];
 
-function telechargerCSV(nomFichier: string, lignes: string[][]) {
-  const contenu = lignes.map((ligne) => ligne.map((c) => `"${(c?? '').toString().replace(/"/g, '""')}"`).join(',')).join('\n');
-  const blob = new Blob(['\uFEFF' + contenu], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = nomFichier; a.click(); URL.revokeObjectURL(url);
+function chunk<T>(arr: T[], size: number){ const r:T[][]=[]; for(let i=0;i<arr.length;i+=size) r.push(arr.slice(i,i+size)); return r; }
+function detectSerie(nomClasse:string, serieBDD:string|null){
+  if(serieBDD && ["A1","A2","C","D"].includes(serieBDD.toUpperCase())) return serieBDD.toUpperCase();
+  const up = nomClasse.toUpperCase();
+  if(up.includes('A1')) return 'A1';
+  if(up.includes('A2')) return 'A2';
+  if(up.match(/\bC\b/) || up.includes(' TLE C') || up.includes('1ERE C')) return 'C';
+  if(up.match(/\bD\b/) || up.includes(' TLE D') || up.includes('1ERE D')) return 'D';
+  return 'A2'; // défaut si non trouvé
 }
 
 export default function ExamenDocumentsPage() {
   const params = useParams(); const examenId = params?.id as string; const supabase = createClient();
   const [examen, setExamen] = useState<Examen | null>(null);
-  const [centre, setCentre] = useState<Centre | null>(null);
-  const [etablissementNom, setEtablissementNom] = useState('');
+  const [etabNom, setEtabNom] = useState('');
   const [candidats, setCandidats] = useState<Candidat[]>([]);
-  const [resultats, setResultats] = useState<Resultat[]>([]);
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [parClasse, setParClasse] = useState<MoyenneGroupe[]>([]);
-  const [parSerie, setParSerie] = useState<MoyenneGroupe[]>([]);
-  const [parMatiere, setParMatiere] = useState<MoyenneMatiere[]>([]);
-  const [document, setDocument] = useState('emargement_epreuves');
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [matieresEpreuves, setMatieresEpreuves] = useState<string[]>(MATIERES_BAC_DEFAULT);
+  const [matieres, setMatieres] = useState<string[]>(MATIERES_PAR_SERIE["A2"]);
 
   const charger = useCallback(async () => {
-    setLoading(true); setError(null);
-    try {
-      const { data: examenData, error: examenError } = await supabase.from('examens').select('nom, categorie, type, niveau, serie, annee_scolaire, session, date_debut, date_fin, organisateur, etablissement_id').eq('id', examenId).single();
-      if (examenError) throw new Error(`Erreur examen : ${examenError.message}`);
-      setExamen(examenData);
-      const nomUp = (examenData.nom + ' ' + examenData.niveau + ' ' + examenData.type).toUpperCase();
-      if(nomUp.includes('BEPC')) setMatieresEpreuves(MATIERES_BEPC_DEFAULT); else setMatieresEpreuves(MATIERES_BAC_DEFAULT);
-      const { data: etabData } = await supabase.from('etablissements').select('nom').eq('id', examenData.etablissement_id).single();
-      setEtablissementNom(etabData?.nom?? '');
-      if (examenData.categorie!== 'interne') {
-        const { data: centreData } = await supabase.from('examens_centre').select('nom_centre, code_centre, ville, drena, president_jury, secretaire').eq('examen_id', examenId).maybeSingle();
-        setCentre(centreData);
-      }
-      const { data: candData, error: candError } = await supabase.from('examens_candidats').select('eleve_id, numero_table, eleves(matricule, classes(nom))').eq('examen_id', examenId);
-      if (candError) throw new Error(`Erreur candidats : ${candError.message}`);
-      type RowC = { eleve_id: string; numero_table: string | null; eleves: { matricule: string; classes: { nom: string } | { nom: string }[] | null } | { matricule: string; classes: { nom: string } | { nom: string }[] | null }[] | null };
-      const brut = (candData?? []) as unknown as RowC[];
-      const eleveIds = brut.map((r) => r.eleve_id);
-      const { data: profilesData } = await supabase.from('profiles').select('id, nom, prenom').in('id', eleveIds.length > 0? eleveIds : ['00000000-0000-0000-0000-000000000000']);
-      const profilesMap = new Map((profilesData?? []).map((p) => [p.id, p]));
-      const listeCandidats: Candidat[] = brut.map((r) => {
-        const ele = Array.isArray(r.eleves)? r.eleves[0] : r.eleves;
-        const cl = ele?.classes? (Array.isArray(ele.classes)? ele.classes[0] : ele.classes) : null;
-        const profil = profilesMap.get(r.eleve_id);
-        return { eleve_id: r.eleve_id, nom: profil?.nom?? 'Inconnu', prenom: profil?.prenom?? '', matricule: ele?.matricule?? '-', classe_nom: cl?.nom?? '-', numero_table: r.numero_table };
-      });
-      listeCandidats.sort((a, b) => (a.numero_table?? '').localeCompare(b.numero_table?? '') || a.nom.localeCompare(b.nom));
-      setCandidats(listeCandidats);
-      const [resResultats, resStats, resClasse, resSerie, resMatiere] = await Promise.all([
-        supabase.rpc('calculer_resultats_examen', { p_examen_id: examenId }),
-        supabase.rpc('calculer_statistiques_examen', { p_examen_id: examenId }),
-        supabase.rpc('calculer_moyennes_par_classe', { p_examen_id: examenId }),
-        supabase.rpc('calculer_moyennes_par_serie', { p_examen_id: examenId }),
-        supabase.rpc('calculer_moyennes_par_matiere', { p_examen_id: examenId }),
-      ]);
-      setResultats((resResultats.data as Resultat[])?? []); setStats(resStats.data as Stats);
-      setParClasse((resClasse.data as MoyenneGroupe[])?? []); setParSerie((resSerie.data as MoyenneGroupe[])?? []); setParMatiere((resMatiere.data as MoyenneMatiere[])?? []);
-    } catch (err) { setError(err instanceof Error? err.message : 'Erreur inconnue'); } finally { setLoading(false); }
+    setLoading(true);
+    const { data: ex } = await supabase.from('examens').select('nom,niveau,serie,annee_scolaire,organisateur,etablissement_id').eq('id', examenId).single();
+    setExamen(ex as any);
+    const isBEPC = (ex?.nom+' '+ex?.niveau).toUpperCase().includes('BEPC');
+    if(isBEPC) setMatieres(MATIERES_BEPC); else if(ex?.serie && MATIERES_PAR_SERIE[ex.serie]) setMatieres(MATIERES_PAR_SERIE[ex.serie]);
+
+    const { data: etab } = await supabase.from('etablissements').select('nom').eq('id', ex.etablissement_id).single(); setEtabNom(etab?.nom||'');
+
+    const { data: candData } = await supabase.from('examens_candidats').select('eleve_id, numero_table, eleves(matricule, serie, classes(nom, serie))').eq('examen_id', examenId);
+    const brut = (candData??[]) as any[];
+    const ids = brut.map(r=>r.eleve_id);
+    const { data: profs } = await supabase.from('profiles').select('id,nom,prenom').in('id', ids.length?ids:['00000000-0000-0000-0000-000000000000']);
+    const map = new Map((profs??[]).map((p:any)=>[p.id,p]));
+    const liste: Candidat[] = brut.map(r=>{
+      const ele = Array.isArray(r.eleves)?r.eleves[0]:r.eleves;
+      const cl = ele?.classes? (Array.isArray(ele.classes)?ele.classes[0]:ele.classes):null;
+      const p = map.get(r.eleve_id);
+      const serie = isBEPC? null : detectSerie(cl?.nom||'', ele?.serie || cl?.serie || null);
+      return { eleve_id:r.eleve_id, nom:p?.nom||'Inconnu', prenom:p?.prenom||'', matricule:ele?.matricule||'-', classe_nom:cl?.nom||'-', numero_table:r.numero_table, serie };
+    });
+    // Tri officiel: Série A1 -> A2 -> C -> D, puis Classe, puis N° Table
+    liste.sort((a,b)=>{
+      const sA = ORDRE_SERIES.indexOf(a.serie||''); const sB = ORDRE_SERIES.indexOf(b.serie||'');
+      if(sA!==sB) return sA-sB;
+      if(a.classe_nom!==b.classe_nom) return a.classe_nom.localeCompare(b.classe_nom);
+      return (a.numero_table||'').localeCompare(b.numero_table||'');
+    });
+    setCandidats(liste); setLoading(false);
   }, [examenId, supabase]);
+  useEffect(()=>{ charger(); }, [charger]);
 
-  useEffect(() => { charger(); }, [charger]);
+  if(loading) return <p className="p-6">Chargement...</p>;
 
-  const salles = chunk(candidats, TAILLE_SALLE);
+  const isBEPC = (examen?.nom+' '+examen?.niveau).toUpperCase().includes('BEPC');
 
-  if (loading) return <p className="p-6 text-sm text-gray-500">Chargement...</p>;
-  if (!examen) return <p className="p-6 text-sm text-red-600">Examen introuvable.</p>;
+  // GROUPEMENT STRICT: SERIE -> CLASSE -> 15 max
+  const groupesMap = new Map<string, Candidat[]>();
+  if(isBEPC){
+    groupesMap.set('BEPC', candidats);
+  } else {
+    for(const c of candidats){
+      const key = `${c.serie}__${c.classe_nom}`; // A2__Tle A2-1 / D__Tle D2
+      if(!groupesMap.has(key)) groupesMap.set(key, []);
+      groupesMap.get(key)!.push(c);
+    }
+  }
+
+  // Tri des clés dans l'ordre A1, A2, C, D
+  const clesTriees = Array.from(groupesMap.keys()).sort((a,b)=>{
+    if(isBEPC) return 0;
+    const serieA = a.split('__')[0]; const serieB = b.split('__')[0];
+    return ORDRE_SERIES.indexOf(serieA) - ORDRE_SERIES.indexOf(serieB) || a.localeCompare(b);
+  });
+
+  const salles: { serie: string; classe: string; candidats: Candidat[]; numSalleSerie: number }[] = [];
+  const compteurSalleParSerie = new Map<string, number>();
+  for(const key of clesTriees){
+    const list = groupesMap.get(key)!;
+    const [serie, classe] = key.split('__');
+    const chunks = chunk(list, TAILLE_SALLE);
+    chunks.forEach((g)=>{
+      const num = (compteurSalleParSerie.get(serie)||0)+1;
+      compteurSalleParSerie.set(serie, num);
+      salles.push({ serie: serie==='BEPC'?'':serie, classe: classe==='BEPC'?'':classe, candidats: g, numSalleSerie: num });
+    });
+  }
 
   return (
-    <main className="p-4 md:p-6 max-w-[1600px] mx-auto pb-16">
+    <main className="p-3 max-w-[1600px] mx-auto">
       <div className="print:hidden">
-        <h1 className="text-xl font-bold mb-1">Documents — {examen.nom}</h1>
-        <p className="text-sm text-gray-500 mb-1">{candidats.length} candidats • {salles.length} salle(s) de {TAILLE_SALLE} max • {examen.annee_scolaire}</p>
-        {error && <div className="bg-red-50 border border-red-300 text-red-700 text-sm rounded-md p-3 mb-4">{error}</div>}
-        <div className="flex flex-wrap gap-1 mb-4">{DOCUMENTS.map((d) => (<button key={d.value} onClick={() => setDocument(d.value)} className={`px-3 py-1.5 rounded-md text-xs whitespace-nowrap ${document === d.value? 'bg-black text-white' : 'bg-gray-100 text-gray-600'}`}>{d.label}</button>))}</div>
-
-        {document === 'emargement_epreuves' && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
-            <p className="font-semibold text-sm mb-2">Configurer les 9 matières (ordre CI) • Découpé en {salles.length} salle(s) de 15 :</p>
-            <div className="grid grid-cols-3 md:grid-cols-9 gap-2">
-              {matieresEpreuves.map((m,i) => (<input key={i} value={m} onChange={(e)=>{ const c=[...matieresEpreuves]; c[i]=e.target.value; setMatieresEpreuves(c); }} placeholder={`Matière ${i+1}`} className="border rounded px-2 py-1.5 text-xs bg-white" />))}
-            </div>
-            <div className="flex gap-2 mt-2">
-              <button onClick={()=>setMatieresEpreuves(MATIERES_BEPC_DEFAULT)} className="text-xs border px-2 py-1 rounded bg-white">Modèle BEPC (9)</button>
-              <button onClick={()=>setMatieresEpreuves(MATIERES_BAC_DEFAULT)} className="text-xs border px-2 py-1 rounded bg-white">Modèle BAC (9)</button>
-              <span className="text-xs text-gray-600 self-center">• {salles.length} page(s) à imprimer</span>
-            </div>
+        <h1 className="font-bold text-sm">{examen?.nom} • {candidats.length} candidats • {isBEPC? 'BEPC': 'Séries: '+Array.from(new Set(candidats.map(c=>c.serie))).join(', ')} • {salles.length} salle(s)</h1>
+        <p className="text-[11px] text-gray-600 mb-2">Règle CI: Série (A1/A2/C/D) → Classe → max 15. Jamais mélanger A2 avec D. Tes 40 élèves = 10 par série = 4 salles distinctes.</p>
+        <div className="bg-yellow-50 border rounded p-2 mb-2">
+          <div className="grid grid-cols-3 md:grid-cols-9 gap-1">
+            {matieres.map((m,i)=><input key={i} value={m} onChange={e=>{ const c=[...matieres]; c[i]=e.target.value; setMatieres(c); }} className="border px-1 py-1 text-xs bg-white rounded" />)}
           </div>
-        )}
-
-        <div className="flex gap-2 mb-6 flex-wrap">
-          <button onClick={async () => {
-              if (!examen) return; if (!confirm(`Générer les N° Table pour ${candidats.length} candidats?`)) return; setGenerating(true);
-              const anneeSuffix = examen.annee_scolaire?.split('-')[1]?.slice(-2) || examen.annee_scolaire?.slice(-2) || '27';
-              const nomUp = (examen.nom + ' ' + examen.niveau + ' ' + examen.type).toUpperCase();
-              const prefix = nomUp.includes('BEPC')? 'BE' : nomUp.includes('BAC')? 'BA' : nomUp.includes('CEPE')? 'CE' : 'EX';
-              try { for (const c of candidats) { if (!c.numero_table || c.numero_table === '-') { const suffix = c.matricule? c.matricule.slice(-5) : c.eleve_id.slice(0,5).toUpperCase(); const nouveau = `${prefix}${anneeSuffix}-${suffix}`; await supabase.from('examens_candidats').update({ numero_table: nouveau }).eq('examen_id', examenId).eq('eleve_id', c.eleve_id); } } alert('N° Table générés!'); window.location.reload(); } catch (e: any) { alert('Erreur: '+e.message); } finally { setGenerating(false); }
-            }} disabled={generating} className="px-3 py-2 bg-orange-600 text-white rounded text-sm disabled:opacity-50">{generating? 'Génération...' : 'Générer N° Table'}</button>
-          <button onClick={() => window.print()} className="bg-blue-600 text-white text-sm px-4 py-2 rounded-md">Imprimer / Export PDF (par salle)</button>
+          <div className="flex gap-1 mt-2 flex-wrap">{ORDRE_SERIES.map(s=><button key={s} onClick={()=>setMatieres(MATIERES_PAR_SERIE[s])} className="border bg-white px-2 py-1 text-xs rounded">BAC {s}</button>)}<button onClick={()=>setMatieres(MATIERES_BEPC)} className="border bg-white px-2 py-1 text-xs rounded">BEPC</button></div>
         </div>
+        <button onClick={()=>window.print()} className="bg-blue-600 text-white px-4 py-2 rounded text-sm">Imprimer par salle (paysage)</button>
       </div>
 
-      <div className="bg-white text-[11px]">
-        {document === 'emargement_epreuves' && salles.map((groupe, idxSalle) => (
-          <div key={idxSalle} className="mb-8 border rounded-lg p-2 md:p-3 print:border-none print:mb-0 print:break-after-page last:print:break-after-avoid">
-            <div className="text-center mb-2 border-b pb-2 flex justify-between items-end">
-              <div className="text-left">
-                <p className="text-[10px] font-semibold uppercase">{examen.organisateur?? etablissementNom}</p>
-                <h2 className="text-[12px] font-bold">SALLE {idxSalle+1} — {examen.nom} — Émargement par épreuve</h2>
-                <p className="text-[9px] text-gray-500">Candidats {idxSalle*TAILLE_SALLE+1} à {idxSalle*TAILLE_SALLE+groupe.length} / {candidats.length} • {groupe.length} élèves • Année {examen.annee_scolaire}</p>
-              </div>
-              <div className="text-right text-[9px]">
-                <p>Président de salle:.........................</p>
-                <p className="mt-1">Surveillant:.........................</p>
-              </div>
+      {salles.map((s, idx)=>(
+        <div key={idx} className="mt-4 border p-2 print:border-none print:break-after-page">
+          <div className="flex justify-between border-b pb-1 mb-1">
+            <div>
+              <p className="text-[9px] uppercase font-semibold">{etabNom} — {examen?.annee_scolaire}</p>
+              <h2 className="text-[11px] font-bold">{isBEPC? `SALLE ${idx+1} — BEPC` : `SALLE ${idx+1} — SÉRIE ${s.serie} — ${s.classe} — Groupe ${s.numSalleSerie}`}</h2>
+              <p className="text-[8px] text-gray-500">{s.candidats.length} élèves • {s.classe} • Série {s.serie || 'BEPC'} • Ne jamais mélanger avec autre série</p>
             </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-[9px] border border-black border-collapse">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="border border-black px-1 py-1 w-6">#</th>
-                    <th className="border border-black px-1 py-1 w-[70px]">N° Table</th>
-                    <th className="border border-black px-1 py-1 w-[70px]">Matricule</th>
-                    <th className="border border-black px-1 py-1 text-left">Nom</th>
-                    <th className="border border-black px-1 py-1 text-left">Prénom</th>
-                    {matieresEpreuves.map((mat,i) => (<th key={i} className="border border-black px-1 py-1 min-w-[52px] bg-yellow-50">{mat || `Mat ${i+1}`}</th>))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {groupe.map((c, idx) => (
-                    <tr key={c.eleve_id} className="h-[28px]">
-                      <td className="border border-black px-1 text-center">{idxSalle*TAILLE_SALLE + idx+1}</td>
-                      <td className="border border-black px-1 font-mono font-bold text-center text-[8px]">{c.numero_table?? '-'}</td>
-                      <td className="border border-black px-1 text-center text-[8px]">{c.matricule}</td>
-                      <td className="border border-black px-1">{c.nom}</td>
-                      <td className="border border-black px-1">{c.prenom}</td>
-                      {matieresEpreuves.map((_,i) => (<td key={i} className="border border-black px-1"></td>))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex justify-between text-[8px] mt-1 text-gray-500">
-              <span>Salle {idxSalle+1}/{salles.length} — {groupe.length} candidats</span>
-              <span className="print:hidden">Page {idxSalle+1} va s'imprimer séparément</span>
-            </div>
+            <div className="text-[8px] text-right"><p>Président:.................</p><p>Surveillant:...............</p></div>
           </div>
-        ))}
-
-        {document === 'liste' && chunk(candidats, TAILLE_SALLE).map((groupe, idxSalle) => (
-          <div key={idxSalle} className="mb-8 print:break-after-page">
-            <h3 className="font-bold mb-2">SALLE {idxSalle+1} — Liste des candidats ({groupe.length})</h3>
-            <table className="w-full text-xs border"><thead className="bg-gray-100"><tr><th className="text-left px-2 py-1.5">#</th><th className="text-left px-2 py-1.5">N° Table</th><th className="text-left px-2 py-1.5">Nom</th><th className="text-left px-2 py-1.5">Prénom</th><th className="text-left px-2 py-1.5">Matricule</th></tr></thead><tbody>{groupe.map((c,i)=><tr key={c.eleve_id} className="border-t"><td className="px-2 py-1.5">{idxSalle*15+i+1}</td><td className="px-2 py-1.5 font-mono font-bold">{c.numero_table?? '-'}</td><td className="px-2 py-1.5">{c.nom}</td><td className="px-2 py-1.5">{c.prenom}</td><td className="px-2 py-1.5">{c.matricule}</td></tr>)}</tbody></table>
-          </div>
-        ))}
-      </div>
-
-      <style jsx global>{`
-        @media print {
-          @page { size: A4 landscape; margin: 6mm; }
-         .print\\:break-after-page { break-after: page; }
-         .print\\:break-after-avoid { break-after: avoid; }
-          body { -webkit-print-color-adjust: exact; }
-        }
-      `}</style>
+          <table className="w-full text-[8px] border-collapse border border-black">
+            <thead className="bg-gray-100"><tr><th className="border border-black px-1 w-6">#</th><th className="border border-black w-[60px]">N° Table</th><th className="border border-black w-[55px]">Matricule</th><th className="border border-black">Nom</th><th className="border border-black">Prénom</th>{matieres.map((mat,i)=><th key={i} className="border border-black bg-yellow-50 min-w-[42px]">{mat||'-'}</th>)}</tr></thead>
+            <tbody>{s.candidats.map((c,i)=><tr key={c.eleve_id} className="h-[24px]"><td className="border border-black text-center">{i+1}</td><td className="border border-black text-center font-mono font-bold text-[7px]">{c.numero_table||'-'}</td><td className="border border-black text-center text-[7px]">{c.matricule}</td><td className="border border-black px-1">{c.nom}</td><td className="border border-black px-1">{c.prenom}</td>{matieres.map((_,j)=><td key={j} className="border border-black"></td>)}</tr>)}</tbody>
+          </table>
+        </div>
+      ))}
+      <style jsx global>{`@media print{ @page{ size:A4 landscape; margin:4mm;}.print\\:break-after-page{ break-after:page; } }`}</style>
     </main>
   );
-    }
+                                                   }

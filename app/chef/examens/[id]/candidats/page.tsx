@@ -202,19 +202,35 @@ export default function ExamenCandidatsPage() {
   }
 
   async function modifierLangue(id: string, champ: 'lv1_matiere_id' | 'lv2_matiere_id', matiereId: string) {
-    const autreChamp = champ === 'lv1_matiere_id' ? 'lv2_matiere_id' : 'lv1_matiere_id';
     const courant = candidats.find((c) => c.id === id);
-    if (matiereId && courant && courant[autreChamp] === matiereId) {
-      setError('La LV1 et la LV2 doivent être deux langues différentes.');
-      return;
+    if (!courant) return;
+    const autreChamp = champ === 'lv1_matiere_id' ? 'lv2_matiere_id' : 'lv1_matiere_id';
+
+    let lv1 = champ === 'lv1_matiere_id' ? matiereId || null : courant.lv1_matiere_id;
+    let lv2 = champ === 'lv2_matiere_id' ? matiereId || null : courant.lv2_matiere_id;
+
+    if (matiereId && courant[autreChamp] === matiereId) {
+      // La langue choisie était déjà dans l'autre champ : on échange la LV1 et la LV2
+      if (champ === 'lv1_matiere_id') {
+        lv1 = matiereId;
+        lv2 = courant.lv1_matiere_id;
+      } else {
+        lv2 = matiereId;
+        lv1 = courant.lv2_matiere_id;
+      }
+    } else if (matiereId && anglaisId && matiereId !== anglaisId) {
+      // L'anglais est obligatoire en A1 et A2 : s'il n'est pas la langue choisie, il est l'autre
+      if (champ === 'lv1_matiere_id') lv2 = anglaisId;
+      else lv1 = anglaisId;
     }
+
     setError(null);
     setCandidats((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, [champ]: matiereId || null } : c))
+      prev.map((c) => (c.id === id ? { ...c, lv1_matiere_id: lv1, lv2_matiere_id: lv2 } : c))
     );
     const { error: updateError } = await supabase
       .from('examens_candidats')
-      .update({ [champ]: matiereId || null })
+      .update({ lv1_matiere_id: lv1, lv2_matiere_id: lv2 })
       .eq('id', id);
     if (updateError) {
       setError(`Erreur mise à jour langue : ${updateError.message}`);
@@ -332,10 +348,19 @@ export default function ExamenCandidatsPage() {
 
   // Choix de LV1 / LV2 : seulement pour les candidats de série A1 ou A2 dans un examen de Terminale
   const matieresLV = matieres.filter((m) => NOMS_LV.includes(m.nom.trim().toLowerCase()));
+  const anglaisId = matieresLV.find((m) => m.nom.trim().toLowerCase() === 'anglais')?.id ?? null;
+  const languesManquantes = NOMS_LV.filter(
+    (n) => !matieresLV.some((m) => m.nom.trim().toLowerCase() === n)
+  ).map((n) => n.charAt(0).toUpperCase() + n.slice(1));
   const concerneParLV = (c: Candidat) => estBac && SERIES_AVEC_LV.includes(c.serie ?? '');
   const afficherLV = candidats.some(concerneParLV);
   const nbColonnes = afficherLV ? 8 : 6;
   const candidatsSansLV1 = candidats.filter((c) => concerneParLV(c) && !c.lv1_matiere_id).length;
+  const candidatsSansAnglais = candidats.filter(
+    (c) =>
+      concerneParLV(c) && anglaisId && (c.lv1_matiere_id || c.lv2_matiere_id) &&
+      c.lv1_matiere_id !== anglaisId && c.lv2_matiere_id !== anglaisId
+  ).length;
   // Dispenses : seulement les épreuves communes ou de la série du candidat
   const epreuvesDe = (c: Candidat) => epreuves.filter((ep) => !ep.serie || ep.serie === c.serie);
 
@@ -402,13 +427,22 @@ export default function ExamenCandidatsPage() {
         </p>
       </div>
 
-      {afficherLV && (candidatsSansLV1 > 0 || matieresLV.length === 0) && (
+      {afficherLV && languesManquantes.length > 0 && (
         <div className="bg-amber-50 border border-amber-300 text-amber-800 text-sm rounded-md p-3 mb-4">
-          {matieresLV.length === 0 ? (
-            <>Aucune matière nommée Allemand, Anglais ou Espagnol dans ton établissement : crée-les dans la liste des matières pour pouvoir choisir les LV.</>
-          ) : (
-            <>{candidatsSansLV1} candidat(s) de série A1/A2 n'ont pas encore de LV1 (cases en orange).</>
-          )}
+          Il manque dans la liste des matières de ton établissement : {languesManquantes.join(', ')}. Crée-les (avec
+          exactement ce nom) pour pouvoir les choisir en LV1 ou LV2.
+        </div>
+      )}
+      {afficherLV && candidatsSansLV1 > 0 && (
+        <div className="bg-amber-50 border border-amber-300 text-amber-800 text-sm rounded-md p-3 mb-4">
+          {candidatsSansLV1} candidat(s) de série A1/A2 n'ont pas encore de LV1 (cases en orange).
+        </div>
+      )}
+
+      {afficherLV && candidatsSansAnglais > 0 && (
+        <div className="bg-amber-50 border border-amber-300 text-amber-800 text-sm rounded-md p-3 mb-4">
+          {candidatsSansAnglais} candidat(s) de série A1/A2 n'ont pas l'anglais en LV1 ni en LV2. L'anglais est
+          obligatoire dans ces séries : corrige leur choix.
         </div>
       )}
 
@@ -507,7 +541,7 @@ export default function ExamenCandidatsPage() {
                         <p className="text-xs text-gray-400">Aucune épreuve configurée pour cet examen.</p>
                       ) : (
                         <div className="grid grid-cols-2 gap-1">
-                  {epreuvesDe(c).map((ep) => (
+                          {epreuvesDe(c).map((ep) => (
                             <label key={ep.id} className="flex items-center gap-1.5 text-xs">
                               <input
                                 type="checkbox"
@@ -531,8 +565,9 @@ export default function ExamenCandidatsPage() {
       <p className="text-xs text-gray-400 mt-2">
         LV1 et LV2 (allemand, anglais ou espagnol) ne concernent que les candidats de Terminale séries A1 et A2 : leur
         choix détermine quelles épreuves de langue comptent dans leur calcul. En séries C et D, l'anglais est passé par
-        tous, il n'y a rien à choisir.
+        tous, il n'y a rien à choisir. L'anglais est obligatoire en A1 et A2 : il est LV1 ou LV2, l'autre langue est
+        l'allemand ou l'espagnol. Choisir l'allemand ou l'espagnol place automatiquement l'anglais dans l'autre case.
       </p>
     </main>
   );
-}
+                                             }

@@ -63,12 +63,13 @@ export default function ExamenDocumentsPage() {
   const charger = useCallback(async () => {
     setLoading(true);
     try{
-      const { data: examenData } = await supabase.from('examens').select('nom,categorie,type,niveau,serie,annee_scolaire,session,date_debut,date_fin,organisateur,etablissement_id').eq('id', examenId).single();
+            const { data: examenData } = await supabase.from('examens').select('nom,categorie,type,niveau,serie,annee_scolaire,session,date_debut,date_fin,organisateur,etablissement_id').eq('id', examenId).single();
+      if(!examenData){ setLoading(false); return; }
       setExamen(examenData as any);
-      const isBEPC = (examenData.nom+' '+examenData.niveau).toUpperCase().includes('BEPC');
+      const isBEPC = ((examenData.nom||'')+' '+(examenData.niveau||'')).toUpperCase().includes('BEPC');
       if(isBEPC) setMatieres(MATIERES_BEPC); else if(examenData.serie && MATIERES_PAR_SERIE[examenData.serie]) setMatieres(MATIERES_PAR_SERIE[examenData.serie]);
 
-      const { data: etab } = await supabase.from('etablissements').select('nom').eq('id', examenData.etablissement_id).single(); setEtabNom(etab?.nom||'');
+      const { data: etab } = await supabase.from('etablissements').select('nom').eq('id', (examenData as any).etablissement_id).single(); setEtabNom(etab?.nom||'');
       const { data: cd } = await supabase.from('examens_centre').select('nom_centre, code_centre, ville, drena, president_jury, secretaire').eq('examen_id', examenId).maybeSingle(); setCentre(cd as any);
 
       const { data: candData } = await supabase.from('examens_candidats').select('eleve_id, numero_table, eleves(matricule, serie, classes(nom, serie))').eq('examen_id', examenId);

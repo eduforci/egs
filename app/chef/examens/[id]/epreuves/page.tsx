@@ -26,11 +26,11 @@ const TYPES_EPREUVE = [
   { value: 'autre', label: 'Autre' },
 ];
 
-const ROLES_LANGUE = [
-  { value: '', label: 'Aucun (épreuve normale)' },
-  { value: 'LV1', label: 'LV1 (langue vivante 1)' },
-  { value: 'LV2', label: 'LV2 (langue vivante 2)' },
-];
+// Langues vivantes : chaque candidat en choisit une comme LV1 et une comme LV2 (dans la liste des candidats)
+const NOMS_LV = ['allemand', 'anglais', 'espagnol'];
+const estLV = (nom: string) => NOMS_LV.includes(nom.trim().toLowerCase());
+// Seules les séries A1 et A2 ont un choix de LV1 / LV2 ; en C et D, l'anglais est une matière normale
+const SERIES_AVEC_LV = ['A1', 'A2'];
 
 const SERIES_BAC = ['A1', 'A2', 'C', 'D'];
 const TOUTES = 'toutes';
@@ -57,7 +57,6 @@ export default function ExamenEpreuvesPage() {
   const [bareme, setBareme] = useState('20');
   const [duree, setDuree] = useState('');
   const [typeEpreuve, setTypeEpreuve] = useState('ecrit');
-  const [roleLangue, setRoleLangue] = useState('');
 
   const [copieSource, setCopieSource] = useState('');
   const [copieCible, setCopieCible] = useState('');
@@ -66,6 +65,11 @@ export default function ExamenEpreuvesPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [succes, setSucces] = useState<string | null>(null);
+
+  const matiereNomChoisie = matieresDisponibles.find((m) => m.id === matiereChoisie)?.nom ?? '';
+  const nomAuto = matiereNomChoisie
+    ? `${matiereNomChoisie} ${TYPES_EPREUVE.find((t) => t.value === typeEpreuve)?.label ?? ''}`.trim()
+    : '';
 
   const charger = useCallback(
     async (silencieux = false) => {
@@ -151,14 +155,14 @@ export default function ExamenEpreuvesPage() {
   }, [charger]);
 
   // Total de points d'une série : épreuves communes + épreuves propres à la série.
-  // Comme dans le calcul des résultats, un candidat ne passe qu'une seule LV1 et une seule LV2.
+  // Matières normales : toutes comptent (écrit + oral d'une même matière s'additionnent).
+  // Séries A1 et A2 : langues vivantes (allemand, anglais, espagnol) : un candidat n'en passe que deux (sa LV1
+  // et sa LV2), on compte donc les deux matières de langue les mieux dotées. Séries C et D : tout compte.
   function totalPointsPourSerie(serie: string): number {
     const applicables = epreuves.filter((e) => !e.serie || e.serie === serie);
-    const sansLangue = applicables
-      .filter((e) => !e.role_langue)
-      .reduce((somme, e) => somme + e.coefficient, 0);
 
-    const pointsLangue = (role: string) => {
+    // Anciennes épreuves créées avec un rôle LV1/LV2 explicite
+    const pointsRole = (role: string) => {
       const parMatiere = new Map<string, number>();
       applicables
         .filter((e) => e.role_langue === role)
@@ -167,7 +171,22 @@ export default function ExamenEpreuvesPage() {
       return valeurs.length > 0 ? Math.max(...valeurs) : 0;
     };
 
-    return (sansLangue + pointsLangue('LV1') + pointsLangue('LV2')) * 20;
+    const sansRole = applicables.filter((e) => !e.role_langue);
+    const choixLV = SERIES_AVEC_LV.includes(serie);
+    const normales = sansRole
+      .filter((e) => !choixLV || !estLV(e.matiere_nom))
+      .reduce((somme, e) => somme + e.coefficient, 0);
+
+    const parLangue = new Map<string, number>();
+    sansRole
+      .filter((e) => choixLV && estLV(e.matiere_nom))
+      .forEach((e) => parLangue.set(e.matiere_id, (parLangue.get(e.matiere_id) ?? 0) + e.coefficient));
+    const deuxMeilleures = Array.from(parLangue.values())
+      .sort((a, b) => b - a)
+      .slice(0, 2)
+      .reduce((somme, v) => somme + v, 0);
+
+    return (normales + deuxMeilleures + pointsRole('LV1') + pointsRole('LV2')) * 20;
   }
 
   function libelleEcart(total: number): string {
@@ -178,14 +197,30 @@ export default function ExamenEpreuvesPage() {
   }
 
   async function ajouterEpreuve() {
-    if (!matiereChoisie || !nomEpreuve.trim()) {
-      setError('Matière et nom de l\'épreuve obligatoires.');
+    if (!matiereChoisie) {
+      setError('Choisis une matière.');
       return;
     }
     if (estBac && !serieChoisie) {
       setError('Choisis la série de cette épreuve (ou « Toutes les séries » pour une matière commune).');
       return;
     }
+    const nomFinal = nomEpreuve.trim() || nomAuto;
+    const serieVoulue = estBac ? (serieChoisie === TOUTES ? null : serieChoisie) : null;
+    const doublon = epreuves.some(
+      (e) =>
+        e.matiere_id === matiereChoisie &&
+        e.nom.trim().toLowerCase() === nomFinal.toLowerCase() &&
+        (!estBac || (e.serie ?? null) === serieVoulue)
+    );
+    if (doublon) {
+      setError(
+        `Une épreuve « ${nomFinal} » existe déjà pour cette matière${estBac ? ' dans cette série' : ''}. ` +
+          'Pour ajouter un écrit et un oral de la même matière, laisse le nom vide (« Anglais Écrit », « Anglais Oral ») ou donne-leur deux noms différents.'
+      );
+      return;
+    }
+
     setSaving(true);
     setError(null);
     setSucces(null);
@@ -193,12 +228,12 @@ export default function ExamenEpreuvesPage() {
     const ligne: Record<string, unknown> = {
       examen_id: examenId,
       matiere_id: matiereChoisie,
-      nom: nomEpreuve.trim(),
+      nom: nomFinal,
       coefficient: parseFloat(coefficient) || 1,
       bareme: parseFloat(bareme) || 20,
       duree: duree.trim() || null,
       type_epreuve: typeEpreuve,
-      role_langue: roleLangue || null,
+      role_langue: null,
     };
     if (estBac) ligne.serie = serieChoisie === TOUTES ? null : serieChoisie;
 
@@ -215,7 +250,7 @@ export default function ExamenEpreuvesPage() {
       } else if (msg.includes('duplicate')) {
         setError(
           estBac
-            ? 'Cette épreuve existe déjà pour cette matière dans cette série.'
+            ? 'Cette épreuve existe déjà pour cette matière dans cette série (même nom). Donne-lui un nom différent, par exemple « Anglais Oral ».'
             : 'Une épreuve avec ce nom existe déjà pour cette matière.'
         );
       } else {
@@ -226,7 +261,7 @@ export default function ExamenEpreuvesPage() {
 
     setSucces(
       estBac
-        ? `Épreuve ajoutée (${serieChoisie === TOUTES ? 'toutes les séries' : `série ${serieChoisie}`}).`
+        ? `Épreuve « ${nomFinal} » ajoutée (${serieChoisie === TOUTES ? 'toutes les séries' : `série ${serieChoisie}`}).`
         : 'Épreuve ajoutée.'
     );
     setNomEpreuve('');
@@ -234,7 +269,6 @@ export default function ExamenEpreuvesPage() {
     setBareme('20');
     setDuree('');
     setTypeEpreuve('ecrit');
-    setRoleLangue('');
     await charger(true);
   }
 
@@ -366,6 +400,11 @@ export default function ExamenEpreuvesPage() {
                       {e.role_langue}
                     </span>
                   )}
+                  {estBac && !e.role_langue && estLV(e.matiere_nom) && (!e.serie || SERIES_AVEC_LV.includes(e.serie)) && (
+                    <span className="ml-1 text-[10px] bg-blue-100 text-blue-700 rounded-full px-1.5 py-0.5">
+                      LV
+                    </span>
+                  )}
                 </td>
                 <td className="px-2 py-2 text-gray-500 text-xs whitespace-nowrap">
                   Coef{' '}
@@ -452,7 +491,7 @@ export default function ExamenEpreuvesPage() {
             <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md p-2 mt-2">
               Chaque série doit totaliser {POINTS_ATTENDUS_BAC} points (somme des coefficients × 20). Un total
               différent signale souvent une matière oubliée ou un mauvais coefficient. Les épreuves communes à toutes
-              les séries comptent dans le total de chaque série ; une LV1 et une LV2 ne sont comptées qu'une fois.
+              les séries comptent dans le total de chaque série. En séries A1 et A2, pour les langues vivantes (allemand, anglais, espagnol), seules les deux matières les mieux dotées sont comptées : la LV1 et la LV2 d'un candidat. En C et D, toutes les épreuves comptent.
             </p>
           )}
         </div>
@@ -570,13 +609,20 @@ export default function ExamenEpreuvesPage() {
             ))}
           </select>
 
-          <input
-            type="text"
-            value={nomEpreuve}
-            onChange={(e) => setNomEpreuve(e.target.value)}
-            placeholder="Nom de l'épreuve (ex: Orthographe, Oral, Épreuve unique)"
-            className="w-full border rounded-md px-3 py-2 text-sm"
-          />
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Nom de l'épreuve (facultatif)</label>
+            <input
+              type="text"
+              value={nomEpreuve}
+              onChange={(e) => setNomEpreuve(e.target.value)}
+              placeholder={nomAuto ? `Par défaut : ${nomAuto}` : "ex: Orthographe, Épreuve unique"}
+              className="w-full border rounded-md px-3 py-2 text-sm"
+            />
+            <p className="text-[11px] text-gray-400 mt-1">
+              Une matière peut avoir plusieurs épreuves (écrit et oral) : choisis le type, laisse le nom vide et il
+              sera « {nomAuto || 'Anglais Oral'} » selon la matière et le type.
+            </p>
+          </div>
 
           <div className="grid grid-cols-2 gap-2">
             <div>
@@ -621,24 +667,16 @@ export default function ExamenEpreuvesPage() {
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs text-gray-600 mb-1">
-              Rôle linguistique (pour BAC A1/A2 — LV1 = choisie comme 1ère langue par le candidat, LV2 = 2ème)
-            </label>
-            <select
-              value={roleLangue}
-              onChange={(e) => setRoleLangue(e.target.value)}
-              className="w-full border rounded-md px-3 py-2 text-sm"
-            >
-              {ROLES_LANGUE.map((r) => (
-                <option key={r.value} value={r.value}>{r.label}</option>
-              ))}
-            </select>
-          </div>
+          {estBac && estLV(matiereNomChoisie) && (!serieChoisie || serieChoisie === TOUTES || SERIES_AVEC_LV.includes(serieChoisie)) && (
+            <p className="text-[11px] text-blue-700 bg-blue-50 border border-blue-200 rounded-md p-2">
+              Langue vivante : en séries A1 et A2, seuls les candidats qui ont choisi {matiereNomChoisie} comme LV1 ou
+              LV2 (dans la liste des candidats) passeront cette épreuve. En séries C et D, tous les candidats la passent.
+            </p>
+          )}
 
           <button
             onClick={ajouterEpreuve}
-            disabled={saving || !matiereChoisie || !nomEpreuve.trim() || (estBac && !serieChoisie)}
+            disabled={saving || !matiereChoisie || (estBac && !serieChoisie)}
             className="w-full bg-blue-600 text-white text-sm px-3 py-2 rounded-md disabled:opacity-50"
           >
             Ajouter l'épreuve
@@ -647,11 +685,11 @@ export default function ExamenEpreuvesPage() {
         <p className="text-xs text-gray-400 mt-2">
           Ex: pour le Français au BEPC, ajoute deux épreuves séparées — "Orthographe" (coef 1) et "CF" (coef 2).
           <br />
-          Ex: pour le BAC A2, ajoute "Anglais Oral" (coef 1, rôle LV1) et "Allemand Oral" (coef 1, rôle LV2) —
-          seule celle correspondant au choix de chaque candidat comptera dans son calcul.
+          Ex: pour le BAC, l'Anglais écrit et l'Anglais oral sont deux épreuves de la même matière : ajoute-les l'une
+          après l'autre en changeant le type (Écrit puis Oral). En séries A1 et A2, les langues vivantes (allemand,
+          anglais, espagnol) dépendent du choix de LV1 et de LV2 de chaque candidat ; en C et D, l'anglais est passé par tous.
         </p>
       </div>
     </main>
   );
-                }
-                  
+}

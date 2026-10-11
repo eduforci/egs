@@ -185,18 +185,15 @@ export default function ExamenDocumentsPage() {
 
         {/* ETIQUETTES */}
         {document === 'etiquettes' && (
-          <div className="grid grid-cols-3 gap-3">
-            {candidats.map((c,i)=>(
-              <div key={c.eleve_id} className="border border-black p-3 text-center h-[90px] flex flex-col justify-center">
-                <div className="font-black text-sm">TABLE N° {c.numero_table?? '-'}</div>
-                <div className="font-bold text-xs mt-1">{c.nom} {c.prenom}</div>
-                <div className="text-[10px]">{c.classe_nom} • Salle {Math.floor(i/TAILLE_SALLE)+1}</div>
-                <div className="text-[8px] mt-1">{examen.nom} {examen.annee_scolaire}</div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {candidats.map((c)=>(
+              <div key={c.eleve_id} className="border-2 border-black p-6 text-center h-[120px] flex flex-col justify-center items-center bg-white print:break-inside-avoid">
+                <div className="text-[10px] font-bold tracking-widest">TABLE N°</div>
+                <div className="font-black text-2xl mt-2 tracking-wider">{c.numero_table?? '-'}</div>
               </div>
             ))}
           </div>
         )}
-
         {/* RELEVES - TOUS LES CANDIDATS ENSEMBLE */}
         {document === 'releves' && (
           <div>

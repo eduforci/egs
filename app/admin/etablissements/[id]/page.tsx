@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import EspacesCheckboxes from "@/components/espaces-checkboxes";
+import { estEspaceValide, type EspaceCode } from "@/lib/espaces";
 
 const STATUTS = ["actif", "en_attente", "suspendu", "expire"] as const;
 
@@ -44,6 +46,7 @@ export default function ModifierEtablissement() {
   const [dateDebut, setDateDebut] = useState("");
   const [initialise, setInitialise] = useState(false);
   const [typeEtablissement, setTypeEtablissement] = useState<string | null>(null);
+  const [espaces, setEspaces] = useState<EspaceCode[]>([]);
   const [systeme, setSysteme] = useState<string | null>(null);
 
   const [classes, setClasses] = useState<Classe[]>([]);
@@ -78,6 +81,10 @@ export default function ModifierEtablissement() {
       setInitialise(data.initialise ?? false);
       setTypeEtablissement(data.type_etablissement ?? null);
       setSysteme(data.systeme_enseignement ?? null);
+      const actifs = Array.isArray((data as any).espaces_actifs)
+        ? ((data as any).espaces_actifs as string[]).filter(estEspaceValide)
+        : [];
+      setEspaces(actifs as EspaceCode[]);
 
       const { data: classesData } = await supabase
         .from("classes")
@@ -121,7 +128,18 @@ export default function ModifierEtablissement() {
       return;
     }
 
+    if (espaces.length === 0) {
+      setErreur("Coche au moins un espace de travail.");
+      return;
+    }
+
     setChargement(true);
+
+    // Espaces de travail : écriture à part, sans bloquer si le SQL « espaces » n'est pas exécuté
+    await supabase
+      .from("etablissements")
+      .update({ espaces_actifs: espaces })
+      .eq("id", id);
 
     const { error } = await supabase
       .from("etablissements")
@@ -345,6 +363,11 @@ export default function ModifierEtablissement() {
         </div>
 
         <div>
+          <label className="block text-sm font-medium mb-1">Espaces de travail de l'école</label>
+          <EspacesCheckboxes value={espaces} onChange={setEspaces} />
+        </div>
+
+        <div>
           <label className="block text-sm font-medium mb-1">Statut</label>
           <select
             value={statut}
@@ -393,4 +416,5 @@ export default function ModifierEtablissement() {
     </main>
   );
         }
+
     

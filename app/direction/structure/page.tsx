@@ -55,7 +55,6 @@ export default function EspacesEcolePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          espacesActifs: actifs,
           droits: personnel.map((p) => ({ id: p.id, espaces: p.espaces })),
         }),
       });
@@ -63,7 +62,7 @@ export default function EspacesEcolePage() {
       if (!reponse.ok) {
         setMessage({ type: 'error', text: data?.error || "Enregistrement impossible." });
       } else {
-        setMessage({ type: 'success', text: 'Espaces enregistrés.' });
+        setMessage({ type: 'success', text: 'Accès du personnel enregistrés.' });
         charger();
       }
     } catch {
@@ -90,7 +89,7 @@ export default function EspacesEcolePage() {
       <div>
         <h1 className="text-2xl font-bold">Espaces de l'école</h1>
         <p className="text-sm text-gray-500">
-          Ouvrez les espaces de travail de votre école. Chaque espace a ses propres classes, élèves et bulletins.
+          Chaque espace a ses propres classes, élèves et bulletins. Vous choisissez ici qui travaille dans quel espace.
         </p>
       </div>
 
@@ -107,23 +106,19 @@ export default function EspacesEcolePage() {
       )}
 
       <div className="border rounded-xl p-4 bg-white space-y-3">
-        <p className="font-semibold text-sm">Espaces ouverts</p>
-        {ESPACES.map((e) => (
-          <label key={e.code} className="flex items-start gap-3 text-sm">
-            <input
-              type="checkbox"
-              checked={actifs.includes(e.code)}
-              onChange={() => setActifs((prev) => basculer(prev, e.code))}
-              className="h-4 w-4 mt-1"
-            />
-            <span>
-              <span className="font-medium">
-                {e.icone} {e.label}
-              </span>
-              <span className="block text-xs text-gray-500">{e.description}</span>
+        <p className="font-semibold text-sm">Espaces de votre école</p>
+        {ESPACES.filter((e) => actifs.includes(e.code)).map((e) => (
+          <div key={e.code} className="text-sm">
+            <span className="font-medium">
+              {e.icone} {e.label}
             </span>
-          </label>
+            <span className="block text-xs text-gray-500">{e.description}</span>
+          </div>
         ))}
+        {actifs.length === 0 && <p className="text-xs text-gray-500">Aucun espace défini pour le moment.</p>}
+        <p className="text-[11px] text-gray-400">
+          Les espaces sont définis à la création de l'établissement. Pour en ajouter ou en retirer, contactez EGS.
+        </p>
       </div>
 
       {estGroupe && (
@@ -168,11 +163,12 @@ export default function EspacesEcolePage() {
 
       <button
         onClick={enregistrer}
-        disabled={saving || actifs.length === 0}
+        disabled={saving || !estGroupe}
         className="w-full bg-black text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-50"
       >
         {saving ? 'Enregistrement...' : 'Enregistrer'}
       </button>
     </div>
   );
-}
+    }
+        

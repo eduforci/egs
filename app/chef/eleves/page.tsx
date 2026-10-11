@@ -89,7 +89,7 @@ export default function ListeElevesPage() {
 
         if (elevesError) throw elevesError;
 
-        const eleveIds = (elevesData ?? []).map((e) => e.id);
+        const eleveIds = (elevesData ?? []).map((e: any) => e.id);
         const { data: profilesData } = await supabase
           .from("profiles")
           .select("id, nom, prenom")

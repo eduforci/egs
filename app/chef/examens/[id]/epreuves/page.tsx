@@ -15,6 +15,7 @@ type Epreuve = {
   type_epreuve: string;
   role_langue: string | null;
   serie: string | null; // null = épreuve commune à toutes les séries
+  specifique: boolean; // matière spécifique pour le repêchage
 };
 
 type MatiereDisponible = { id: string; nom: string };
@@ -31,6 +32,28 @@ const NOMS_LV = ['allemand', 'anglais', 'espagnol'];
 const estLV = (nom: string) => NOMS_LV.includes(nom.trim().toLowerCase());
 // Seules les séries A1 et A2 ont un choix de LV1 / LV2 ; en C et D, l'anglais est une matière normale
 const SERIES_AVEC_LV = ['A1', 'A2'];
+
+// Rang de la langue pour une épreuve de série A1/A2 (le coefficient peut différer entre LV1 et LV2)
+const ROLES_LANGUE = [
+  { value: '', label: 'LV1 ou LV2 (même épreuve pour les deux)' },
+  { value: 'LV1', label: 'LV1 seulement' },
+  { value: 'LV2', label: 'LV2 seulement' },
+];
+
+// Matières spécifiques (repêchage) : devinées d'après le nom, modifiables avec la case à cocher
+const devinerSpecifique = (nom: string) => {
+  const n = nom.trim().toLowerCase();
+  return (
+    n.includes('français') || n.includes('francais') || n.includes('philo') ||
+    n.includes('math') || n.includes('physique') || n.includes('svt') || n.includes('vie et de la terre')
+  );
+};
+
+// Coefficients proposés pour les langues vivantes (écrit / oral) selon la série
+const COEF_LV_DEFAUT: Record<string, { lv1Ecrit: string; lv1Oral: string; lv2Ecrit: string; lv2Oral: string }> = {
+  A1: { lv1Ecrit: '4', lv1Oral: '0', lv2Ecrit: '0', lv2Oral: '1' },
+  A2: { lv1Ecrit: '2', lv1Oral: '1', lv2Ecrit: '2', lv2Oral: '1' },
+};
 
 const SERIES_BAC = ['A1', 'A2', 'C', 'D'];
 const TOUTES = 'toutes';
@@ -57,6 +80,9 @@ export default function ExamenEpreuvesPage() {
   const [bareme, setBareme] = useState('20');
   const [duree, setDuree] = useState('');
   const [typeEpreuve, setTypeEpreuve] = useState('ecrit');
+  const [roleLangue, setRoleLangue] = useState('');
+  const [specifique, setSpecifique] = useState(false);
+  const [coefsLV, setCoefsLV] = useState({ lv1Ecrit: '', lv1Oral: '', lv2Ecrit: '', lv2Oral: '' });
 
   const [copieSource, setCopieSource] = useState('');
   const [copieCible, setCopieCible] = useState('');
@@ -67,8 +93,11 @@ export default function ExamenEpreuvesPage() {
   const [succes, setSucces] = useState<string | null>(null);
 
   const matiereNomChoisie = matieresDisponibles.find((m) => m.id === matiereChoisie)?.nom ?? '';
+  // Le rang LV1 / LV2 ne se choisit que pour une langue vivante d'une série A1 ou A2
+  const choixRole = estBac && estLV(matiereNomChoisie) && SERIES_AVEC_LV.includes(serieChoisie);
+  const roleEff = choixRole ? roleLangue : '';
   const nomAuto = matiereNomChoisie
-    ? `${matiereNomChoisie} ${TYPES_EPREUVE.find((t) => t.value === typeEpreuve)?.label ?? ''}`.trim()
+    ? `${matiereNomChoisie} ${TYPES_EPREUVE.find((t) => t.value === typeEpreuve)?.label ?? ''}${roleEff ? ` ${roleEff}` : ''}`.trim()
     : '';
 
   const charger = useCallback(
@@ -92,7 +121,7 @@ export default function ExamenEpreuvesPage() {
 
         const { data: emData, error: emError } = await supabase
           .from('examens_matieres')
-          .select('id, matiere_id, nom, coefficient, bareme, duree, type_epreuve, role_langue, serie, matieres(nom)')
+          .select('id, matiere_id, nom, coefficient, bareme, duree, type_epreuve, role_langue, serie, specifique, matieres(nom)')
           .eq('examen_id', examenId);
 
         if (emError) throw new Error(`Erreur épreuves : ${emError.message}`);
@@ -100,7 +129,7 @@ export default function ExamenEpreuvesPage() {
         type Row = {
           id: string; matiere_id: string; nom: string; coefficient: number;
           bareme: number; duree: string | null; type_epreuve: string; role_langue: string | null;
-          serie: string | null;
+          serie: string | null; specifique: boolean | null;
           matieres: { nom: string } | { nom: string }[] | null;
         };
         const liste: Epreuve[] = ((emData ?? []) as unknown as Row[]).map((r) => {
@@ -109,7 +138,7 @@ export default function ExamenEpreuvesPage() {
             id: r.id, matiere_id: r.matiere_id, matiere_nom: m?.nom ?? 'Inconnue',
             nom: r.nom, coefficient: Number(r.coefficient), bareme: r.bareme,
             duree: r.duree, type_epreuve: r.type_epreuve, role_langue: r.role_langue,
-            serie: r.serie ?? null,
+            serie: r.serie ?? null, specifique: !!r.specifique,
           };
         });
         liste.sort((a, b) => a.matiere_nom.localeCompare(b.matiere_nom) || a.nom.localeCompare(b.nom));
@@ -233,7 +262,8 @@ export default function ExamenEpreuvesPage() {
       bareme: parseFloat(bareme) || 20,
       duree: duree.trim() || null,
       type_epreuve: typeEpreuve,
-      role_langue: null,
+      role_langue: roleEff || null,
+      specifique,
     };
     if (estBac) ligne.serie = serieChoisie === TOUTES ? null : serieChoisie;
 
@@ -269,6 +299,72 @@ export default function ExamenEpreuvesPage() {
     setBareme('20');
     setDuree('');
     setTypeEpreuve('ecrit');
+    setRoleLangue('');
+    setSpecifique(false);
+    await charger(true);
+  }
+
+  const serieLV = SERIES_AVEC_LV.includes(serieChoisie);
+
+  function choisirSerie(valeur: string) {
+    setSerieChoisie(valeur);
+    const d = COEF_LV_DEFAUT[valeur];
+    if (d) setCoefsLV(d);
+  }
+
+  async function genererLangues() {
+    if (!SERIES_AVEC_LV.includes(serieChoisie)) {
+      setError('Choisis la série A1 ou A2 pour ajouter les langues vivantes.');
+      return;
+    }
+    const langues = matieresDisponibles.filter((m) => estLV(m.nom));
+    const manquantes = NOMS_LV.filter((n) => !langues.some((m) => m.nom.trim().toLowerCase() === n));
+    if (manquantes.length > 0) {
+      setError(
+        `Crée d'abord la matière ${manquantes.map((n) => n.charAt(0).toUpperCase() + n.slice(1)).join(' et ')} (nom exact) dans les matières de l'établissement.`
+      );
+      return;
+    }
+    const combos = [
+      { role: 'LV1', type: 'ecrit', coef: parseFloat(coefsLV.lv1Ecrit) || 0 },
+      { role: 'LV1', type: 'oral', coef: parseFloat(coefsLV.lv1Oral) || 0 },
+      { role: 'LV2', type: 'ecrit', coef: parseFloat(coefsLV.lv2Ecrit) || 0 },
+      { role: 'LV2', type: 'oral', coef: parseFloat(coefsLV.lv2Oral) || 0 },
+    ].filter((c) => c.coef > 0);
+    if (combos.length === 0) {
+      setError('Indique au moins un coefficient supérieur à 0.');
+      return;
+    }
+
+    const lignes: Record<string, unknown>[] = [];
+    langues.forEach((m) => {
+      combos.forEach((c) => {
+        const label = TYPES_EPREUVE.find((t) => t.value === c.type)?.label ?? '';
+        const nom = `${m.nom} ${c.role} ${label}`;
+        const existe = epreuves.some((e) => e.matiere_id === m.id && e.serie === serieChoisie && e.nom === nom);
+        if (existe) return;
+        lignes.push({
+          examen_id: examenId, matiere_id: m.id, nom, coefficient: c.coef, bareme: 20,
+          duree: null, type_epreuve: c.type, role_langue: c.role, serie: serieChoisie,
+          specifique: c.role === 'LV1',
+        });
+      });
+    });
+    if (lignes.length === 0) {
+      setError(`Les langues vivantes de la série ${serieChoisie} sont déjà toutes ajoutées.`);
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    setSucces(null);
+    const { error: genError } = await supabase.from('examens_matieres').insert(lignes);
+    setSaving(false);
+    if (genError) {
+      setError(`Erreur ajout des langues : ${genError.message}`);
+      return;
+    }
+    setSucces(`${lignes.length} épreuve(s) de langues vivantes ajoutée(s) pour la série ${serieChoisie}.`);
     await charger(true);
   }
 
@@ -353,6 +449,7 @@ export default function ExamenEpreuvesPage() {
         duree: e.duree,
         type_epreuve: e.type_epreuve,
         role_langue: e.role_langue,
+        specifique: e.specifique,
         serie: copieCible,
       }))
     );
@@ -398,6 +495,11 @@ export default function ExamenEpreuvesPage() {
                   {e.role_langue && (
                     <span className="ml-1 text-[10px] bg-amber-100 text-amber-700 rounded-full px-1.5 py-0.5">
                       {e.role_langue}
+                    </span>
+                  )}
+                  {estBac && e.specifique && (
+                    <span className="ml-1 text-[10px] bg-purple-100 text-purple-700 rounded-full px-1.5 py-0.5">
+                      spécifique
                     </span>
                   )}
                   {estBac && !e.role_langue && estLV(e.matiere_nom) && (!e.serie || SERIES_AVEC_LV.includes(e.serie)) && (
@@ -573,6 +675,41 @@ export default function ExamenEpreuvesPage() {
         </div>
       )}
 
+      {/* Générateur des langues vivantes (A1 / A2) */}
+      {estBac && serieLV && (
+        <div className="border rounded-lg p-4 mb-6 bg-blue-50/40">
+          <p className="font-semibold text-sm mb-1">Langues vivantes — série {serieChoisie}</p>
+          <p className="text-xs text-gray-500 mb-3">
+            Ajoute d'un coup les épreuves d'Allemand, d'Anglais et d'Espagnol pour la LV1 et la LV2. Chaque candidat ne
+            passera que celles de ses deux langues. Mets 0 pour une épreuve qui n'existe pas.
+          </p>
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            {([
+              ['lv1Ecrit', 'LV1 écrit (coef)'],
+              ['lv1Oral', 'LV1 oral (coef)'],
+              ['lv2Ecrit', 'LV2 écrit (coef)'],
+              ['lv2Oral', 'LV2 oral (coef)'],
+            ] as const).map(([cle, label]) => (
+              <div key={cle}>
+                <label className="block text-xs text-gray-600 mb-1">{label}</label>
+                <input
+                  type="number" step="0.5" min="0" value={coefsLV[cle]}
+                  onChange={(e) => setCoefsLV({ ...coefsLV, [cle]: e.target.value })}
+                  className="w-full border rounded-md px-3 py-2 text-sm"
+                />
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={genererLangues}
+            disabled={saving}
+            className="w-full bg-blue-600 text-white text-sm px-3 py-2 rounded-md disabled:opacity-50"
+          >
+            Ajouter les langues vivantes
+          </button>
+        </div>
+      )}
+
       {/* Ajouter une épreuve */}
       <div className="border rounded-lg p-4">
         <p className="font-semibold text-sm mb-3">Ajouter une épreuve</p>
@@ -582,7 +719,7 @@ export default function ExamenEpreuvesPage() {
               <label className="block text-xs text-gray-600 mb-1">Série (obligatoire)</label>
               <select
                 value={serieChoisie}
-                onChange={(e) => setSerieChoisie(e.target.value)}
+                onChange={(e) => choisirSerie(e.target.value)}
                 className="w-full border rounded-md px-3 py-2 text-sm"
               >
                 <option value="">Choisir la série</option>
@@ -600,7 +737,11 @@ export default function ExamenEpreuvesPage() {
 
           <select
             value={matiereChoisie}
-            onChange={(e) => setMatiereChoisie(e.target.value)}
+            onChange={(e) => {
+              setMatiereChoisie(e.target.value);
+              const nom = matieresDisponibles.find((m) => m.id === e.target.value)?.nom ?? '';
+              setSpecifique(devinerSpecifique(nom));
+            }}
             className="w-full border rounded-md px-3 py-2 text-sm"
           >
             <option value="">Choisir une matière</option>
@@ -667,11 +808,44 @@ export default function ExamenEpreuvesPage() {
             </div>
           </div>
 
+          {choixRole && (
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">Cette épreuve concerne</label>
+              <select
+                value={roleLangue}
+                onChange={(e) => setRoleLangue(e.target.value)}
+                className="w-full border rounded-md px-3 py-2 text-sm"
+              >
+                {ROLES_LANGUE.map((r) => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+              <p className="text-[11px] text-gray-400 mt-1">
+                « LV1 seulement » : les candidats qui ont cette langue en LV1. « LV2 seulement » : ceux qui l'ont en
+                LV2. « LV1 ou LV2 » : même épreuve et même coefficient quel que soit le rang de la langue.
+              </p>
+            </div>
+          )}
+
           {estBac && estLV(matiereNomChoisie) && (!serieChoisie || serieChoisie === TOUTES || SERIES_AVEC_LV.includes(serieChoisie)) && (
             <p className="text-[11px] text-blue-700 bg-blue-50 border border-blue-200 rounded-md p-2">
               Langue vivante : en séries A1 et A2, seuls les candidats qui ont choisi {matiereNomChoisie} comme LV1 ou
               LV2 (dans la liste des candidats) passeront cette épreuve. En séries C et D, tous les candidats la passent.
             </p>
+          )}
+
+          {estBac && (
+            <label className="flex items-start gap-2 text-xs text-gray-700">
+              <input
+                type="checkbox" checked={specifique}
+                onChange={(e) => setSpecifique(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                Matière spécifique pour le repêchage (Français, Philosophie, Mathématiques, Physique-Chimie, SVT).
+                La LV1 des séries A1 et A2 compte automatiquement.
+              </span>
+            </label>
           )}
 
           <button
@@ -692,4 +866,5 @@ export default function ExamenEpreuvesPage() {
       </div>
     </main>
   );
-}
+        }
+      

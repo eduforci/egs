@@ -3,12 +3,14 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { useEspace } from "@/lib/use-espace";
 
-type Classe = { id: string; nom: string };
+type Classe = { id: string; nom: string; cycle?: string | null; niveau?: string | null; type_enseignement?: string | null };
 type Eleve = { id: string; nom: string; prenom: string };
 
 export default function BulletinsAccueil() {
   const supabase = createClient();
+  const { classeVisible } = useEspace();
 
   const [anneeScolaire, setAnneeScolaire] = useState("");
   const [classes, setClasses] = useState<Classe[]>([]);
@@ -36,13 +38,21 @@ export default function BulletinsAccueil() {
 
       setAnneeScolaire(etab?.annee_scolaire_active ?? "");
 
-      const { data: c } = await supabase
+      // Cycle et type d'enseignement servent à ranger les classes par espace de travail
+      let reponseClasses: any = await supabase
         .from("classes")
-        .select("id, nom")
+        .select("id, nom, cycle, niveau, type_enseignement")
         .eq("etablissement_id", profile.etablissement_id)
         .order("nom", { ascending: true });
+      if (reponseClasses.error) {
+        reponseClasses = await supabase
+          .from("classes")
+          .select("id, nom, cycle, niveau")
+          .eq("etablissement_id", profile.etablissement_id)
+          .order("nom", { ascending: true });
+      }
 
-      setClasses(c ?? []);
+      setClasses(reponseClasses.data ?? []);
     }
     charger();
   }, []);
@@ -100,9 +110,11 @@ export default function BulletinsAccueil() {
             className="w-full border rounded-lg p-2"
           >
             <option value="">— Choisir une classe —</option>
-            {classes.map((c) => (
-              <option key={c.id} value={c.id}>{c.nom}</option>
-            ))}
+            {classes
+              .filter((c) => classeVisible(c.cycle, c.type_enseignement, c.niveau))
+              .map((c) => (
+                <option key={c.id} value={c.id}>{c.nom}</option>
+              ))}
           </select>
         </div>
 
@@ -149,4 +161,5 @@ export default function BulletinsAccueil() {
     </main>
   );
     }
-                  
+
+        

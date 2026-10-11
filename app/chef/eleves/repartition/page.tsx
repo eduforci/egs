@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { useEspace } from '@/lib/use-espace';
 
 type Eleve = {
   id: string;
@@ -33,11 +34,13 @@ function inferCycle(niveauBrut: string): string {
 
 export default function RepartitionElevesPage() {
   const supabase = createClient();
+  const { classeVisible } = useEspace();
 
   const [etablissementId, setEtablissementId] = useState('');
   const [anneeActive, setAnneeActive] = useState('');
 
-  const [niveaux, setNiveaux] = useState<string[]>([]);
+  const [niveauxBruts, setNiveauxBruts] = useState<{ niveau: string; cycle: string | null; type_enseignement: string | null }[]>([]);
+  const [typesModeles, setTypesModeles] = useState<Record<string, string>>({});
   const [niveauChoisi, setNiveauChoisi] = useState('');
 
   const [eleves, setEleves] = useState<Eleve[]>([]);
@@ -77,16 +80,26 @@ export default function RepartitionElevesPage() {
       .single();
     setAnneeActive(etab?.annee_scolaire_active ?? '');
 
-    const { data: classesData } = await supabase
+    // Cycle et type servent à ne montrer que les niveaux de l'espace de travail choisi
+    let reponseClasses: any = await supabase
       .from('classes')
-      .select('niveau')
+      .select('niveau, cycle, type_enseignement')
       .eq('etablissement_id', profile.etablissement_id)
       .eq('annee_scolaire', etab?.annee_scolaire_active ?? '');
-
-    const niveauxUniques = Array.from(
-      new Set((classesData ?? []).map((c) => c.niveau))
-    ).sort();
-    setNiveaux(niveauxUniques);
+    if (reponseClasses.error) {
+      reponseClasses = await supabase
+        .from('classes')
+        .select('niveau, cycle')
+        .eq('etablissement_id', profile.etablissement_id)
+        .eq('annee_scolaire', etab?.annee_scolaire_active ?? '');
+    }
+    setNiveauxBruts(
+      (reponseClasses.data ?? []).map((c: any) => ({
+        niveau: c.niveau,
+        cycle: c.cycle ?? null,
+        type_enseignement: c.type_enseignement ?? null,
+      }))
+    );
 
     setLoading(false);
   }, [supabase]);
@@ -94,6 +107,14 @@ export default function RepartitionElevesPage() {
   useEffect(() => {
     chargerContexte();
   }, [chargerContexte]);
+
+  const niveaux = Array.from(
+    new Set(
+      niveauxBruts
+        .filter((c) => classeVisible(c.cycle, c.type_enseignement, c.niveau))
+        .map((c) => c.niveau)
+    )
+  ).sort();
 
   const chargerElevesEtClasses = useCallback(async (niveau: string) => {
     if (!niveau || !etablissementId) return;
@@ -115,6 +136,21 @@ export default function RepartitionElevesPage() {
     setClassesDuNiveau(classesData ?? []);
 
     const idsClasses = (classesData ?? []).map((c) => c.id);
+
+    // Type d'enseignement des classes de ce niveau (lecture à part : sans effet si le SQL manque)
+    if (idsClasses.length > 0) {
+      const { data: typesData, error: erreurTypes } = await supabase
+        .from('classes')
+        .select('id, type_enseignement')
+        .in('id', idsClasses);
+      if (!erreurTypes) {
+        const table: Record<string, string> = {};
+        (typesData ?? []).forEach((c: any) => {
+          table[c.id] = c.type_enseignement || 'general';
+        });
+        setTypesModeles(table);
+      }
+    }
 
     const { data: elevesData } = idsClasses.length > 0
       ? await supabase
@@ -191,6 +227,7 @@ export default function RepartitionElevesPage() {
         const classeModele = classesDuNiveau.find((c) => c.cycle) ?? classesDuNiveau[0];
         const cycleNouvelleClasse = classeModele?.cycle || inferCycle(niveauChoisi) || null;
         const serieNouvelleClasse = classeModele?.serie || null;
+        const typeModele = classeModele ? typesModeles[classeModele.id] : undefined;
 
         const { data: nouvelleClasse, error: creationError } = await supabase
           .from('classes')
@@ -201,6 +238,7 @@ export default function RepartitionElevesPage() {
             cycle: cycleNouvelleClasse,
             serie: serieNouvelleClasse,
             annee_scolaire: anneeActive,
+            ...(typeModele && typeModele !== 'general' ? { type_enseignement: typeModele } : {}),
           })
           .select('id')
           .single();
@@ -373,4 +411,5 @@ export default function RepartitionElevesPage() {
       )}
     </main>
   );
-          }
+        }
+                  

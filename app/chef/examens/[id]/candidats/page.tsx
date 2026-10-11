@@ -4,6 +4,10 @@ import { useEffect, useState, useCallback, Fragment } from 'react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
+// Langues vivantes : seules les séries A1 et A2 choisissent une LV1 et une LV2 (allemand, anglais, espagnol)
+const NOMS_LV = ['allemand', 'anglais', 'espagnol'];
+const SERIES_AVEC_LV = ['A1', 'A2'];
+
 type Candidat = {
   id: string; // id de la ligne examens_candidats
   eleve_id: string;
@@ -11,6 +15,7 @@ type Candidat = {
   prenom: string;
   matricule: string;
   classe_nom: string;
+  serie: string | null;
   type: string;
   lv1_matiere_id: string | null;
   lv2_matiere_id: string | null;
@@ -34,9 +39,10 @@ export default function ExamenCandidatsPage() {
   const [etablissementId, setEtablissementId] = useState<string | null>(null);
   const [candidats, setCandidats] = useState<Candidat[]>([]);
   const [matieres, setMatieres] = useState<{ id: string; nom: string }[]>([]);
-  const [epreuves, setEpreuves] = useState<{ id: string; nom: string; matiere_nom: string }[]>([]);
+  const [epreuves, setEpreuves] = useState<{ id: string; nom: string; matiere_nom: string; serie: string | null }[]>([]);
   const [dispenses, setDispenses] = useState<Record<string, Set<string>>>({}); // candidat_id -> Set<epreuve_id>
   const [candidatOuvert, setCandidatOuvert] = useState<string | null>(null);
+  const [estBac, setEstBac] = useState(false);
 
   const [recherche, setRecherche] = useState('');
   const [resultatsRecherche, setResultatsRecherche] = useState<EleveRecherche[]>([]);
@@ -53,17 +59,18 @@ export default function ExamenCandidatsPage() {
     try {
       const { data: examen, error: examenError } = await supabase
         .from('examens')
-        .select('nom, etablissement_id')
+        .select('nom, etablissement_id, niveau')
         .eq('id', examenId)
         .single();
 
       if (examenError) throw new Error(`Erreur examen : ${examenError.message}`);
       setExamenNom(examen.nom);
       setEtablissementId(examen.etablissement_id);
+      setEstBac(examen.niveau === 'Terminale');
 
       const { data: candData, error: candError } = await supabase
         .from('examens_candidats')
-        .select('id, eleve_id, type, lv1_matiere_id, lv2_matiere_id, statut_final, eleves(matricule, classe_id, classes(nom))')
+        .select('id, eleve_id, type, lv1_matiere_id, lv2_matiere_id, statut_final, eleves(matricule, classe_id, classes(nom, serie))')
         .eq('examen_id', examenId);
 
       if (candError) throw new Error(`Erreur candidats : ${candError.message}`);
@@ -71,8 +78,8 @@ export default function ExamenCandidatsPage() {
       type RowE = {
         id: string; eleve_id: string; type: string;
         lv1_matiere_id: string | null; lv2_matiere_id: string | null; statut_final: string | null;
-        eleves: { matricule: string; classe_id: string; classes: { nom: string } | { nom: string }[] | null }
-          | { matricule: string; classe_id: string; classes: { nom: string } | { nom: string }[] | null }[] | null;
+        eleves: { matricule: string; classe_id: string; classes: { nom: string; serie: string | null } | { nom: string; serie: string | null }[] | null }
+          | { matricule: string; classe_id: string; classes: { nom: string; serie: string | null } | { nom: string; serie: string | null }[] | null }[] | null;
       };
       const brut = (candData ?? []) as unknown as RowE[];
       const eleveIds = brut.map((r) => r.eleve_id);
@@ -86,13 +93,13 @@ export default function ExamenCandidatsPage() {
 
       const { data: epreuvesData } = await supabase
         .from('examens_matieres')
-        .select('id, nom, matieres(nom)')
+        .select('id, nom, serie, matieres(nom)')
         .eq('examen_id', examenId);
 
-      type RowEp = { id: string; nom: string; matieres: { nom: string } | { nom: string }[] | null };
+      type RowEp = { id: string; nom: string; serie: string | null; matieres: { nom: string } | { nom: string }[] | null };
       const listeEpreuves = ((epreuvesData ?? []) as unknown as RowEp[]).map((r) => {
         const m = Array.isArray(r.matieres) ? r.matieres[0] : r.matieres;
-        return { id: r.id, nom: r.nom, matiere_nom: m?.nom ?? 'Inconnue' };
+        return { id: r.id, nom: r.nom, matiere_nom: m?.nom ?? 'Inconnue', serie: r.serie ?? null };
       });
       setEpreuves(listeEpreuves);
 
@@ -128,6 +135,7 @@ export default function ExamenCandidatsPage() {
           prenom: profil?.prenom ?? '',
           matricule: ele?.matricule ?? '-',
           classe_nom: cl?.nom ?? '-',
+          serie: cl?.serie ?? null,
           type: r.type,
           lv1_matiere_id: r.lv1_matiere_id,
           lv2_matiere_id: r.lv2_matiere_id,
@@ -194,6 +202,13 @@ export default function ExamenCandidatsPage() {
   }
 
   async function modifierLangue(id: string, champ: 'lv1_matiere_id' | 'lv2_matiere_id', matiereId: string) {
+    const autreChamp = champ === 'lv1_matiere_id' ? 'lv2_matiere_id' : 'lv1_matiere_id';
+    const courant = candidats.find((c) => c.id === id);
+    if (matiereId && courant && courant[autreChamp] === matiereId) {
+      setError('La LV1 et la LV2 doivent être deux langues différentes.');
+      return;
+    }
+    setError(null);
     setCandidats((prev) =>
       prev.map((c) => (c.id === id ? { ...c, [champ]: matiereId || null } : c))
     );
@@ -315,6 +330,15 @@ export default function ExamenCandidatsPage() {
     charger();
   }
 
+  // Choix de LV1 / LV2 : seulement pour les candidats de série A1 ou A2 dans un examen de Terminale
+  const matieresLV = matieres.filter((m) => NOMS_LV.includes(m.nom.trim().toLowerCase()));
+  const concerneParLV = (c: Candidat) => estBac && SERIES_AVEC_LV.includes(c.serie ?? '');
+  const afficherLV = candidats.some(concerneParLV);
+  const nbColonnes = afficherLV ? 8 : 6;
+  const candidatsSansLV1 = candidats.filter((c) => concerneParLV(c) && !c.lv1_matiere_id).length;
+  // Dispenses : seulement les épreuves communes ou de la série du candidat
+  const epreuvesDe = (c: Candidat) => epreuves.filter((ep) => !ep.serie || ep.serie === c.serie);
+
   if (loading) return <p className="p-6 text-sm text-gray-500">Chargement...</p>;
 
   return (
@@ -378,6 +402,16 @@ export default function ExamenCandidatsPage() {
         </p>
       </div>
 
+      {afficherLV && (candidatsSansLV1 > 0 || matieresLV.length === 0) && (
+        <div className="bg-amber-50 border border-amber-300 text-amber-800 text-sm rounded-md p-3 mb-4">
+          {matieresLV.length === 0 ? (
+            <>Aucune matière nommée Allemand, Anglais ou Espagnol dans ton établissement : crée-les dans la liste des matières pour pouvoir choisir les LV.</>
+          ) : (
+            <>{candidatsSansLV1} candidat(s) de série A1/A2 n'ont pas encore de LV1 (cases en orange).</>
+          )}
+        </div>
+      )}
+
       {/* Liste des candidats */}
       <div className="border rounded-lg overflow-x-auto">
         <table className="w-full text-sm">
@@ -388,15 +422,19 @@ export default function ExamenCandidatsPage() {
               <th className="text-left px-3 py-2">Type</th>
               <th className="text-left px-3 py-2 w-28">Statut</th>
               <th className="text-left px-3 py-2 w-24">Dispenses</th>
-              <th className="text-left px-3 py-2 w-32">LV1</th>
-              <th className="text-left px-3 py-2 w-32">LV2</th>
+              {afficherLV && (
+                <>
+                  <th className="text-left px-3 py-2 w-32">LV1</th>
+                  <th className="text-left px-3 py-2 w-32">LV2</th>
+                </>
+              )}
               <th className="w-16"></th>
             </tr>
           </thead>
           <tbody>
             {candidats.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-3 py-4 text-center text-gray-400">
+                <td colSpan={nbColonnes} className="px-3 py-4 text-center text-gray-400">
                   Aucun candidat. Utilise "Tout sélectionner" pour peupler depuis les classes liées.
                 </td>
               </tr>
@@ -432,30 +470,27 @@ export default function ExamenCandidatsPage() {
                       {(dispenses[c.id]?.size ?? 0) > 0 ? `${dispenses[c.id]!.size} dispense(s)` : 'Gérer'}
                     </button>
                   </td>
-                  <td className="px-2 py-1.5">
-                    <select
-                      value={c.lv1_matiere_id ?? ''}
-                      onChange={(e) => modifierLangue(c.id, 'lv1_matiere_id', e.target.value)}
-                      className="w-28 border rounded px-1 py-1 text-xs"
-                    >
-                      <option value="">-</option>
-                      {matieres.map((m) => (
-                        <option key={m.id} value={m.id}>{m.nom}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-2 py-1.5">
-                    <select
-                      value={c.lv2_matiere_id ?? ''}
-                      onChange={(e) => modifierLangue(c.id, 'lv2_matiere_id', e.target.value)}
-                      className="w-28 border rounded px-1 py-1 text-xs"
-                    >
-                      <option value="">-</option>
-                      {matieres.map((m) => (
-                        <option key={m.id} value={m.id}>{m.nom}</option>
-                      ))}
-                    </select>
-                  </td>
+                  {afficherLV &&
+                    (['lv1_matiere_id', 'lv2_matiere_id'] as const).map((champ) => (
+                      <td key={champ} className="px-2 py-1.5">
+                        {concerneParLV(c) ? (
+                          <select
+                            value={c[champ] ?? ''}
+                            onChange={(e) => modifierLangue(c.id, champ, e.target.value)}
+                            className={`w-28 border rounded px-1 py-1 text-xs ${
+                              champ === 'lv1_matiere_id' && !c.lv1_matiere_id ? 'border-amber-400 bg-amber-50' : ''
+                            }`}
+                          >
+                            <option value="">-</option>
+                            {matieresLV.map((m) => (
+                              <option key={m.id} value={m.id}>{m.nom}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-gray-300 text-xs whitespace-nowrap">Non concerné</span>
+                        )}
+                      </td>
+                    ))}
                   <td className="px-3 py-2">
                     <button onClick={() => retirerCandidat(c.id)} className="text-red-600 text-xs">
                       Retirer
@@ -464,15 +499,15 @@ export default function ExamenCandidatsPage() {
                 </tr>
                 {candidatOuvert === c.id && (
                   <tr className="bg-gray-50 border-t">
-                    <td colSpan={8} className="px-3 py-3">
+                    <td colSpan={nbColonnes} className="px-3 py-3">
                       <p className="text-xs font-medium mb-2">
                         Épreuves dont {c.nom} {c.prenom} est dispensé(e) :
                       </p>
-                      {epreuves.length === 0 ? (
+                      {epreuvesDe(c).length === 0 ? (
                         <p className="text-xs text-gray-400">Aucune épreuve configurée pour cet examen.</p>
                       ) : (
                         <div className="grid grid-cols-2 gap-1">
-                          {epreuves.map((ep) => (
+                  {epreuvesDe(c).map((ep) => (
                             <label key={ep.id} className="flex items-center gap-1.5 text-xs">
                               <input
                                 type="checkbox"
@@ -494,8 +529,9 @@ export default function ExamenCandidatsPage() {
         </table>
       </div>
       <p className="text-xs text-gray-400 mt-2">
-        LV1/LV2 ne sont utiles que pour un BAC série A1/A2 — laisse vide pour les autres examens.
-        Le choix de chaque candidat détermine automatiquement quelle épreuve de langue compte dans son calcul.
+        LV1 et LV2 (allemand, anglais ou espagnol) ne concernent que les candidats de Terminale séries A1 et A2 : leur
+        choix détermine quelles épreuves de langue comptent dans leur calcul. En séries C et D, l'anglais est passé par
+        tous, il n'y a rien à choisir.
       </p>
     </main>
   );

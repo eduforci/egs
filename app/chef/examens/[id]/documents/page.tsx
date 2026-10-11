@@ -29,6 +29,7 @@ const DOCUMENTS = [
   { value: 'liste', label: 'Liste des candidats' },
   { value: 'emargement', label: "Feuille d'émargement" },
   { value: 'convocations', label: 'Convocations' },
+  { value: 'etiquettes', label: 'Étiquettes tables' },
   { value: 'pv', label: 'Procès-verbal' },
   { value: 'releves', label: 'Relevés de notes' },
   { value: 'palmares', label: 'Palmarès' },
@@ -63,6 +64,7 @@ export default function ExamenDocumentsPage() {
 
   const [document, setDocument] = useState('liste');
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const charger = useCallback(async () => {
@@ -70,33 +72,33 @@ export default function ExamenDocumentsPage() {
     setError(null);
     try {
       const { data: examenData, error: examenError } = await supabase
-       .from('examens')
-       .select('nom, categorie, type, niveau, serie, annee_scolaire, session, date_debut, date_fin, organisateur, etablissement_id')
-       .eq('id', examenId)
-       .single();
+      .from('examens')
+      .select('nom, categorie, type, niveau, serie, annee_scolaire, session, date_debut, date_fin, organisateur, etablissement_id')
+      .eq('id', examenId)
+      .single();
       if (examenError) throw new Error(`Erreur examen : ${examenError.message}`);
       setExamen(examenData);
 
       const { data: etabData } = await supabase
-       .from('etablissements')
-       .select('nom')
-       .eq('id', examenData.etablissement_id)
-       .single();
+      .from('etablissements')
+      .select('nom')
+      .eq('id', examenData.etablissement_id)
+      .single();
       setEtablissementNom(etabData?.nom?? '');
 
       if (examenData.categorie!== 'interne') {
         const { data: centreData } = await supabase
-         .from('examens_centre')
-         .select('nom_centre, code_centre, ville, drena, president_jury, secretaire')
-         .eq('examen_id', examenId)
-         .maybeSingle();
+        .from('examens_centre')
+        .select('nom_centre, code_centre, ville, drena, president_jury, secretaire')
+        .eq('examen_id', examenId)
+        .maybeSingle();
         setCentre(centreData);
       }
 
       const { data: candData, error: candError } = await supabase
-       .from('examens_candidats')
-       .select('eleve_id, numero_table, eleves(matricule, classes(nom))')
-       .eq('examen_id', examenId);
+      .from('examens_candidats')
+      .select('eleve_id, numero_table, eleves(matricule, classes(nom))')
+      .eq('examen_id', examenId);
       if (candError) throw new Error(`Erreur candidats : ${candError.message}`);
 
       type RowC = { eleve_id: string; numero_table: string | null; eleves: { matricule: string; classes: { nom: string } | { nom: string }[] | null } | { matricule: string; classes: { nom: string } | { nom: string }[] | null }[] | null };
@@ -104,9 +106,9 @@ export default function ExamenDocumentsPage() {
       const eleveIds = brut.map((r) => r.eleve_id);
 
       const { data: profilesData } = await supabase
-       .from('profiles')
-       .select('id, nom, prenom')
-       .in('id', eleveIds.length > 0? eleveIds : ['00000000-0000-0000-0000-000000000000']);
+      .from('profiles')
+      .select('id, nom, prenom')
+      .in('id', eleveIds.length > 0? eleveIds : ['00000000-0000-0000-0000-000000000000']);
       const profilesMap = new Map((profilesData?? []).map((p) => [p.id, p]));
 
       const listeCandidats: Candidat[] = brut.map((r) => {
@@ -150,14 +152,14 @@ export default function ExamenDocumentsPage() {
   function exporterListeCandidatsCSV() {
     const lignes = [
       ['N° Table', 'Nom', 'Prénom', 'Matricule', 'Classe'],
-     ...candidats.map((c) => [c.numero_table?? '', c.nom, c.prenom, c.matricule, c.classe_nom]),
+    ...candidats.map((c) => [c.numero_table?? '', c.nom, c.prenom, c.matricule, c.classe_nom]),
     ];
     telechargerCSV(`liste_candidats_${examen?.nom?? 'examen'}.csv`, lignes);
   }
   function exporterResultatsCSV() {
     const lignes = [
       ['Rang', 'Nom', 'Prénom', 'Matricule', 'Classe', 'Moyenne', 'Mention', 'Décision'],
-     ...resultats.map((r) => [r.rang?.toString()?? '', r.nom, r.prenom, r.matricule, r.classe_nom, r.moyenne.toString(), r.mention, r.decision]),
+    ...resultats.map((r) => [r.rang?.toString()?? '', r.nom, r.prenom, r.matricule, r.classe_nom, r.moyenne.toString(), r.mention, r.decision]),
     ];
     telechargerCSV(`resultats_${examen?.nom?? 'examen'}.csv`, lignes);
   }
@@ -175,15 +177,15 @@ export default function ExamenDocumentsPage() {
       [],
       ['Par classe'],
       ['Classe', 'Candidats', 'Moyenne', 'Taux admission'],
-     ...parClasse.map((c) => [c.classe_nom?? '', String(c.nb_candidats), String(c.moyenne), String(c.taux_admission)]),
+    ...parClasse.map((c) => [c.classe_nom?? '', String(c.nb_candidats), String(c.moyenne), String(c.taux_admission)]),
       [],
       ['Par série'],
       ['Série', 'Candidats', 'Moyenne', 'Taux admission'],
-     ...parSerie.map((s) => [s.serie?? '', String(s.nb_candidats), String(s.moyenne), String(s.taux_admission)]),
+    ...parSerie.map((s) => [s.serie?? '', String(s.nb_candidats), String(s.moyenne), String(s.taux_admission)]),
       [],
       ['Par matière'],
       ['Matière', 'Épreuve', 'Moyenne', 'Notes saisies'],
-     ...parMatiere.map((m) => [m.matiere_nom, m.epreuve_nom, String(m.moyenne), String(m.nb_notes)]),
+    ...parMatiere.map((m) => [m.matiere_nom, m.epreuve_nom, String(m.moyenne), String(m.nb_notes)]),
     ];
     telechargerCSV(`rapport_${examen?.nom?? 'examen'}.csv`, lignes);
   }
@@ -205,7 +207,32 @@ export default function ExamenDocumentsPage() {
             <button key={d.value} onClick={() => setDocument(d.value)} className={`px-3 py-1.5 rounded-md text-xs whitespace-nowrap ${document === d.value? 'bg-black text-white' : 'bg-gray-100 text-gray-600'}`}>{d.label}</button>
           ))}
         </div>
-        <div className="flex gap-2 mb-6">
+        <div className="flex gap-2 mb-6 flex-wrap">
+          <button
+            onClick={async () => {
+              if (!examen) return;
+              if (!confirm(`Générer les N° Table pour ${candidats.length} candidats?`)) return;
+              setGenerating(true);
+              const anneeSuffix = examen.annee_scolaire?.split('-')[1]?.slice(-2) || examen.annee_scolaire?.slice(-2) || '27';
+              const nomUp = (examen.nom + ' ' + examen.niveau + ' ' + examen.type).toUpperCase();
+              const prefix = nomUp.includes('BEPC')? 'BE' : nomUp.includes('BAC')? 'BA' : nomUp.includes('CEPE')? 'CE' : 'EX';
+              try {
+                for (const c of candidats) {
+                  if (!c.numero_table || c.numero_table === '-') {
+                    const suffix = c.matricule? c.matricule.slice(-5) : c.eleve_id.slice(0,5).toUpperCase();
+                    const nouveau = `${prefix}${anneeSuffix}-${suffix}`;
+                    await supabase.from('examens_candidats').update({ numero_table: nouveau }).eq('examen_id', examenId).eq('eleve_id', c.eleve_id);
+                  }
+                }
+                alert('N° Table générés!');
+                window.location.reload();
+              } catch (e: any) { alert('Erreur: '+e.message); } finally { setGenerating(false); }
+            }}
+            disabled={generating}
+            className="px-3 py-2 bg-orange-600 text-white rounded text-sm disabled:opacity-50"
+          >
+            {generating? 'Génération...' : 'Générer N° Table'}
+          </button>
           <button onClick={() => window.print()} className="bg-blue-600 text-white text-sm px-4 py-2 rounded-md">Imprimer / Export PDF</button>
           {document === 'liste' && <button onClick={exporterListeCandidatsCSV} className="border text-sm px-4 py-2 rounded-md">Export Excel (CSV)</button>}
           {(document === 'releves' || document === 'palmares') && <button onClick={exporterResultatsCSV} className="border text-sm px-4 py-2 rounded-md">Export Excel (CSV)</button>}
@@ -298,6 +325,23 @@ export default function ExamenDocumentsPage() {
           </>
         )}
 
+        {document === 'etiquettes' && (
+          <>
+            <div className="flex justify-between items-center mb-3 print:mb-2">
+              <h3 className="font-semibold">Étiquettes N° Table — à découper (seulement N°)</h3>
+              <p className="text-xs text-gray-500 print:hidden">{candidats.length} étiquettes</p>
+            </div>
+            <div className="grid grid-cols-3 gap-3 print:gap-2">
+              {candidats.map((c) => (
+                <div key={c.eleve_id} className="border-2 border-dashed border-black bg-white rounded-sm h-[92px] flex justify-center items-center text-center p-2 break-inside-avoid">
+                  <span className="text-[26px] font-black font-mono tracking-widest">{c.numero_table || '-'}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-gray-400 mt-3 text-center print:hidden">Imprimer → découper → coller sur les tables</p>
+          </>
+        )}
+
         {document === 'pv' && stats && (
           <>
             <h3 className="font-semibold text-center mb-3">PROCÈS-VERBAL DE L'EXAMEN</h3>
@@ -340,7 +384,7 @@ export default function ExamenDocumentsPage() {
                 </tr>
               </thead>
               <tbody>
-                {resultats.map((r) => (
+                                {resultats.map((r) => (
                   <tr key={r.eleve_id} className="border-t">
                     <td className="px-2 py-1.5">{r.rang?? '-'}</td>
                     <td className="px-2 py-1.5">{r.nom}</td>
@@ -394,7 +438,6 @@ export default function ExamenDocumentsPage() {
         {document === 'rapport' && stats && (
           <>
             <h3 className="font-semibold mb-3">Rapport statistique</h3>
-
             <div className="grid grid-cols-4 gap-2 mb-4">
               {[
                 ['Inscrits', stats.inscrits], ['Présents', stats.presents],
@@ -408,7 +451,6 @@ export default function ExamenDocumentsPage() {
                 </div>
               ))}
             </div>
-
             <p className="font-semibold mb-1">Par classe</p>
             <table className="w-full text-xs border mb-4">
               <thead className="bg-gray-100">
@@ -423,7 +465,6 @@ export default function ExamenDocumentsPage() {
                 ))}
               </tbody>
             </table>
-
             <p className="font-semibold mb-1">Par série</p>
             <table className="w-full text-xs border mb-4">
               <thead className="bg-gray-100">
@@ -438,7 +479,6 @@ export default function ExamenDocumentsPage() {
                 ))}
               </tbody>
             </table>
-
             <p className="font-semibold mb-1">Par matière</p>
             <table className="w-full text-xs border">
               <thead className="bg-gray-100">
@@ -463,4 +503,4 @@ export default function ExamenDocumentsPage() {
       `}</style>
     </main>
   );
-                                                                                                                      }
+}

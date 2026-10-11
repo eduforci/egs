@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import EspaceSelecteur from '@/components/espace-selecteur';
 import Avatar from '@/components/avatar';
 
 type NavItem = { label: string; href: string; icon: string };
@@ -195,6 +196,7 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
           <div className="flex-1 min-w-0">
             <div className="text-xs text-neutral-400 truncate">{etablissementNom}</div>
           </div>
+          <EspaceSelecteur />
         </header>
 
         {/* BANDEAU — visible uniquement si un directeur des études visite une page partagée avec le chef */}
@@ -217,4 +219,5 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
     </div>
   );
 }
-  
+
+        

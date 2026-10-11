@@ -18,6 +18,8 @@ type Resultat = {
   a_participe: boolean;
   rang: number | null;
   decision: string;
+  repeche?: boolean;
+  points_reels?: number | null;
 };
 
 type Statistiques = {
@@ -61,7 +63,6 @@ export default function ResultatsExamenPage() {
   const [resultats, setResultats] = useState<Resultat[]>([]);
   const [stats, setStats] = useState<Statistiques | null>(null);
   const [parClasse, setParClasse] = useState<MoyenneGroupe[]>([]);
-  const [parSerie, setParSerie] = useState<MoyenneGroupe[]>([]);
   const [parMatiere, setParMatiere] = useState<MoyenneMatiere[]>([]);
 
   const [publieLe, setPublieLe] = useState<string | null>(null);
@@ -97,24 +98,21 @@ export default function ResultatsExamenPage() {
         .maybeSingle();
       setPublieLe((etatPublication as any)?.resultats_publies_le ?? null);
 
-      const [resResultats, resStats, resClasse, resSerie, resMatiere] = await Promise.all([
+      const [resResultats, resStats, resClasse, resMatiere] = await Promise.all([
         supabase.rpc('calculer_resultats_examen', { p_examen_id: examenId }),
         supabase.rpc('calculer_statistiques_examen', { p_examen_id: examenId }),
         supabase.rpc('calculer_moyennes_par_classe', { p_examen_id: examenId }),
-        supabase.rpc('calculer_moyennes_par_serie', { p_examen_id: examenId }),
         supabase.rpc('calculer_moyennes_par_matiere', { p_examen_id: examenId }),
       ]);
 
       if (resResultats.error) throw new Error(`Erreur résultats : ${resResultats.error.message}`);
       if (resStats.error) throw new Error(`Erreur statistiques : ${resStats.error.message}`);
       if (resClasse.error) throw new Error(`Erreur par classe : ${resClasse.error.message}`);
-      if (resSerie.error) throw new Error(`Erreur par série : ${resSerie.error.message}`);
       if (resMatiere.error) throw new Error(`Erreur par matière : ${resMatiere.error.message}`);
 
       setResultats((resResultats.data as Resultat[]) ?? []);
       setStats(resStats.data as Statistiques);
       setParClasse((resClasse.data as MoyenneGroupe[]) ?? []);
-      setParSerie((resSerie.data as MoyenneGroupe[]) ?? []);
       setParMatiere((resMatiere.data as MoyenneMatiere[]) ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur inconnue');
@@ -164,6 +162,37 @@ export default function ResultatsExamenPage() {
   const major = classes[0];
   const top10 = classes.slice(0, 10);
   const top20 = classes.slice(0, 20);
+
+  // Résultats par série, calculés à partir des résultats individuels (série de la classe de chaque candidat)
+  const groupesSerie = new Map<string, { candidats: number; admis: number; somme: number }>();
+  for (const r of classes) {
+    const cle = r.serie || 'Non renseignée';
+    const g = groupesSerie.get(cle) ?? { candidats: 0, admis: 0, somme: 0 };
+    g.candidats += 1;
+    if (r.decision === 'Admis') g.admis += 1;
+    g.somme += Number(r.moyenne);
+    groupesSerie.set(cle, g);
+  }
+  const lignesSerie = Array.from(groupesSerie.entries())
+    .sort(([a], [b]) => a.localeCompare(b, 'fr', { numeric: true }))
+    .map(([serie, g]) => ({
+      serie,
+      candidats: g.candidats,
+      admis: g.admis,
+      refuses: g.candidats - g.admis,
+      moyenne: Math.round((g.somme / g.candidats) * 100) / 100,
+      taux: Math.round((g.admis / g.candidats) * 1000) / 10,
+    }));
+  const totalSerie =
+    classes.length > 0
+      ? {
+          candidats: classes.length,
+          admis: classes.filter((r) => r.decision === 'Admis').length,
+          refuses: classes.filter((r) => r.decision !== 'Admis').length,
+          moyenne: Math.round((classes.reduce((s, r) => s + Number(r.moyenne), 0) / classes.length) * 100) / 100,
+          taux: Math.round((classes.filter((r) => r.decision === 'Admis').length / classes.length) * 1000) / 10,
+        }
+      : null;
 
   if (loading) return <p className="p-6 text-sm text-gray-500">Chargement...</p>;
 
@@ -265,9 +294,20 @@ export default function ResultatsExamenPage() {
                     <td className="px-3 py-2 font-semibold">{r.rang ?? '-'}</td>
                     <td className="px-3 py-2">{r.nom} {r.prenom}</td>
                     <td className="px-3 py-2 text-gray-500">{r.classe_nom}</td>
-                    <td className="px-3 py-2">{r.moyenne}/20 <span className="text-gray-400 text-xs">({r.points_obtenus}/{r.points_total})</span></td>
+                    <td className="px-3 py-2">
+                      {r.moyenne}/20{' '}
+                      <span className="text-gray-400 text-xs">
+                        ({r.repeche ? `${r.points_reels} → ${r.points_obtenus}` : r.points_obtenus}/{r.points_total})
+                      </span>
+                    </td>
                     <td className="px-3 py-2 text-gray-500">{['Admis','Ajourné','Refusé'].includes(r.decision) ? r.mention : '-'}</td>
-                    <td className={`px-3 py-2 font-medium ${DECISION_STYLE[r.decision] ?? ''}`}>{r.decision}</td>
+                    <td className={`px-3 py-2 font-medium ${DECISION_STYLE[r.decision] ?? ''}`}>{r.decision}
+                      {r.repeche && (
+                        <span className="ml-1 text-[10px] bg-amber-100 text-amber-700 rounded-full px-1.5 py-0.5 font-normal">
+                          repêché
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 ))
               )}
@@ -285,6 +325,7 @@ export default function ResultatsExamenPage() {
             { label: 'Absents', valeur: stats.absents },
             { label: 'Exclus', valeur: stats.exclus },
             { label: 'Admis', valeur: stats.admis },
+            { label: 'dont repêchés', valeur: resultats.filter((r) => r.repeche).length },
             { label: libelleEchec, valeur: stats.ajournes },
             { label: 'Taux de réussite', valeur: `${stats.pourcentage_admis}%` },
             { label: 'Moyenne générale', valeur: `${stats.moyenne_generale}/20` },
@@ -329,28 +370,44 @@ export default function ResultatsExamenPage() {
 
       {/* Par série */}
       {onglet === 'serie' && (
-        <div className="border rounded-lg overflow-hidden">
+        <div className="border rounded-lg overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-100">
               <tr>
                 <th className="text-left px-3 py-2">Série</th>
                 <th className="text-left px-3 py-2">Candidats</th>
+                <th className="text-left px-3 py-2">Admis</th>
+                <th className="text-left px-3 py-2">{libelleEchec}</th>
                 <th className="text-left px-3 py-2">Moyenne</th>
-                <th className="text-left px-3 py-2">Taux admission</th>
+                <th className="text-left px-3 py-2">Taux de réussite</th>
               </tr>
             </thead>
             <tbody>
-              {parSerie.length === 0 ? (
-                <tr><td colSpan={4} className="px-3 py-4 text-center text-gray-400">Aucune donnée.</td></tr>
+              {lignesSerie.length === 0 ? (
+                <tr><td colSpan={6} className="px-3 py-4 text-center text-gray-400">Aucune donnée.</td></tr>
               ) : (
-                parSerie.map((s, i) => (
-                  <tr key={i} className="border-t">
-                    <td className="px-3 py-2">{s.serie}</td>
-                    <td className="px-3 py-2">{s.nb_candidats}</td>
-                    <td className="px-3 py-2">{s.moyenne}/20</td>
-                    <td className="px-3 py-2">{s.taux_admission}%</td>
-                  </tr>
-                ))
+                <>
+                  {lignesSerie.map((s) => (
+                    <tr key={s.serie} className="border-t">
+                      <td className="px-3 py-2">{s.serie}</td>
+                      <td className="px-3 py-2">{s.candidats}</td>
+                      <td className="px-3 py-2">{s.admis}</td>
+                      <td className="px-3 py-2">{s.refuses}</td>
+                      <td className="px-3 py-2">{s.moyenne}/20</td>
+                      <td className="px-3 py-2">{s.taux}%</td>
+                    </tr>
+                  ))}
+                  {totalSerie && lignesSerie.length > 1 && (
+                    <tr className="border-t-2 bg-gray-50 font-semibold">
+                      <td className="px-3 py-2">Ensemble</td>
+                      <td className="px-3 py-2">{totalSerie.candidats}</td>
+                      <td className="px-3 py-2">{totalSerie.admis}</td>
+                      <td className="px-3 py-2">{totalSerie.refuses}</td>
+                      <td className="px-3 py-2">{totalSerie.moyenne}/20</td>
+                      <td className="px-3 py-2">{totalSerie.taux}%</td>
+                    </tr>
+                  )}
+                </>
               )}
             </tbody>
           </table>
@@ -423,9 +480,8 @@ export default function ResultatsExamenPage() {
               {top20.length === 0 && <p className="px-3 py-3 text-sm text-gray-400">Aucun candidat classé.</p>}
             </div>
           </div>
-        </div>
+     </div>
       )}
     </main>
   );
-    }
-                                                              
+}

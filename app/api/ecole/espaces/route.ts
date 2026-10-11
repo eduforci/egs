@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
-import { ESPACES_CODES, espaceDeClasse } from "@/lib/espaces";
+import { ESPACES_CODES } from "@/lib/espaces";
 
 export const dynamic = "force-dynamic";
 
@@ -76,42 +76,26 @@ export async function GET() {
   });
 }
 
-// Enregistre les espaces ouverts et, si fourni, les droits du personnel.
+// Enregistre les droits du personnel. Les espaces ouverts sont fixés par l'administrateur de la plateforme.
 export async function POST(request: NextRequest) {
   const verif = await verifierPromoteur();
   if ("erreur" in verif) return verif.erreur;
   const { admin, etablissementId } = verif;
 
   const body = await request.json().catch(() => ({}));
-  const espacesActifs = nettoyer(body?.espacesActifs);
-  if (espacesActifs.length === 0) {
-    return NextResponse.json({ error: "Ouvrez au moins un espace." }, { status: 400 });
-  }
 
-  // On ne ferme pas un espace qui contient encore des classes.
-  const { data: classes } = await admin
-    .from("classes")
-    .select("cycle, niveau, type_enseignement")
-    .eq("etablissement_id", etablissementId);
-  const utilises = new Set((classes ?? []).map((c: any) => espaceDeClasse(c.cycle, c.type_enseignement, c.niveau)));
-  const fermesAvecClasses = Array.from(utilises).filter((e) => !espacesActifs.includes(e));
-  if (fermesAvecClasses.length > 0) {
-    return NextResponse.json(
-      { error: `Impossible de fermer : ${fermesAvecClasses.join(", ")} (des classes existent encore).` },
-      { status: 400 }
-    );
-  }
-
-  const { error: erreurEtab } = await admin
+  const { data: etab, error: erreurEtab } = await admin
     .from("etablissements")
-    .update({ espaces_actifs: espacesActifs })
-    .eq("id", etablissementId);
+    .select("espaces_actifs")
+    .eq("id", etablissementId)
+    .single();
   if (erreurEtab) {
     return NextResponse.json(
       { error: `${erreurEtab.message}. Exécutez d'abord le script SQL « espaces » dans Supabase.` },
       { status: 500 }
     );
   }
+  const espacesActifs = nettoyer((etab as any)?.espaces_actifs ?? []);
 
   const droits: { id: string; espaces: unknown }[] = Array.isArray(body?.droits) ? body.droits : [];
   let nbDroits = 0;
@@ -130,5 +114,4 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ ok: true, espacesActifs, nbDroits });
-      }
-    
+}

@@ -79,16 +79,19 @@ export default function ProfesseursPlanningPage() {
       .eq('role', 'enseignant')
       .order('nom');
 
-    let { data: planning, error: erreurPlanning } = await supabase
+    const reponsePlanning = await supabase
       .from('enseignants_planning')
       .select('enseignant_id, vacataire, max_heures_semaine, disciplines, cycle_prof')
       .eq('etablissement_id', profil.etablissement_id);
+    let planning: any[] | null = reponsePlanning.data as any[] | null;
+    let erreurPlanning: any = reponsePlanning.error;
     if (erreurPlanning) {
       const ancien = await supabase
         .from('enseignants_planning')
         .select('enseignant_id, vacataire, max_heures_semaine')
         .eq('etablissement_id', profil.etablissement_id);
-      planning = ancien.data as any;
+      planning = ancien.data as any[] | null;
+      erreurPlanning = ancien.error;
     }
     if (erreurPlanning) {
       setMessage({
@@ -360,4 +363,4 @@ export default function ProfesseursPlanningPage() {
     </div>
   );
       }
-                                                        
+          

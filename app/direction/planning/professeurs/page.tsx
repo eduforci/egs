@@ -14,10 +14,26 @@ import {
   type ModeJour,
 } from '@/lib/planning';
 
+const DISCIPLINES: { cle: string; label: string }[] = [
+  { cle: 'anglais', label: 'Anglais' },
+  { cle: 'dessin', label: 'Dessin / Éd. musicale' },
+  { cle: 'edhc', label: 'EDHC' },
+  { cle: 'eps', label: 'EPS' },
+  { cle: 'francais', label: 'Français' },
+  { cle: 'hg', label: 'Histoire-Géo' },
+  { cle: 'lv2', label: 'LV2 (All./Esp.)' },
+  { cle: 'maths', label: 'Mathématiques' },
+  { cle: 'philo', label: 'Philosophie' },
+  { cle: 'pc', label: 'Physique-Chimie' },
+  { cle: 'svt', label: 'SVT' },
+];
+
 type Prof = {
   id: string;
   nom: string;
   prenom: string;
+  disciplines: string[];
+  cycleProf: string;
   vacataire: boolean;
   maxHeures: string;
   dispos: Disponibilite[];
@@ -39,6 +55,8 @@ export default function ProfesseursPlanningPage() {
   const [ouvert, setOuvert] = useState<string | null>(null);
   const [modes, setModes] = useState<Record<string, ModeJour>>({});
   const [vacataire, setVacataire] = useState(false);
+  const [disciplines, setDisciplines] = useState<string[]>([]);
+  const [cycleProf, setCycleProf] = useState('');
   const [maxHeures, setMaxHeures] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -61,10 +79,17 @@ export default function ProfesseursPlanningPage() {
       .eq('role', 'enseignant')
       .order('nom');
 
-    const { data: planning, error: erreurPlanning } = await supabase
+    let { data: planning, error: erreurPlanning } = await supabase
       .from('enseignants_planning')
-      .select('enseignant_id, vacataire, max_heures_semaine')
+      .select('enseignant_id, vacataire, max_heures_semaine, disciplines, cycle_prof')
       .eq('etablissement_id', profil.etablissement_id);
+    if (erreurPlanning) {
+      const ancien = await supabase
+        .from('enseignants_planning')
+        .select('enseignant_id, vacataire, max_heures_semaine')
+        .eq('etablissement_id', profil.etablissement_id);
+      planning = ancien.data as any;
+    }
     if (erreurPlanning) {
       setMessage({
         type: 'error',
@@ -96,6 +121,8 @@ export default function ProfesseursPlanningPage() {
           id: e.id,
           nom: e.nom || '',
           prenom: e.prenom || '',
+          disciplines: Array.isArray(p?.disciplines) ? p.disciplines : [],
+          cycleProf: p?.cycle_prof ?? '',
           vacataire: p?.vacataire === true,
           maxHeures: p?.max_heures_semaine === null || p?.max_heures_semaine === undefined ? '' : String(p.max_heures_semaine),
           dispos: (dispos || []).filter((d: any) => d.enseignant_id === e.id),
@@ -117,6 +144,8 @@ export default function ProfesseursPlanningPage() {
     }
     setOuvert(p.id);
     setVacataire(p.vacataire);
+    setDisciplines(p.disciplines);
+    setCycleProf(p.cycleProf);
     setMaxHeures(p.maxHeures);
     const m: Record<string, ModeJour> = {};
     JOURS.forEach((j) => (m[j] = modeDuJour(p.dispos, j)));
@@ -144,6 +173,8 @@ export default function ProfesseursPlanningPage() {
         enseignant_id: p.id,
         etablissement_id: etablissementId,
         vacataire,
+        disciplines,
+        cycle_prof: cycleProf || null,
         max_heures_semaine: max,
         updated_at: new Date().toISOString(),
       },
@@ -253,7 +284,38 @@ export default function ProfesseursPlanningPage() {
                 </label>
 
                 <div>
-                  <label className="block text-xs text-gray-500 mb-1">Maximum d'heures par semaine (facultatif)</label>
+                  <p className="text-xs text-gray-500 mb-1">Discipline(s) enseignée(s)</p>
+                  <div className="grid grid-cols-2 gap-1">
+                    {DISCIPLINES.map((d) => (
+                      <label key={d.cle} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={disciplines.includes(d.cle)}
+                          onChange={() =>
+                            setDisciplines((prev) => (prev.includes(d.cle) ? prev.filter((x) => x !== d.cle) : [...prev, d.cle]))
+                          }
+                        />
+                        {d.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Cycle où il enseigne</label>
+                  <select
+                    value={cycleProf}
+                    onChange={(e) => setCycleProf(e.target.value)}
+                    className="w-full border rounded-lg p-1.5 text-sm bg-white"
+                  >
+                    <option value="">Collège et lycée</option>
+                    <option value="college">Collège seulement (21 h par semaine)</option>
+                    <option value="lycee">Lycée seulement (18 h par semaine)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Maximum d'heures par semaine (facultatif, surtout pour un vacataire)</label>
                   <input
                     value={maxHeures}
                     onChange={(e) => setMaxHeures(e.target.value)}
@@ -298,4 +360,4 @@ export default function ProfesseursPlanningPage() {
     </div>
   );
       }
-            
+                                                        

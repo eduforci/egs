@@ -39,6 +39,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Personnel', href: '/chef/personnel', icon: '🧑‍💼' },
       { label: 'Emploi du temps', href: '/direction/emploi-du-temps', icon: '📅' },
       { label: 'Grille horaire', href: '/direction/emploi-du-temps/grille', icon: '⏰' },
+      { label: 'Planning (volumes, vacataires)', href: '/direction/planning', icon: '🗓️' },
       { label: 'Établissement', href: '/direction/etablissement', icon: '🏛️' },
       { label: "Espaces de l'école", href: '/direction/structure', icon: '🧭' },
       { label: 'Examens', href: '/chef/examens', icon: '📝' },
@@ -246,5 +247,5 @@ export default function DirecteurLayout({ children }: { children: React.ReactNod
       </div>
     </div>
   );
-    }
-            
+      }
+      

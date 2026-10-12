@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
-import { volumesOfficielsClasse, niveauVersCode, cycleDuNiveau } from "@/lib/volumes-officiels";
+import { VOLUMES_OFFICIELS, cleDeMatiere, niveauVersCode, cycleDuNiveau } from "@/lib/volumes-officiels";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -24,7 +24,25 @@ async function contexte() {
   return { admin, etablissementId: profil.etablissement_id as string };
 }
 
+const LIBELLE: Record<string, string> = {
+  anglais: "Anglais", dessin: "Dessin / Éducation musicale", edhc: "EDHC", eps: "EPS", francais: "Français",
+  hg: "Histoire-Géographie", lv2: "LV2 (Allemand / Espagnol)", maths: "Mathématiques", philo: "Philosophie",
+  pc: "Physique-Chimie", svt: "SVT",
+};
+
+// Lecture par paquets (la base limite le nombre de lignes renvoyées par requête).
+async function lireParPaquets(admin: any, table: string, colonne: string, ids: string[], champs: string): Promise<any[]> {
+  const out: any[] = [];
+  for (let i = 0; i < ids.length; i += 40) {
+    const { data, error } = await admin.from(table).select(champs).in(colonne, ids.slice(i, i + 40));
+    if (error) return out;
+    out.push(...(data ?? []));
+  }
+  return out;
+}
+
 // Tout ce dont la génération a besoin, calculé côté serveur (les règles d'accès ne bloquent pas la lecture).
+// Les cours à placer viennent des CLASSES et du tableau officiel des horaires, pas des matières déjà rattachées.
 export async function GET() {
   const ctx = await contexte();
   if ("erreur" in ctx) return ctx.erreur;
@@ -55,37 +73,54 @@ export async function GET() {
   const { data: param } = await admin.from("planning_parametres").select("jours").eq("etablissement_id", etablissementId).maybeSingle();
   const jours = Array.isArray((param as any)?.jours) && (param as any).jours.length > 0 ? (param as any).jours : JOURS_DEFAUT;
 
-  // Matières, volumes et professeurs affectés
-  let lignesRes = idsClasses.length
-    ? await admin.from("classes_matieres").select("classe_id, matiere_id, volume_hebdo").in("classe_id", idsClasses)
-    : { data: [] as any[], error: null as any };
-  if (lignesRes.error) lignesRes = await admin.from("classes_matieres").select("classe_id, matiere_id").in("classe_id", idsClasses);
-  const lignes = (lignesRes.data ?? []) as any[];
-  const idsMat = Array.from(new Set(lignes.map((l) => l.matiere_id).filter(Boolean)));
-  const { data: matsBrutes } = idsMat.length ? await admin.from("matieres").select("id, nom").in("id", idsMat) : { data: [] as any[] };
-  const nomMat = new Map((matsBrutes ?? []).map((m: any) => [m.id, m.nom as string]));
+  // Matières de l'école et matières rattachées aux classes (avec un éventuel volume saisi à la main)
+  let lignes = await lireParPaquets(admin, "classes_matieres", "classe_id", idsClasses, "classe_id, matiere_id, volume_hebdo");
+  if (lignes.length === 0) lignes = await lireParPaquets(admin, "classes_matieres", "classe_id", idsClasses, "classe_id, matiere_id");
+  const { data: matsEtab } = await admin.from("matieres").select("id, nom").eq("etablissement_id", etablissementId);
+  const nomMat = new Map<string, string>((matsEtab ?? []).map((m: any) => [m.id, m.nom as string]));
+  const manquants = Array.from(new Set(lignes.map((l) => l.matiere_id).filter((id) => id && !nomMat.has(id))));
+  (await lireParPaquets(admin, "matieres", "id", manquants as string[], "id, nom")).forEach((m: any) => nomMat.set(m.id, m.nom));
+  const matieresEcole = Array.from(nomMat, ([id, nom]) => ({ id, nom, cle: cleDeMatiere(nom) })).sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
 
-  const { data: affs } = idsClasses.length
-    ? await admin.from("affectations_enseignant").select("classe_id, matiere_id, enseignant_id").in("classe_id", idsClasses)
-    : { data: [] as any[] };
-  const profParPaire = new Map((affs ?? []).map((a: any) => [a.classe_id + "|" + a.matiere_id, a.enseignant_id as string]));
+  // Professeurs : disciplines déclarées + disciplines déduites des affectations existantes
+  const affs = await lireParPaquets(admin, "affectations_enseignant", "classe_id", idsClasses, "classe_id, matiere_id, enseignant_id");
+  const cycleClasse = new Map<string, string>();
+  classesToutes.forEach((c) => {
+    const code = niveauVersCode(c.niveau);
+    if (code) cycleClasse.set(c.id, cycleDuNiveau(code));
+  });
 
   const { data: ensBruts } = await admin
     .from("profiles")
     .select("id, nom, prenom")
     .eq("etablissement_id", etablissementId)
     .eq("role", "enseignant");
-  const { data: planBruts } = await admin
+  let planRes = await admin
     .from("enseignants_planning")
-    .select("enseignant_id, vacataire, max_heures_semaine")
+    .select("enseignant_id, vacataire, max_heures_semaine, disciplines, cycle_prof")
     .eq("etablissement_id", etablissementId);
+  if (planRes.error)
+    planRes = await admin.from("enseignants_planning").select("enseignant_id, vacataire, max_heures_semaine").eq("etablissement_id", etablissementId);
   const { data: dispoBrutes } = await admin
     .from("enseignants_disponibilites")
     .select("enseignant_id, jour, heure_debut, heure_fin")
     .eq("etablissement_id", etablissementId);
-  const planParId = new Map((planBruts ?? []).map((p: any) => [p.enseignant_id, p]));
+  const planParId = new Map((planRes.data ?? []).map((p: any) => [p.enseignant_id, p]));
   const profs = (ensBruts ?? []).map((e: any) => {
     const p: any = planParId.get(e.id);
+    const siennes = affs.filter((a) => a.enseignant_id === e.id);
+    const disciplines = new Set<string>(Array.isArray(p?.disciplines) ? p.disciplines : []);
+    siennes.forEach((a) => {
+      const cle = cleDeMatiere(nomMat.get(a.matiere_id) ?? "");
+      if (cle) disciplines.add(cle);
+    });
+    const nbCycle: Record<string, number> = {};
+    siennes.forEach((a) => {
+      const c = cycleClasse.get(a.classe_id);
+      if (c) nbCycle[c] = (nbCycle[c] || 0) + 1;
+    });
+    const cycleDeduit = Object.keys(nbCycle).sort((x, y) => nbCycle[y] - nbCycle[x])[0] ?? null;
+    const cycleChoisi = p?.cycle_prof === "college" || p?.cycle_prof === "lycee" ? p.cycle_prof : null;
     return {
       id: e.id as string,
       nom: `${e.nom ?? ""} ${e.prenom ?? ""}`.trim(),
@@ -94,14 +129,17 @@ export async function GET() {
       dispos: (dispoBrutes ?? [])
         .filter((d: any) => d.enseignant_id === e.id)
         .map((d: any) => ({ jour: d.jour, heure_debut: String(d.heure_debut).slice(0, 5), heure_fin: String(d.heure_fin).slice(0, 5) })),
+      disciplines: Array.from(disciplines),
+      cycle: cycleChoisi ?? cycleDeduit,
+      cycleStrict: cycleChoisi !== null,
+      affectes: siennes.map((a) => a.classe_id + "|" + a.matiere_id),
     };
   });
 
-  // Construction des éléments à placer
+  // Cours à placer : pour chaque classe, toutes les matières du tableau officiel de son niveau.
   const classes: any[] = [];
-  const items: any[] = [];
+  const unites: any[] = [];
   const avertissements: string[] = [];
-  const matieresInconnues = new Set<string>();
   for (const c of classesToutes) {
     const code = niveauVersCode(c.niveau);
     if (!code) {
@@ -113,40 +151,65 @@ export async function GET() {
       avertissements.push(`Classe « ${c.nom} » ignorée : la grille horaire du ${cycle === "college" ? "collège" : "lycée"} est vide.`);
       continue;
     }
-    const deClasse = lignes.filter((l) => l.classe_id === c.id);
-    const off = volumesOfficielsClasse(c.niveau, deClasse.map((l) => ({ id: l.matiere_id, nom: nomMat.get(l.matiere_id) ?? "" })));
-    off.inconnues.forEach((n) => matieresInconnues.add(n));
+    const rattachees = lignes.filter((l) => l.classe_id === c.id);
+    const introuvables: string[] = [];
     let nb = 0;
-    for (const l of deClasse) {
-      const manuel = l.volume_hebdo === null || l.volume_hebdo === undefined ? null : Number(l.volume_hebdo);
-      const heures = manuel !== null ? manuel : off.volumes.get(l.matiere_id) ?? 0;
+    let total = 0;
+    const dejaPrises = new Set<string>();
+    for (const [cle, officiel] of Object.entries(VOLUMES_OFFICIELS[code])) {
+      // la matière de la classe si elle existe, sinon la matière de l'école portant ce nom
+      const idsDeCle = [
+        ...rattachees.filter((l) => cleDeMatiere(nomMat.get(l.matiere_id) ?? "") === cle).map((l) => l.matiere_id as string),
+        ...matieresEcole.filter((m) => m.cle === cle).map((m) => m.id),
+      ];
+      const matiereId = idsDeCle[0];
+      if (!matiereId) {
+        introuvables.push(LIBELLE[cle] ?? cle);
+        continue;
+      }
+      const ligne = rattachees.find((l) => l.matiere_id === matiereId);
+      const manuel = ligne && ligne.volume_hebdo !== null && ligne.volume_hebdo !== undefined ? Number(ligne.volume_hebdo) : null;
+      const heures = manuel !== null ? manuel : (officiel as number);
+      dejaPrises.add(matiereId);
       if (!(heures > 0)) continue;
-      items.push({
-        classeId: c.id,
-        matiereId: l.matiere_id,
-        matiereNom: nomMat.get(l.matiere_id) ?? "Matière",
-        heures,
-        profId: profParPaire.get(c.id + "|" + l.matiere_id) ?? null,
-        cycle,
+      unites.push({
+        classeId: c.id, classeNom: c.nom, matiereId, matiereNom: nomMat.get(matiereId) ?? LIBELLE[cle], heures,
+        profId: null, cycle, cle,
       });
       nb++;
+      total += heures;
     }
-    classes.push({ id: c.id, nom: c.nom, niveau: c.niveau, cycle, nbMatieres: nb });
+    // matières propres à l'école (hors tableau officiel) avec un volume saisi à la main
+    for (const l of rattachees) {
+      if (dejaPrises.has(l.matiere_id)) continue;
+      const v = l.volume_hebdo === null || l.volume_hebdo === undefined ? 0 : Number(l.volume_hebdo);
+      if (!(v > 0)) continue;
+      unites.push({ classeId: c.id, classeNom: c.nom, matiereId: l.matiere_id, matiereNom: nomMat.get(l.matiere_id) ?? "Matière", heures: v, profId: null, cycle, cle: cleDeMatiere(nomMat.get(l.matiere_id) ?? "") });
+      nb++;
+      total += v;
+    }
+    classes.push({ id: c.id, nom: c.nom, niveau: c.niveau, cycle, nbMatieres: nb, heures: total, introuvables });
   }
 
   // Cours déjà enregistrés (servent à éviter les conflits de professeurs avec les classes non régénérées)
-  const { data: existants } = await admin
-    .from("emploi_du_temps")
-    .select("classe_id, enseignant_id, jour, heure_debut, heure_fin")
-    .eq("etablissement_id", etablissementId);
+  const existants: any[] = [];
+  for (let debut = 0; debut < 20000; debut += 1000) {
+    const { data } = await admin
+      .from("emploi_du_temps")
+      .select("classe_id, enseignant_id, jour, heure_debut, heure_fin")
+      .eq("etablissement_id", etablissementId)
+      .range(debut, debut + 999);
+    existants.push(...(data ?? []));
+    if (!data || data.length < 1000) break;
+  }
 
   return NextResponse.json({
     jours,
     periodes,
     classes,
-    items,
+    unites,
     profs,
-    existants: (existants ?? []).map((e: any) => ({
+    existants: existants.map((e: any) => ({
       classeId: e.classe_id,
       profId: e.enseignant_id,
       jour: e.jour,
@@ -154,7 +217,6 @@ export async function GET() {
       fin: String(e.heure_fin).slice(0, 5),
     })),
     avertissements,
-    matieresInconnues: Array.from(matieresInconnues),
   });
 }
 
@@ -203,5 +265,5 @@ export async function POST(request: NextRequest) {
     }
   }
   return NextResponse.json({ ok: true, nbCreneaux: lignes.length, nbClasses: classeIds.length });
-    }
-       
+  }
+                                  

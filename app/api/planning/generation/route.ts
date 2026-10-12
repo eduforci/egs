@@ -95,7 +95,7 @@ export async function GET() {
     .select("id, nom, prenom")
     .eq("etablissement_id", etablissementId)
     .eq("role", "enseignant");
-  let planRes = await admin
+  let planRes: { data: any[] | null; error: any } = await admin
     .from("enseignants_planning")
     .select("enseignant_id, vacataire, max_heures_semaine, disciplines, cycle_prof")
     .eq("etablissement_id", etablissementId);
@@ -265,5 +265,5 @@ export async function POST(request: NextRequest) {
     }
   }
   return NextResponse.json({ ok: true, nbCreneaux: lignes.length, nbClasses: classeIds.length });
-  }
-                                  
+    }
+    

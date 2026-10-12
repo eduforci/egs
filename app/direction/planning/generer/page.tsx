@@ -2,23 +2,32 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { genererEmploiDuTemps, type EntreeG, type SortieG } from '@/lib/planning-generation';
+import type { EntreeG } from '@/lib/planning-generation';
+import { genererAvecRepartition, type ProfR, type SortieR, type UniteR } from '@/lib/planning-repartition';
 import { JOURS_LABEL, formaterHeures } from '@/lib/planning';
 
-type ClasseG = { id: string; nom: string; niveau: string | null; cycle: string; nbMatieres: number };
-type Donnees = Omit<EntreeG, 'profs'> & {
+type ClasseG = {
+  id: string;
+  nom: string;
+  niveau: string | null;
+  cycle: string;
+  nbMatieres: number;
+  heures: number;
+  introuvables: string[];
+};
+type Donnees = Omit<EntreeG, 'profs' | 'items'> & {
   classes: ClasseG[];
-  profs: (EntreeG['profs'][number] & { nom: string })[];
+  unites: UniteR[];
+  profs: ProfR[];
   existants: { classeId: string; profId: string | null; jour: string; debut: string; fin: string }[];
   avertissements: string[];
-  matieresInconnues: string[];
 };
 
 export default function GenererPlanningPage() {
   const [donnees, setDonnees] = useState<Donnees | null>(null);
   const [erreur, setErreur] = useState('');
   const [choisies, setChoisies] = useState<Set<string>>(new Set());
-  const [resultat, setResultat] = useState<{ sortie: SortieG; classeIds: string[] } | null>(null);
+  const [resultat, setResultat] = useState<{ sortie: SortieR; classeIds: string[] } | null>(null);
   const [classeVue, setClasseVue] = useState('');
   const [calcul, setCalcul] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -52,16 +61,17 @@ export default function GenererPlanningPage() {
     // laisse l'écran afficher « Calcul en cours » avant le calcul
     setTimeout(() => {
       const ids = Array.from(choisies);
-      const entree: EntreeG = {
-        jours: donnees.jours,
-        periodes: donnees.periodes,
-        profs: donnees.profs,
-        items: donnees.items.filter((i) => choisies.has(i.classeId)),
-        occupes: donnees.existants
-          .filter((e) => e.profId && !choisies.has(e.classeId))
-          .map((e) => ({ profId: e.profId as string, jour: e.jour, debut: e.debut, fin: e.fin })),
-      };
-      const sortie = genererEmploiDuTemps(entree);
+      const sortie = genererAvecRepartition(
+        {
+          jours: donnees.jours,
+          periodes: donnees.periodes,
+          occupes: donnees.existants
+            .filter((e) => e.profId && !choisies.has(e.classeId))
+            .map((e) => ({ profId: e.profId as string, jour: e.jour, debut: e.debut, fin: e.fin })),
+        },
+        donnees.unites.filter((u) => choisies.has(u.classeId)),
+        donnees.profs
+      );
       setResultat({ sortie, classeIds: ids });
       setClasseVue(ids[0]);
       setCalcul(false);
@@ -98,7 +108,7 @@ export default function GenererPlanningPage() {
   const periodesTriees = [...periodesVue].sort((a, b) => a.ordre - b.ordre);
   const lectureCase = (jour: string, periodeId: string) =>
     resultat?.sortie.placements.find((p) => p.classeId === classeVue && p.jour === jour && p.periodeId === periodeId);
-  const nomMatiere = (matiereId: string) => donnees.items.find((i) => i.matiereId === matiereId)?.matiereNom ?? '';
+  const nomMatiere = (matiereId: string) => donnees.unites.find((i) => i.matiereId === matiereId)?.matiereNom ?? '';
 
   return (
     <div className="max-w-2xl mx-auto p-4 space-y-4">
@@ -124,14 +134,18 @@ export default function GenererPlanningPage() {
         </div>
       )}
 
-      {(donnees.avertissements.length > 0 || donnees.matieresInconnues.length > 0) && (
+      {donnees.avertissements.length > 0 && (
         <div className="p-3 rounded-lg text-xs bg-amber-50 text-amber-800 border border-amber-200 space-y-1">
           {donnees.avertissements.map((a) => (
             <p key={a}>{a}</p>
           ))}
-          {donnees.matieresInconnues.length > 0 && (
-            <p>Matières sans volume officiel (saisissez-les dans Volumes horaires) : {donnees.matieresInconnues.join(', ')}.</p>
-          )}
+        </div>
+      )}
+
+      {donnees.profs.length > 0 && donnees.profs.every((p) => p.disciplines.length === 0) && (
+        <div className="p-3 rounded-lg text-xs bg-amber-50 text-amber-800 border border-amber-200">
+          Aucun professeur n'a de discipline. Indiquez-la dans « Professeurs et vacataires » pour que le logiciel puisse
+          répartir les cours ; sinon les cours sont placés sans professeur.
         </div>
       )}
 
@@ -198,6 +212,36 @@ export default function GenererPlanningPage() {
             )}
           </div>
 
+          {resultat.sortie.sansProf.length > 0 && (
+            <div className="border rounded-xl p-3 bg-amber-50 text-xs text-amber-800 space-y-1">
+              <p className="font-medium">Cours placés sans professeur (aucun professeur disponible pour cette discipline) :</p>
+              {Array.from(new Set(resultat.sortie.sansProf.map((u) => u.matiereNom))).map((m) => (
+                <p key={m}>
+                  {m} : {resultat.sortie.sansProf.filter((u) => u.matiereNom === m).map((u) => u.classeNom).join(', ')}
+                </p>
+              ))}
+            </div>
+          )}
+
+          {resultat.sortie.charges.length > 0 && (
+            <div className="border rounded-xl p-3 bg-white text-xs space-y-1">
+              <p className="font-semibold text-sm">Charge des professeurs</p>
+              {[...resultat.sortie.charges]
+                .sort((a, b) => Number(b.vacataire) - Number(a.vacataire) || b.heures - a.heures)
+                .map((c) => (
+                  <div key={c.profId} className="flex justify-between gap-2">
+                    <span>
+                      {c.nom}
+                      {c.vacataire && <span className="ml-1 text-[10px] bg-amber-100 text-amber-800 px-1 rounded">Vacataire</span>}
+                    </span>
+                    <span className="text-gray-600">
+                      {formaterHeures(c.heures)} {c.vacataire ? `(plafond ${formaterHeures(c.cible)})` : `(cible ${formaterHeures(c.cible)})`}
+                    </span>
+                  </div>
+                ))}
+            </div>
+          )}
+
           <select
             value={classeVue}
             onChange={(e) => setClasseVue(e.target.value)}
@@ -209,6 +253,14 @@ export default function GenererPlanningPage() {
               </option>
             ))}
           </select>
+
+          {classeVueDef && (
+            <p className={`text-xs ${classeVueDef.introuvables.length > 0 ? 'text-amber-700' : 'text-gray-500'}`}>
+              {classeVueDef.nom} : {classeVueDef.nbMatieres} matière(s), {formaterHeures(classeVueDef.heures)} par semaine.
+              {classeVueDef.introuvables.length > 0 &&
+                ` Matière(s) introuvable(s) dans l'école, donc non placées : ${classeVueDef.introuvables.join(', ')}.`}
+            </p>
+          )}
 
           <div className="overflow-x-auto border rounded-xl bg-white">
             <table className="w-full text-[11px] border-collapse">
@@ -261,5 +313,5 @@ export default function GenererPlanningPage() {
       )}
     </div>
   );
-        }
-    
+                          }
+                    

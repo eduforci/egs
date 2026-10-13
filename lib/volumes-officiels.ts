@@ -58,6 +58,22 @@ export function niveauVersCode(niveau: string | null | undefined): NiveauCode | 
   return null;
 }
 
+// Niveau officiel d'une classe : on essaie le niveau, puis niveau + série, puis le nom de la classe.
+export function niveauDeClasse(c: { niveau?: string | null; nom?: string | null; serie?: string | null }): NiveauCode | null {
+  const essais = [
+    c.niveau,
+    [c.niveau, c.serie].filter(Boolean).join(' '),
+    c.nom,
+    [c.niveau, c.nom].filter(Boolean).join(' '),
+    [c.nom, c.serie].filter(Boolean).join(' '),
+  ];
+  for (const e of essais) {
+    const code = niveauVersCode(e);
+    if (code) return code;
+  }
+  return null;
+}
+
 // Nom d'une matière de l'école -> matière du tableau officiel (ou null).
 export function cleDeMatiere(nom: string): CleMatiere | null {
   const n = normaliser(nom);
@@ -77,11 +93,10 @@ export function cleDeMatiere(nom: string): CleMatiere | null {
 }
 
 // Volumes officiels pour les matières d'une classe. Une seule matière de LV2 reçoit les heures.
-export function volumesOfficielsClasse(
-  niveau: string | null | undefined,
+export function volumesOfficielsCode(
+  code: NiveauCode | null,
   matieres: { id: string; nom: string }[]
 ): { code: NiveauCode | null; volumes: Map<string, number>; inconnues: string[] } {
-  const code = niveauVersCode(niveau);
   const volumes = new Map<string, number>();
   const inconnues: string[] = [];
   if (!code) return { code, volumes, inconnues: matieres.map((m) => m.nom) };
@@ -99,4 +114,12 @@ export function volumesOfficielsClasse(
     }
   }
   return { code, volumes, inconnues };
-    }
+}
+
+export function volumesOfficielsClasse(
+  niveau: string | null | undefined,
+  matieres: { id: string; nom: string }[]
+): { code: NiveauCode | null; volumes: Map<string, number>; inconnues: string[] } {
+  return volumesOfficielsCode(niveauVersCode(niveau), matieres);
+         }
+               

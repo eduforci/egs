@@ -184,6 +184,12 @@ export default function ExamenDetailsPage() {
           Documents
         </Link>
         <Link
+          href={`/chef/examens/${examenId}/salles`}
+          className="border rounded-lg p-3 text-center text-sm font-medium hover:bg-gray-50"
+        >
+          N° table / Salles
+        </Link>
+        <Link
           href={`/chef/examens/${examenId}/parametres`}
           className="border rounded-lg p-3 text-center text-sm font-medium hover:bg-gray-50"
         >
@@ -239,4 +245,5 @@ export default function ExamenDetailsPage() {
       )}
     </main>
   );
-        }
+         }
+  

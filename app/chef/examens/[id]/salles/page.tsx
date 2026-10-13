@@ -13,7 +13,8 @@ type Cand = {
   serie: string | null; classe_nom: string | null;
   numero_table: string | null; salle: number | null; salle_serie: string | null;
 };
-type Epreuve = { id: string; nom: string };
+type Col = { m: string; h: string };
+type ColsParSalle = Record<string, Col[]>;
 
 function serieDe(nomClasse: string | null, serieClasse: string | null, serieExamen: string | null): string | null {
   if (serieClasse && serieClasse.trim()) return serieClasse.trim().toUpperCase();
@@ -30,8 +31,9 @@ export default function SallesExamenPage() {
   const [examen, setExamen] = useState<any>(null);
   const [etab, setEtab] = useState('');
   const [cands, setCands] = useState<Cand[]>([]);
-  const [epreuves, setEpreuves] = useState<Epreuve[]>([]);
-  const [ordre, setOrdre] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [cols, setCols] = useState<ColsParSalle>({});
+  const [modifie, setModifie] = useState(false);
   const [vue, setVue] = useState<'liste' | 'salles' | 'emargement' | 'etiquettes'>('liste');
   const [salleSel, setSalleSel] = useState<number | 'toutes'>('toutes');
   const [loading, setLoading] = useState(true);
@@ -90,14 +92,17 @@ export default function SallesExamenPage() {
       liste.sort((a, b) => (a.numero_table ?? 'ZZ').localeCompare(b.numero_table ?? 'ZZ') || a.nom.localeCompare(b.nom));
       setCands(liste);
 
-      const { data: ep } = await supabase.from('examens_matieres').select('id, nom').eq('examen_id', examenId);
-      const eps: Epreuve[] = (ep ?? []).map((x: any) => ({ id: x.id, nom: x.nom }));
-      const sauve: string[] = Array.isArray(ex.ordre_emargement) ? ex.ordre_emargement : [];
-      const tri = [
-        ...sauve.map((id) => eps.find((e) => e.id === id)).filter(Boolean) as Epreuve[],
-        ...eps.filter((e) => !sauve.includes(e.id)),
-      ];
-      setEpreuves(tri); setOrdre(tri.map((e) => e.id));
+      const { data: ep } = await supabase.from('examens_matieres').select('nom').eq('examen_id', examenId);
+      const noms: string[] = Array.from(new Set<string>((ep ?? []).map((x: any) => String(x.nom).replace(/\s*(écrit|ecrit|oral|pratique)\s*$/i, '').trim()).filter(Boolean)));
+      setSuggestions(noms);
+      const o = ex.ordre_emargement;
+      const base: ColsParSalle = {};
+      if (o && typeof o === 'object' && !Array.isArray(o)) {
+        for (const k of Object.keys(o)) {
+          base[k] = (Array.isArray(o[k]) ? o[k] : []).map((x: any) => ({ m: String(x?.m ?? ''), h: String(x?.h ?? '') }));
+        }
+      }
+      setCols(base); setModifie(false);
     } catch (e: any) {
       setErreur(e.message ?? 'Erreur de chargement');
     } finally { setLoading(false); }
@@ -130,13 +135,22 @@ export default function SallesExamenPage() {
     } catch (e: any) { setErreur(e.message); } finally { setBusy(false); }
   }
 
-  async function deplacer(i: number, d: -1 | 1) {
-    const j = i + d;
-    if (j < 0 || j >= epreuves.length) return;
-    const n = [...epreuves]; [n[i], n[j]] = [n[j], n[i]];
-    setEpreuves(n); setOrdre(n.map((e) => e.id));
-    const r = await supabase.from('examens').update({ ordre_emargement: n.map((e) => e.id) }).eq('id', examenId);
-    if (r.error) setErreur('Ordre non enregistré (SQL examens_tables à exécuter) : ' + r.error.message);
+  function colsDe(n: number): Col[] { return cols[String(n)] ?? []; }
+  function majCols(n: number, f: (l: Col[]) => Col[]) {
+    setCols((c) => ({ ...c, [String(n)]: f(c[String(n)] ?? []) })); setModifie(true);
+  }
+  function copierVersToutes(n: number) {
+    if (!window.confirm('Copier ces matières dans toutes les autres salles ?')) return;
+    const src = colsDe(n).map((c) => ({ ...c }));
+    setCols((c) => { const r: ColsParSalle = { ...c };
+      salles.forEach((x) => { r[String(x.n)] = src.map((y) => ({ ...y })); }); return r; });
+    setModifie(true);
+  }
+  async function enregistrerCols() {
+    setErreur(null); setInfo(null);
+    const r = await supabase.from('examens').update({ ordre_emargement: cols }).eq('id', examenId);
+    if (r.error) setErreur('Non enregistré (SQL examens_tables à exécuter ?) : ' + r.error.message);
+    else { setModifie(false); setInfo('Matières d’émargement enregistrées.'); }
   }
 
   const salles = useMemo(() => {
@@ -151,7 +165,6 @@ export default function SallesExamenPage() {
 
   const sallesAff = salleSel === 'toutes' ? salles : salles.filter((s) => s.n === salleSel);
   const sansNum = cands.filter((c) => !c.numero_table).length;
-  void ordre;
 
   if (loading) return <div className="p-4 text-sm">Chargement…</div>;
 
@@ -201,20 +214,42 @@ export default function SallesExamenPage() {
             {salles.map((s) => <option key={s.n} value={s.n}>Salle {s.n}{s.serie ? ` (${s.serie})` : ''} — {s.liste.length}</option>)}
           </select>
         )}
-        {vue === 'emargement' && epreuves.length > 0 && (
+        {vue === 'emargement' && (
           <div className="border rounded p-2 mb-3 text-sm">
-            <div className="font-medium mb-1">Ordre des matières (colonnes)</div>
-            {epreuves.map((e, i) => (
-              <div key={e.id} className="flex items-center gap-2 py-0.5">
-                <button onClick={() => deplacer(i, -1)} disabled={i === 0} className="px-2 border rounded disabled:opacity-30">↑</button>
-                <button onClick={() => deplacer(i, 1)} disabled={i === epreuves.length - 1} className="px-2 border rounded disabled:opacity-30">↓</button>
-                <span>{i + 1}. {e.nom}</span>
+            <datalist id="matieres-sugg">{suggestions.map((m) => <option key={m} value={m} />)}</datalist>
+            <div className="font-medium mb-1">Matières à faire signer (par salle)</div>
+            <p className="text-xs text-gray-600 mb-2">Ajoutez, dans l&apos;ordre du chronogramme, les matières composées, avec le jour/heure si vous voulez. Vous pouvez corriger, déplacer ou supprimer.</p>
+            {salles.length === 0 && <div className="text-gray-500">Générez d&apos;abord les salles.</div>}
+            {sallesAff.map((s) => (
+              <div key={s.n} className="border rounded p-2 mb-2">
+                <div className="font-medium">Salle {s.n}{s.serie ? ` — Série ${s.serie}` : ''}</div>
+                {colsDe(s.n).map((c, i) => (
+                  <div key={i} className="flex flex-wrap items-center gap-1 py-1">
+                    <span className="w-5 text-xs">{i + 1}.</span>
+                    <input list="matieres-sugg" value={c.m} placeholder="Matière"
+                      onChange={(e) => majCols(s.n, (l) => l.map((x, k) => k === i ? { ...x, m: e.target.value } : x))}
+                      className="border rounded p-1 w-36" />
+                    <input value={c.h} placeholder="Jour / heure"
+                      onChange={(e) => majCols(s.n, (l) => l.map((x, k) => k === i ? { ...x, h: e.target.value } : x))}
+                      className="border rounded p-1 w-28" />
+                    <button disabled={i === 0} className="px-2 border rounded disabled:opacity-30"
+                      onClick={() => majCols(s.n, (l) => { const n = [...l]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; return n; })}>↑</button>
+                    <button disabled={i === colsDe(s.n).length - 1} className="px-2 border rounded disabled:opacity-30"
+                      onClick={() => majCols(s.n, (l) => { const n = [...l]; [n[i + 1], n[i]] = [n[i], n[i + 1]]; return n; })}>↓</button>
+                    <button className="px-2 border rounded text-red-600"
+                      onClick={() => majCols(s.n, (l) => l.filter((_, k) => k !== i))}>✕</button>
+                  </div>
+                ))}
+                <div className="flex gap-2 mt-1">
+                  <button className="px-2 py-1 border rounded" onClick={() => majCols(s.n, (l) => [...l, { m: '', h: '' }])}>+ Ajouter une matière</button>
+                  <button className="px-2 py-1 border rounded" onClick={() => copierVersToutes(s.n)}>Copier vers toutes les salles</button>
+                </div>
               </div>
             ))}
+            <button onClick={enregistrerCols} disabled={!modifie}
+              className="px-3 py-2 rounded bg-green-600 text-white disabled:opacity-40">Enregistrer</button>
+            {modifie && <span className="ml-2 text-xs text-amber-700">Modifications non enregistrées</span>}
           </div>
-        )}
-        {vue === 'emargement' && epreuves.length === 0 && (
-          <div className="text-sm text-amber-700 mb-3">Aucune épreuve définie : ajoutez-les dans « Épreuves ».</div>
         )}
       </div>
 
@@ -269,14 +304,14 @@ export default function SallesExamenPage() {
             <thead><tr className="bg-gray-100">
               <th className="border p-1 w-6">N°</th><th className="border p-1">N° Table</th>
               <th className="border p-1 text-left">Nom et prénoms</th>
-              {epreuves.map((e) => <th key={e.id} className="border p-1">{e.nom}</th>)}
+              {colsDe(s.n).map((c, k) => <th key={k} className="border p-1">{c.m}{c.h ? <div className="font-normal">{c.h}</div> : null}</th>)}
             </tr></thead>
             <tbody>{s.liste.map((c, i) => (
               <tr key={c.id} style={{ height: 34 }}>
                 <td className="border p-1 text-center">{i + 1}</td>
                 <td className="border p-1 font-mono text-center">{c.numero_table}</td>
                 <td className="border p-1">{c.nom} {c.prenom}</td>
-                {epreuves.map((e) => <td key={e.id} className="border p-1" />)}
+                {colsDe(s.n).map((_, k) => <td key={k} className="border p-1" />)}
               </tr>))}
             </tbody>
           </table>
@@ -297,5 +332,5 @@ export default function SallesExamenPage() {
       )}
     </div>
   );
-    }
-    
+  }
+          

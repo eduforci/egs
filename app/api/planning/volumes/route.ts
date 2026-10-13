@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
-import { volumesOfficielsClasse, niveauVersCode, NIVEAU_LABEL } from "@/lib/volumes-officiels";
+import { volumesOfficielsCode, niveauDeClasse, NIVEAU_LABEL, type NiveauCode } from "@/lib/volumes-officiels";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -28,7 +28,15 @@ async function chargerClasses(admin: any, etablissementId: string) {
   let req = admin.from("classes").select("id, nom, niveau, annee_scolaire").eq("etablissement_id", etablissementId);
   if (etab?.annee_scolaire_active) req = req.eq("annee_scolaire", etab.annee_scolaire_active);
   const { data } = await req.order("nom");
-  return (data ?? []) as { id: string; nom: string; niveau: string | null; annee_scolaire: string | null }[];
+  const brutes = (data ?? []) as { id: string; nom: string; niveau: string | null; annee_scolaire: string | null }[];
+  // la série est rangée dans une colonne à part : lecture facultative
+  const sr = brutes.length ? await admin.from("classes").select("id, serie").in("id", brutes.map((c) => c.id)) : { data: [] as any[] };
+  const serieParId = new Map<string, string | null>((sr.data ?? []).map((x: any) => [x.id, x.serie ?? null]));
+  return brutes.map((c) => ({
+    ...c,
+    serie: serieParId.get(c.id) ?? null,
+    code: niveauDeClasse({ niveau: c.niveau, nom: c.nom, serie: serieParId.get(c.id) ?? null }) as NiveauCode | null,
+  }));
 }
 
 async function chargerLignes(admin: any, classeIds: string[]) {
@@ -54,13 +62,13 @@ export async function GET(request: NextRequest) {
 
   const classes = await chargerClasses(admin, etablissementId);
   const classeId = request.nextUrl.searchParams.get("classeId");
-  const liste = classes.map((c) => ({ id: c.id, nom: c.nom, niveau: c.niveau, reconnu: niveauVersCode(c.niveau) !== null }));
+  const liste = classes.map((c) => ({ id: c.id, nom: c.nom, niveau: c.niveau, reconnu: c.code !== null }));
   if (!classeId) return NextResponse.json({ classes: liste });
 
   const classe = classes.find((c) => c.id === classeId);
   if (!classe) return NextResponse.json({ error: "Classe introuvable." }, { status: 404 });
   const { lignes, installe } = await chargerLignes(admin, [classeId]);
-  const off = volumesOfficielsClasse(classe.niveau, lignes.map((l) => ({ id: l.matiere_id, nom: l.nom })));
+  const off = volumesOfficielsCode(classe.code, lignes.map((l) => ({ id: l.matiere_id, nom: l.nom })));
   return NextResponse.json({
     classes: liste,
     installe,
@@ -96,7 +104,7 @@ export async function POST(request: NextRequest) {
     const matieresInconnues = new Set<string>();
     for (const c of classes) {
       const deClasse = lignes.filter((l) => l.classe_id === c.id);
-      const off = volumesOfficielsClasse(c.niveau, deClasse.map((l) => ({ id: l.matiere_id, nom: l.nom })));
+      const off = volumesOfficielsCode(c.code, deClasse.map((l) => ({ id: l.matiere_id, nom: l.nom })));
       if (!off.code) {
         classesIgnorees.push(c.nom);
         continue;
@@ -147,4 +155,4 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ error: "Demande inconnue." }, { status: 400 });
       }
-  
+    

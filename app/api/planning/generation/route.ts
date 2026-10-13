@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
-import { VOLUMES_OFFICIELS, cleDeMatiere, niveauVersCode, cycleDuNiveau } from "@/lib/volumes-officiels";
+import { VOLUMES_OFFICIELS, cleDeMatiere, niveauDeClasse, cycleDuNiveau } from "@/lib/volumes-officiels";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -54,6 +54,10 @@ export async function GET() {
   const { data: classesBrutes } = await reqClasses.order("nom");
   const classesToutes = (classesBrutes ?? []) as any[];
   const idsClasses = classesToutes.map((c) => c.id as string);
+  // la série est rangée dans une colonne à part : lecture facultative
+  const serieRes = idsClasses.length ? await admin.from("classes").select("id, serie").in("id", idsClasses) : { data: [] as any[] };
+  const serieParClasse = new Map<string, string | null>((serieRes.data ?? []).map((x: any) => [x.id, x.serie ?? null]));
+  const codeDeClasse = (c: any) => niveauDeClasse({ niveau: c.niveau, nom: c.nom, serie: serieParClasse.get(c.id) ?? null });
 
   // Grille horaire de l'école (par cycle) et jours de cours
   const { data: periodesBrutes } = await admin
@@ -86,7 +90,7 @@ export async function GET() {
   const affs = await lireParPaquets(admin, "affectations_enseignant", "classe_id", idsClasses, "classe_id, matiere_id, enseignant_id");
   const cycleClasse = new Map<string, string>();
   classesToutes.forEach((c) => {
-    const code = niveauVersCode(c.niveau);
+    const code = codeDeClasse(c);
     if (code) cycleClasse.set(c.id, cycleDuNiveau(code));
   });
 
@@ -141,9 +145,9 @@ export async function GET() {
   const unites: any[] = [];
   const avertissements: string[] = [];
   for (const c of classesToutes) {
-    const code = niveauVersCode(c.niveau);
+    const code = codeDeClasse(c);
     if (!code) {
-      avertissements.push(`Classe « ${c.nom} » ignorée : niveau « ${c.niveau ?? "vide"} » non reconnu.`);
+      avertissements.push(`Classe « ${c.nom} » ignorée : niveau « ${c.niveau ?? "vide"} » non reconnu (il faut le niveau et la série, par exemple « Seconde A » ou « Terminale D »).`);
       continue;
     }
     const cycle = cycleDuNiveau(code);
@@ -266,4 +270,4 @@ export async function POST(request: NextRequest) {
   }
   return NextResponse.json({ ok: true, nbCreneaux: lignes.length, nbClasses: classeIds.length });
     }
-    
+                        

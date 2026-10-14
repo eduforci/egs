@@ -28,6 +28,12 @@ const ETAPES: { href: string; icone: string; titre: string; texte: string; bient
     texte: "Qui est vacataire, ses jours et heures de disponibilité, son plafond d'heures.",
   },
   {
+    href: '/direction/planning/devoirs',
+    icone: '📝',
+    titre: 'Devoirs de niveau (facultatif)',
+    texte: 'Un après-midi sans cours pour les devoirs de 3e, de Terminale ou d\'autres niveaux.',
+  },
+  {
     href: '/direction/planning/generer',
     icone: '⚡',
     titre: "5. Générer l'emploi du temps",

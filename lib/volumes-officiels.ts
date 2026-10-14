@@ -27,6 +27,14 @@ export const NIVEAU_LABEL: Record<NiveauCode, string> = {
   '1A': 'Première A', '1C': 'Première C', '1D': 'Première D', TA: 'Terminale A', TC: 'Terminale C', TD: 'Terminale D',
 };
 
+// Niveau « famille » : seconde A et seconde C font le même cours d'EPS, comme 6e 1 et 6e 4.
+export function groupeNiveau(code: NiveauCode): string {
+  if (code === '2A' || code === '2C') return '2nde';
+  if (code === '1A' || code === '1C' || code === '1D') return '1ere';
+  if (code === 'TA' || code === 'TC' || code === 'TD') return 'term';
+  return code;
+}
+
 export function cycleDuNiveau(code: NiveauCode): 'college' | 'lycee' {
   return ['6e', '5e', '4e', '3e'].includes(code) ? 'college' : 'lycee';
 }
@@ -121,5 +129,4 @@ export function volumesOfficielsClasse(
   matieres: { id: string; nom: string }[]
 ): { code: NiveauCode | null; volumes: Map<string, number>; inconnues: string[] } {
   return volumesOfficielsCode(niveauVersCode(niveau), matieres);
-         }
-               
+}

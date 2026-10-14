@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
-import { VOLUMES_OFFICIELS, cleDeMatiere, niveauDeClasse, cycleDuNiveau } from "@/lib/volumes-officiels";
+import { VOLUMES_OFFICIELS, cleDeMatiere, niveauDeClasse, cycleDuNiveau, groupeNiveau } from "@/lib/volumes-officiels";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -178,7 +178,7 @@ export async function GET() {
       if (!(heures > 0)) continue;
       unites.push({
         classeId: c.id, classeNom: c.nom, matiereId, matiereNom: nomMat.get(matiereId) ?? LIBELLE[cle], heures,
-        profId: null, cycle, cle,
+        profId: null, cycle, cle, groupe: groupeNiveau(code),
       });
       nb++;
       total += heures;
@@ -188,7 +188,7 @@ export async function GET() {
       if (dejaPrises.has(l.matiere_id)) continue;
       const v = l.volume_hebdo === null || l.volume_hebdo === undefined ? 0 : Number(l.volume_hebdo);
       if (!(v > 0)) continue;
-      unites.push({ classeId: c.id, classeNom: c.nom, matiereId: l.matiere_id, matiereNom: nomMat.get(l.matiere_id) ?? "Matière", heures: v, profId: null, cycle, cle: cleDeMatiere(nomMat.get(l.matiere_id) ?? "") });
+      unites.push({ classeId: c.id, classeNom: c.nom, matiereId: l.matiere_id, matiereNom: nomMat.get(l.matiere_id) ?? "Matière", heures: v, profId: null, cycle, cle: cleDeMatiere(nomMat.get(l.matiere_id) ?? ""), groupe: groupeNiveau(code) });
       nb++;
       total += v;
     }
@@ -200,14 +200,24 @@ export async function GET() {
   for (let debut = 0; debut < 20000; debut += 1000) {
     const { data } = await admin
       .from("emploi_du_temps")
-      .select("classe_id, enseignant_id, jour, heure_debut, heure_fin")
+      .select("classe_id, enseignant_id, jour, heure_debut, heure_fin, salle")
       .eq("etablissement_id", etablissementId)
       .range(debut, debut + 999);
     existants.push(...(data ?? []));
     if (!data || data.length < 1000) break;
   }
 
+  // Salles de l'école (étape « Salles »)
+  const sallesRes = await admin
+    .from("planning_salles")
+    .select("id, nom, capacite, ordre")
+    .eq("etablissement_id", etablissementId)
+    .order("ordre")
+    .order("nom");
+  const salles = (sallesRes.data ?? []).map((x: any) => ({ id: x.id as string, nom: x.nom as string }));
+
   return NextResponse.json({
+    salles,
     jours,
     periodes,
     classes,
@@ -216,6 +226,7 @@ export async function GET() {
     existants: existants.map((e: any) => ({
       classeId: e.classe_id,
       profId: e.enseignant_id,
+      salle: e.salle ?? null,
       jour: e.jour,
       debut: String(e.heure_debut).slice(0, 5),
       fin: String(e.heure_fin).slice(0, 5),
@@ -252,6 +263,7 @@ export async function POST(request: NextRequest) {
       periode_id: c.periodeId,
       heure_debut: c.debut,
       heure_fin: c.fin,
+      salle: typeof c.salleNom === "string" && c.salleNom ? c.salleNom : null,
     }));
 
   // Sauvegarde de l'ancien emploi du temps pour pouvoir le remettre en cas d'échec.
@@ -269,5 +281,4 @@ export async function POST(request: NextRequest) {
     }
   }
   return NextResponse.json({ ok: true, nbCreneaux: lignes.length, nbClasses: classeIds.length });
-    }
-                        
+}

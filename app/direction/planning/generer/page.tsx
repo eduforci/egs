@@ -19,7 +19,8 @@ type Donnees = Omit<EntreeG, 'profs' | 'items'> & {
   classes: ClasseG[];
   unites: UniteR[];
   profs: ProfR[];
-  existants: { classeId: string; profId: string | null; jour: string; debut: string; fin: string }[];
+  salles: { id: string; nom: string }[];
+  existants: { classeId: string; profId: string | null; salle: string | null; jour: string; debut: string; fin: string }[];
   avertissements: string[];
 };
 
@@ -55,7 +56,7 @@ export default function GenererPlanningPage() {
   const nomProf = useMemo(() => new Map((donnees?.profs ?? []).map((p) => [p.id, p.nom])), [donnees]);
 
   const generer = () => {
-    if (!donnees || choisies.size === 0) return;
+    if (!donnees || choisies.size === 0 || donnees.salles.length === 0) return;
     setCalcul(true);
     setMessage(null);
     // laisse l'écran afficher « Calcul en cours » avant le calcul
@@ -68,6 +69,12 @@ export default function GenererPlanningPage() {
           occupes: donnees.existants
             .filter((e) => e.profId && !choisies.has(e.classeId))
             .map((e) => ({ profId: e.profId as string, jour: e.jour, debut: e.debut, fin: e.fin })),
+          salles: donnees.salles,
+          blocages: donnees.blocages,
+          occupesSalles: donnees.existants
+            .filter((e) => e.salle && !choisies.has(e.classeId))
+            .map((e) => ({ salleId: donnees.salles.find((x) => x.nom === e.salle)?.id ?? '', jour: e.jour, debut: e.debut, fin: e.fin }))
+            .filter((o) => o.salleId),
         },
         donnees.unites.filter((u) => choisies.has(u.classeId)),
         donnees.profs
@@ -134,6 +141,20 @@ export default function GenererPlanningPage() {
         </div>
       )}
 
+      {donnees.salles.length === 0 ? (
+        <div className="p-3 rounded-lg text-sm bg-red-50 text-red-700 border border-red-200">
+          Aucune salle n'est déclarée. Créez d'abord les salles de l'école :{' '}
+          <Link href="/direction/planning/salles" className="underline font-medium">
+            Salles
+          </Link>
+          .
+        </div>
+      ) : (
+        <p className="text-xs text-gray-500">
+          {donnees.salles.length} salle(s) disponible(s). Une salle n'est jamais utilisée par deux classes en même temps.
+        </p>
+      )}
+
       {donnees.avertissements.length > 0 && (
         <div className="p-3 rounded-lg text-xs bg-amber-50 text-amber-800 border border-amber-200 space-y-1">
           {donnees.avertissements.map((a) => (
@@ -181,7 +202,7 @@ export default function GenererPlanningPage() {
         </div>
         <button
           onClick={generer}
-          disabled={calcul || choisies.size === 0}
+          disabled={calcul || choisies.size === 0 || donnees.salles.length === 0}
           className="w-full bg-gray-800 text-white py-2.5 rounded-lg text-sm font-medium disabled:opacity-50"
         >
           {calcul ? 'Calcul en cours...' : "Générer l'emploi du temps"}
@@ -288,6 +309,7 @@ export default function GenererPlanningPage() {
                             <>
                               <div className="font-medium">{nomMatiere(c.matiereId)}</div>
                               <div className="text-gray-500">{c.profId ? nomProf.get(c.profId) : ''}</div>
+                              {c.salleNom && <div className="text-blue-700">{c.salleNom}</div>}
                             </>
                           ) : null}
                         </td>
@@ -313,5 +335,4 @@ export default function GenererPlanningPage() {
       )}
     </div>
   );
-                          }
-                    
+}

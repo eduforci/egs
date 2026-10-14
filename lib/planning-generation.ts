@@ -23,6 +23,8 @@ export type ItemG = {
 };
 export type OccupeG = { profId: string; jour: string; debut: string; fin: string };
 export type SalleG = { id: string; nom: string };
+// Créneau réservé à une classe (devoir de niveau) : aucun cours n'y est placé.
+export type BlocageG = { classeId: string; jour: string; debut: string; fin: string };
 export type OccupeSalleG = { salleId: string; jour: string; debut: string; fin: string };
 
 export type EntreeG = {
@@ -35,6 +37,7 @@ export type EntreeG = {
   // Sans salle déclarée, la contrainte n'existe pas.
   salles?: SalleG[];
   occupesSalles?: OccupeSalleG[]; // salles déjà prises par les classes non régénérées
+  blocages?: BlocageG[]; // devoirs de niveau : créneaux sans cours pour certaines classes
 };
 
 export type PlacementG = {
@@ -174,6 +177,13 @@ function tenter(entree: EntreeG, graine: number): SortieG & { penalite: number }
     l.push([enMinutes(o.debut), enMinutes(o.fin)]);
     intervSalle.set(k, l);
   }
+  const blocClasse = new Map<string, Intervalle[]>(); // classe|jour
+  for (const b of entree.blocages ?? []) {
+    const k = b.classeId + '|' + b.jour;
+    const l = blocClasse.get(k) || [];
+    l.push([enMinutes(b.debut), enMinutes(b.fin)]);
+    blocClasse.set(k, l);
+  }
   const attache = new Map<string, string>(); // classe -> salle habituelle
   const nbAttaches = new Map<string, number>();
   const sallesLibres = (jour: string, d: number, f: number) =>
@@ -238,6 +248,7 @@ function tenter(entree: EntreeG, graine: number): SortieG & { penalite: number }
             if (!profLibre(prof.id, jour, d, f)) continue;
             if (prof.maxHeures !== null && (chargeProf.get(prof.id) || 0) + (f - d) / 60 > prof.maxHeures + 1e-6) continue;
           }
+          if (toutes.some((c) => (blocClasse.get(c + '|' + jour) || []).some(([a, b]) => d < b && a < f))) continue;
           let malusSalle = 0;
           if (avecSalleIci) {
             const libres = sallesLibres(jour, d, f);

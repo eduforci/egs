@@ -75,6 +75,10 @@ export async function GET() {
     });
   });
   const { data: param } = await admin.from("planning_parametres").select("jours").eq("etablissement_id", etablissementId).maybeSingle();
+  // Devoirs de niveau (colonne ajoutée par planning_v4 : lecture facultative)
+  const devRes: { data: any; error: any } = await admin.from("planning_parametres").select("devoirs").eq("etablissement_id", etablissementId).maybeSingle();
+  const devoirs: any[] = Array.isArray(devRes.data?.devoirs) ? devRes.data.devoirs : [];
+  const blocages: { classeId: string; jour: string; debut: string; fin: string }[] = [];
   const jours = Array.isArray((param as any)?.jours) && (param as any).jours.length > 0 ? (param as any).jours : JOURS_DEFAUT;
 
   // Matières de l'école et matières rattachées aux classes (avec un éventuel volume saisi à la main)
@@ -151,6 +155,10 @@ export async function GET() {
       continue;
     }
     const cycle = cycleDuNiveau(code);
+    for (const dv of devoirs) {
+      if (Array.isArray(dv?.niveaux) && dv.niveaux.includes(groupeNiveau(code)) && typeof dv.jour === "string")
+        blocages.push({ classeId: c.id, jour: dv.jour, debut: typeof dv.debut === "string" ? dv.debut : "14:00", fin: typeof dv.fin === "string" && dv.fin ? dv.fin : "23:59" });
+    }
     if (!periodes[cycle] || periodes[cycle].filter((p) => !p.pause).length === 0) {
       avertissements.push(`Classe « ${c.nom} » ignorée : la grille horaire du ${cycle === "college" ? "collège" : "lycée"} est vide.`);
       continue;
@@ -217,6 +225,7 @@ export async function GET() {
   const salles = (sallesRes.data ?? []).map((x: any) => ({ id: x.id as string, nom: x.nom as string }));
 
   return NextResponse.json({
+    blocages,
     salles,
     jours,
     periodes,

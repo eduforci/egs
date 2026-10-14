@@ -25,9 +25,12 @@ export type ProfR = ProfG & {
   cycleStrict: boolean; // true si l'école a précisé qu'il n'enseigne que dans ce cycle
   affectes: string[]; // "classeId|matiereId" déjà affectés
 };
-export type UniteR = ItemG & { cle: string | null; classeNom: string };
+export type UniteR = ItemG & { cle: string | null; classeNom: string; groupe?: string };
+export const MAX_CLASSES_EPS_ENSEMBLE = 2;
 export type ChargeR = { profId: string; nom: string; heures: number; vacataire: boolean; cible: number };
 
+// EPS : le jumelage est une possibilité (utilisée en cas de manque de professeur), jamais une obligation.
+const cleJumelage = (u: { groupe?: string; heures: number; matiereId: string }) => (u.groupe ?? '') + '|' + u.heures + '|' + u.matiereId;
 const cleUnite = (u: { classeId: string; matiereId: string }) => u.classeId + '|' + u.matiereId;
 
 function heuresDisponibles(p: ProfR, jours: JourG[], periodes: Record<string, PeriodeG[]>): number {
@@ -65,8 +68,30 @@ export function repartir(
   jours: JourG[],
   periodes: Record<string, PeriodeG[]>,
   exclusions: Map<string, Set<string>>,
-  sansVacataire: Set<string>
+  sansVacataire: Set<string>,
+  jumelables: Set<string> = new Set()
 ): { items: ItemG[]; sansProf: UniteR[]; charges: ChargeR[] } {
+  // EPS : deux classes du même niveau (même volume) sont jumelées et comptent pour un seul cours.
+  const toutes = unites;
+  const partenaires = new Map<string, UniteR[]>(); // clé du cours « maître » -> classes jumelées
+  const jumelees = new Set<string>();
+  const parGroupe = new Map<string, UniteR[]>();
+  for (const u of toutes) {
+    if (u.cle !== 'eps' || !u.groupe) continue;
+    const k = cleJumelage(u);
+    if (!jumelables.has(k)) continue;
+    parGroupe.set(k, [...(parGroupe.get(k) || []), u]);
+  }
+  for (const l of Array.from(parGroupe.values())) {
+    l.sort((a, b) => a.classeNom.localeCompare(b.classeNom, 'fr', { numeric: true }));
+    for (let i = 0; i < l.length; i += MAX_CLASSES_EPS_ENSEMBLE) {
+      const groupe = l.slice(i, i + MAX_CLASSES_EPS_ENSEMBLE);
+      if (groupe.length < 2) continue;
+      partenaires.set(cleUnite(groupe[0]), groupe.slice(1));
+      groupe.slice(1).forEach((x) => jumelees.add(cleUnite(x)));
+    }
+  }
+  unites = toutes.filter((u) => !jumelees.has(cleUnite(u)));
   const charge = new Map<string, number>(profs.map((p) => [p.id, 0]));
   const affecte = new Map<string, string>(); // unité -> prof
   const exclu = (p: ProfR, u: UniteR) => exclusions.get(cleUnite(u))?.has(p.id) === true;
@@ -127,14 +152,24 @@ export function repartir(
     charge.set(choisi.id, (charge.get(choisi.id) || 0) + u.heures);
   }
 
-  const items: ItemG[] = unites.map((u) => ({
-    classeId: u.classeId,
-    matiereId: u.matiereId,
-    matiereNom: u.matiereNom,
-    heures: u.heures,
-    cycle: u.cycle,
-    profId: affecte.get(cleUnite(u)) ?? null,
-  }));
+  const items: ItemG[] = [];
+  for (const u of unites) {
+    const profId = affecte.get(cleUnite(u)) ?? null;
+    const autres = partenaires.get(cleUnite(u)) ?? [];
+    items.push({
+      classeId: u.classeId,
+      matiereId: u.matiereId,
+      matiereNom: u.matiereNom,
+      heures: u.heures,
+      cycle: u.cycle,
+      profId,
+      sansSalle: u.cle === 'eps',
+      avec: autres.length ? autres.map((x) => ({ classeId: x.classeId, matiereId: x.matiereId })) : undefined,
+    });
+    for (const x of autres)
+      items.push({ classeId: x.classeId, matiereId: x.matiereId, matiereNom: x.matiereNom, heures: x.heures, cycle: x.cycle, profId, sansSalle: true, jumeleA: u.classeId });
+  }
+  for (const u of Array.from(sansProf)) for (const x of partenaires.get(cleUnite(u)) ?? []) sansProf.push(x);
   const charges: ChargeR[] = profs
     .filter((p) => (charge.get(p.id) || 0) > 0)
     .map((p) => ({ profId: p.id, nom: p.nom || p.id, heures: charge.get(p.id) || 0, vacataire: p.vacataire, cible: p.vacataire ? plafondVacataire(p, jours, periodes) : cible(p) }));
@@ -148,19 +183,31 @@ export function genererAvecRepartition(
   base: Omit<EntreeG, 'items' | 'profs'>,
   unites: UniteR[],
   profs: ProfR[],
-  tours = 4
+  tours = 5
 ): SortieR {
   const exclusions = new Map<string, Set<string>>();
   const sansVacataire = new Set<string>();
+  const jumelables = new Set<string>(); // niveaux dont l'EPS est jumelée, seulement si nécessaire
   let meilleur: SortieR | null = null;
   for (let t = 0; t < tours; t++) {
-    const rep = repartir(unites, profs, base.jours, base.periodes, exclusions, sansVacataire);
+    const rep = repartir(unites, profs, base.jours, base.periodes, exclusions, sansVacataire, jumelables);
     const sortie = genererEmploiDuTemps({ ...base, profs, items: rep.items }, 12, 2500);
     const resultat: SortieR = { ...sortie, charges: rep.charges, sansProf: rep.sansProf, items: rep.items };
     if (!meilleur || resultat.nonPlaces.length < meilleur.nonPlaces.length) meilleur = resultat;
     if (sortie.nonPlaces.length === 0) break;
     let change = false;
     for (const n of sortie.nonPlaces) {
+      if (/salle/i.test(n.raison)) continue; // manque de salles : changer de professeur n'y change rien
+      const unite = unites.find((x) => x.classeId === n.classeId && x.matiereId === n.matiereId);
+      if (unite && unite.cle === 'eps' && unite.groupe) {
+        // Manque de professeur d'EPS : on autorise deux classes du même niveau à faire l'EPS ensemble.
+        const kj = cleJumelage(unite);
+        if (!jumelables.has(kj)) {
+          jumelables.add(kj);
+          change = true;
+          continue;
+        }
+      }
       const k = n.classeId + '|' + n.matiereId;
       const it = rep.items.find((i) => i.classeId === n.classeId && i.matiereId === n.matiereId);
       if (!it?.profId) continue;
@@ -174,5 +221,4 @@ export function genererAvecRepartition(
     if (!change) break;
   }
   return meilleur!;
-                                                    }
-                  
+}

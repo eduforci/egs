@@ -22,6 +22,7 @@ type Donnees = Omit<EntreeG, 'profs' | 'items'> & {
   salles: { id: string; nom: string }[];
   existants: { classeId: string; profId: string | null; salle: string | null; jour: string; debut: string; fin: string }[];
   avertissements: string[];
+  niveauxNonConfigures?: string[];
 };
 
 export default function GenererPlanningPage() {
@@ -139,6 +140,14 @@ export default function GenererPlanningPage() {
           }`}
         >
           {message.text}
+          {message.type === 'success' && (
+            <>
+              {' '}
+              <Link href="/direction/planning/enseignants" className="underline font-medium">
+                Voir et imprimer les emplois du temps des enseignants
+              </Link>
+            </>
+          )}
         </div>
       )}
 
@@ -154,6 +163,16 @@ export default function GenererPlanningPage() {
         <p className="text-xs text-gray-500">
           {donnees.salles.length} salle(s) disponible(s). Une salle n'est jamais utilisée par deux classes en même temps.
         </p>
+      )}
+
+      {(donnees.niveauxNonConfigures?.length ?? 0) > 0 && (
+        <div className="p-3 rounded-lg text-xs bg-amber-50 text-amber-800 border border-amber-200">
+          Vous n'avez pas encore choisi les matières de : {donnees.niveauxNonConfigures?.join(', ')}. Toutes les matières du tableau
+          officiel seront placées pour ces niveaux.{' '}
+          <Link href="/direction/planning/niveaux" className="underline font-medium">
+            Choisir les matières par niveau
+          </Link>
+        </div>
       )}
 
       {donnees.avertissements.length > 0 && (

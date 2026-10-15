@@ -78,6 +78,10 @@ export async function GET() {
   // Devoirs de niveau (colonne ajoutée par planning_v4 : lecture facultative)
   const devRes: { data: any; error: any } = await admin.from("planning_parametres").select("devoirs").eq("etablissement_id", etablissementId).maybeSingle();
   const devoirs: any[] = Array.isArray(devRes.data?.devoirs) ? devRes.data.devoirs : [];
+  const epsRes: { data: any; error: any } = await admin.from("planning_parametres").select("eps_fenetres").eq("etablissement_id", etablissementId).maybeSingle();
+  const fenetresEps: { debut: string; fin: string }[] | undefined = Array.isArray(epsRes.data?.eps_fenetres)
+    ? epsRes.data.eps_fenetres.filter((w: any) => typeof w?.debut === "string" && typeof w?.fin === "string")
+    : undefined;
   const blocages: { classeId: string; jour: string; debut: string; fin: string }[] = [];
   const jours = Array.isArray((param as any)?.jours) && (param as any).jours.length > 0 ? (param as any).jours : JOURS_DEFAUT;
 
@@ -225,6 +229,7 @@ export async function GET() {
   const salles = (sallesRes.data ?? []).map((x: any) => ({ id: x.id as string, nom: x.nom as string }));
 
   return NextResponse.json({
+    fenetresEps,
     blocages,
     salles,
     jours,

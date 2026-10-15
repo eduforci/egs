@@ -16,11 +16,12 @@ export function anneeCourte(annee: string | null | undefined): string {
   return String(new Date().getFullYear()).slice(2);
 }
 
-// 21710080G -> "0080G"
+// 21710080G -> "0080G" ; J25072407 -> "2407J"
 export function suffixeMatricule(matricule: string | null | undefined): string {
   const m = (matricule ?? '').toUpperCase().replace(/[^0-9A-Z]/g, '');
   if (!m) return '0000';
-  const lettre = /[A-Z]$/.test(m) ? m.slice(-1) : '';
+  // Matricule « J25072407 » (lettre au début, pas de lettre finale) : la lettre du début remplace la lettre finale.
+  const lettre = /[A-Z]$/.test(m) ? m.slice(-1) : /^[A-Z]/.test(m) ? m.charAt(0) : '';
   const chiffres = m.replace(/[^0-9]/g, '');
   return chiffres.slice(-4).padStart(4, '0') + lettre;
 }
@@ -72,4 +73,4 @@ export function repartirSalles(
     }
   }
   return out;
-      }
+}

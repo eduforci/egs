@@ -71,6 +71,7 @@ export default function GenererPlanningPage() {
             .map((e) => ({ profId: e.profId as string, jour: e.jour, debut: e.debut, fin: e.fin })),
           salles: donnees.salles,
           blocages: donnees.blocages,
+          fenetresEps: donnees.fenetresEps,
           occupesSalles: donnees.existants
             .filter((e) => e.salle && !choisies.has(e.classeId))
             .map((e) => ({ salleId: donnees.salles.find((x) => x.nom === e.salle)?.id ?? '', jour: e.jour, debut: e.debut, fin: e.fin }))

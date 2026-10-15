@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
-import { VOLUMES_OFFICIELS, cleDeMatiere, niveauDeClasse, cycleDuNiveau, groupeNiveau } from "@/lib/volumes-officiels";
+import { VOLUMES_OFFICIELS, NIVEAU_LABEL, cleDeMatiere, niveauDeClasse, cycleDuNiveau, groupeNiveau } from "@/lib/volumes-officiels";
+import { indexerConfig, type LigneConfig } from "@/lib/planning-niveaux";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -83,6 +84,10 @@ export async function GET() {
     ? epsRes.data.eps_fenetres.filter((w: any) => typeof w?.debut === "string" && typeof w?.fin === "string")
     : undefined;
   const blocages: { classeId: string; jour: string; debut: string; fin: string }[] = [];
+  // Matières choisies pour chaque niveau (table ajoutée par planning_v5 : lecture facultative)
+  const confRes = await admin.from("planning_niveau_matieres").select("niveau, cle, matiere_id, actif, volume_hebdo").eq("etablissement_id", etablissementId);
+  const configNiveaux = indexerConfig(confRes.error ? [] : ((confRes.data ?? []) as LigneConfig[]));
+  const codesVus = new Set<string>();
   const jours = Array.isArray((param as any)?.jours) && (param as any).jours.length > 0 ? (param as any).jours : JOURS_DEFAUT;
 
   // Matières de l'école et matières rattachées aux classes (avec un éventuel volume saisi à la main)
@@ -172,7 +177,19 @@ export async function GET() {
     let nb = 0;
     let total = 0;
     const dejaPrises = new Set<string>();
-    for (const [cle, officiel] of Object.entries(VOLUMES_OFFICIELS[code])) {
+    codesVus.add(code);
+    // Choix de l'école pour ce niveau (matières décochées, heures modifiées, matières ajoutées)
+    const conf = configNiveaux.get(code);
+    const tableOfficielle = VOLUMES_OFFICIELS[code] as Record<string, number | undefined>;
+    const cles = new Set<string>(Object.keys(tableOfficielle));
+    // une matière du tableau officiel que l'école ajoute à ce niveau (ex. LV2 en 6ème)
+    conf?.officielles.forEach((choix, cle) => {
+      if (choix.actif && choix.volume !== null && choix.volume > 0) cles.add(cle);
+    });
+    for (const cle of Array.from(cles)) {
+      const officiel = tableOfficielle[cle] ?? 0;
+      const choix = conf?.officielles.get(cle);
+      const exclue = choix?.actif === false;
       // la matière de la classe si elle existe, sinon la matière de l'école portant ce nom
       const idsDeCle = [
         ...rattachees.filter((l) => cleDeMatiere(nomMat.get(l.matiere_id) ?? "") === cle).map((l) => l.matiere_id as string),
@@ -180,13 +197,15 @@ export async function GET() {
       ];
       const matiereId = idsDeCle[0];
       if (!matiereId) {
-        introuvables.push(LIBELLE[cle] ?? cle);
+        if (!exclue) introuvables.push(LIBELLE[cle] ?? cle);
         continue;
       }
+      dejaPrises.add(matiereId);
+      if (exclue) continue; // matière décochée pour ce niveau
       const ligne = rattachees.find((l) => l.matiere_id === matiereId);
       const manuel = ligne && ligne.volume_hebdo !== null && ligne.volume_hebdo !== undefined ? Number(ligne.volume_hebdo) : null;
-      const heures = manuel !== null ? manuel : (officiel as number);
-      dejaPrises.add(matiereId);
+      // heures choisies pour le niveau > heures saisies pour la classe > tableau officiel
+      const heures = choix && choix.volume !== null ? choix.volume : manuel !== null ? manuel : officiel;
       if (!(heures > 0)) continue;
       unites.push({
         classeId: c.id, classeNom: c.nom, matiereId, matiereNom: nomMat.get(matiereId) ?? LIBELLE[cle], heures,
@@ -195,9 +214,22 @@ export async function GET() {
       nb++;
       total += heures;
     }
+    // matières ajoutées par l'école pour ce niveau (TIC, arabe...)
+    for (const pm of conf?.perso ?? []) {
+      dejaPrises.add(pm.matiereId);
+      const heuresPm = pm.volume ?? 0;
+      const nomPm = nomMat.get(pm.matiereId);
+      if (!pm.actif || !(heuresPm > 0) || !nomPm) continue;
+      unites.push({ classeId: c.id, classeNom: c.nom, matiereId: pm.matiereId, matiereNom: nomPm, heures: heuresPm, profId: null, cycle, cle: cleDeMatiere(nomPm), groupe: groupeNiveau(code) });
+      nb++;
+      total += heuresPm;
+    }
     // matières propres à l'école (hors tableau officiel) avec un volume saisi à la main
     for (const l of rattachees) {
       if (dejaPrises.has(l.matiere_id)) continue;
+      // une matière du tableau officiel décochée pour ce niveau ne revient pas par ce chemin
+      const cleL = cleDeMatiere(nomMat.get(l.matiere_id) ?? "");
+      if (cleL && conf?.officielles.get(cleL)?.actif === false) continue;
       const v = l.volume_hebdo === null || l.volume_hebdo === undefined ? 0 : Number(l.volume_hebdo);
       if (!(v > 0)) continue;
       unites.push({ classeId: c.id, classeNom: c.nom, matiereId: l.matiere_id, matiereNom: nomMat.get(l.matiere_id) ?? "Matière", heures: v, profId: null, cycle, cle: cleDeMatiere(nomMat.get(l.matiere_id) ?? ""), groupe: groupeNiveau(code) });
@@ -228,7 +260,13 @@ export async function GET() {
     .order("nom");
   const salles = (sallesRes.data ?? []).map((x: any) => ({ id: x.id as string, nom: x.nom as string }));
 
+  // Niveaux dont l'école n'a pas encore choisi les matières (page « Matières par niveau »)
+  const niveauxNonConfigures = Array.from(codesVus)
+    .filter((code) => !configNiveaux.has(code))
+    .map((code) => NIVEAU_LABEL[code as keyof typeof NIVEAU_LABEL] ?? code);
+
   return NextResponse.json({
+    niveauxNonConfigures,
     fenetresEps,
     blocages,
     salles,

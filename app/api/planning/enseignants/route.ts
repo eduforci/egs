@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { niveauDeClasse, cycleDuNiveau } from "@/lib/volumes-officiels";
+import { heuresDePeriode } from "@/lib/planning";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -34,10 +35,6 @@ async function lireParPaquets(admin: any, table: string, colonne: string, ids: s
 }
 
 const hhmm = (h: any) => String(h).slice(0, 5);
-const minutes = (h: string) => {
-  const [a, b] = h.split(":").map(Number);
-  return (a || 0) * 60 + (b || 0);
-};
 
 // Tout ce qu'il faut pour afficher et imprimer l'emploi du temps de chaque enseignant :
 // les cours enregistrés pour les classes de l'année active, regroupés par enseignant.
@@ -149,11 +146,11 @@ export async function GET() {
         cycle: cycleDeClasse(c.classe_id),
       }));
       // récapitulatif : une ligne par (classe, matière), avec les heures de la semaine
-      const recapMap = new Map<string, { classeId: string; classeNom: string; matiere: string; minutes: number }>();
+      const recapMap = new Map<string, { classeId: string; classeNom: string; matiere: string; heures: number }>();
       for (const c of creneaux) {
         const k = c.classeId + "|" + c.matiere;
-        const r = recapMap.get(k) ?? { classeId: c.classeId, classeNom: c.classeNom, matiere: c.matiere, minutes: 0 };
-        r.minutes += minutes(c.fin) - minutes(c.debut);
+        const r = recapMap.get(k) ?? { classeId: c.classeId, classeNom: c.classeNom, matiere: c.matiere, heures: 0 };
+        r.heures += heuresDePeriode(c.debut, c.fin); // heures entières
         recapMap.set(k, r);
       }
       const recap = Array.from(recapMap.values())
@@ -162,7 +159,7 @@ export async function GET() {
           classeNom: r.classeNom,
           effectif: effectif.get(r.classeId) ?? 0,
           matiere: r.matiere,
-          heures: Math.round((r.minutes / 60) * 100) / 100,
+          heures: r.heures,
         }));
       return {
         id: p.id as string,
@@ -173,7 +170,7 @@ export async function GET() {
         sexe: (f?.sexe ?? null) as string | null,
         statut: (f?.statut ?? null) as string | null,
         specialite: (f?.specialite ?? null) as string | null,
-        heures: Math.round((recap.reduce((s, r) => s + r.heures, 0)) * 100) / 100,
+        heures: recap.reduce((s, r) => s + r.heures, 0),
         creneaux,
         recap,
         complements: complements

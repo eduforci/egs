@@ -52,6 +52,10 @@ function Feuille({
   const pp = ens.complements.filter((c) => c.type === 'PP');
   const autres = ens.complements.filter((c) => c.type !== 'PP');
   const totalRecap = ens.recap.reduce((s, r) => s + r.heures, 0);
+  // effectif total : chaque classe compte une seule fois, même si l'enseignant y donne deux matières
+  const effectifParClasse = new Map<string, number>();
+  ens.recap.forEach((r) => effectifParClasse.set(r.classeNom, r.effectif));
+  const effectifTotal = Array.from(effectifParClasse.values()).reduce((s, n) => s + n, 0);
 
   return (
     <div className="feuille space-y-3 bg-white">
@@ -163,7 +167,7 @@ function Feuille({
                   {ens.recap.map((r, i) => (
                     <td key={i}>{r.effectif}</td>
                   ))}
-                  <td>—</td>
+                  <td className="font-bold">{effectifTotal}</td>
                 </tr>
                 <tr>
                   <td className="text-left font-medium">DISCIPLINES</td>
@@ -177,7 +181,7 @@ function Feuille({
                   {ens.recap.map((r, i) => (
                     <td key={i}>{heuresTexte(r.heures)}</td>
                   ))}
-                  <td className="font-bold">{heuresTexte(Math.round(totalRecap * 100) / 100)}</td>
+                  <td className="font-bold">{heuresTexte(totalRecap)}</td>
                 </tr>
               </tbody>
             </table>

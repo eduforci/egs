@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import EnseignantNav from '@/components/enseignant-nav';
+import { heuresDePeriode } from '@/lib/planning';
 
 type Creneau = {
   id: string;
@@ -210,12 +211,8 @@ export default function EmploiDuTempsEnseignantPage() {
         hm(c.heure_fin) === ligne.fin
     );
 
-  const totalHeures = creneaux.reduce((somme, c) => {
-    const [h1, m1] = hm(c.heure_debut).split(':').map(Number);
-    const [h2, m2] = hm(c.heure_fin).split(':').map(Number);
-    return somme + (h2 * 60 + m2 - (h1 * 60 + m1)) / 60;
-  }, 0);
-  const totalAffiche = Number(totalHeures.toFixed(2));
+  // heures entières : une période de 55 min compte pour 1 h, jamais 2,75 h ni 15,42 h
+  const totalAffiche = creneaux.reduce((somme, c) => somme + heuresDePeriode(hm(c.heure_debut), hm(c.heure_fin)), 0);
 
   return (
     <div className="max-w-5xl mx-auto p-4 space-y-4">

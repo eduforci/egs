@@ -164,10 +164,11 @@ export function repartir(
       cycle: u.cycle,
       profId,
       sansSalle: u.cle === 'eps',
+      pleinAir: u.cle === 'eps',
       avec: autres.length ? autres.map((x) => ({ classeId: x.classeId, matiereId: x.matiereId })) : undefined,
     });
     for (const x of autres)
-      items.push({ classeId: x.classeId, matiereId: x.matiereId, matiereNom: x.matiereNom, heures: x.heures, cycle: x.cycle, profId, sansSalle: true, jumeleA: u.classeId });
+      items.push({ classeId: x.classeId, matiereId: x.matiereId, matiereNom: x.matiereNom, heures: x.heures, cycle: x.cycle, profId, sansSalle: true, pleinAir: true, jumeleA: u.classeId });
   }
   for (const u of Array.from(sansProf)) for (const x of partenaires.get(cleUnite(u)) ?? []) sansProf.push(x);
   const charges: ChargeR[] = profs

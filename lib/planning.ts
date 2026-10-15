@@ -23,9 +23,19 @@ export function dureeHeures(debut: string, fin: string): number {
   return Math.max(enMinutes(fin) - enMinutes(debut), 0) / 60;
 }
 
+// Les heures affichées sont toujours entières (2 h, 3 h, 4 h...), jamais 1,75 h, 2,5 h ou 3,25 h.
+export function heuresEntieres(h: number): number {
+  return Math.round(h + 1e-9);
+}
+
 export function formaterHeures(h: number): string {
-  const arrondi = Math.round(h * 100) / 100;
-  return arrondi.toString().replace('.', ',') + ' h';
+  return heuresEntieres(h) + ' h';
+}
+
+// Heures d'une période de cours, en nombre entier : 45 à 89 min = 1 h, 90 à 149 min = 2 h...
+// (une période de 55 min compte pour 1 h d'enseignement).
+export function heuresDePeriode(debut: string, fin: string): number {
+  return Math.max(1, Math.round(dureeHeures(debut, fin)));
 }
 
 // Un enseignant sans aucune plage de disponibilité est considéré disponible en permanence.

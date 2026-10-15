@@ -15,12 +15,15 @@ const NIVEAUX: { code: string; label: string }[] = [
   { code: 'term', label: 'Tle' },
 ];
 
+type Fenetre = { debut: string; fin: string };
+const FENETRES_DEFAUT: Fenetre[] = [{ debut: '07:00', fin: '10:00' }, { debut: '16:00', fin: '18:00' }];
 type Devoir = { jour: string; debut: string; fin: string; niveaux: string[] };
 
 export default function DevoirsNiveauPage() {
   const supabase = createClient();
   const [etablissementId, setEtablissementId] = useState('');
   const [devoirs, setDevoirs] = useState<Devoir[]>([]);
+  const [fenetres, setFenetres] = useState<Fenetre[]>(FENETRES_DEFAUT);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -49,6 +52,14 @@ export default function DevoirsNiveauPage() {
           }))
         );
       }
+      const eps: { data: any; error: any } = await supabase
+        .from('planning_parametres')
+        .select('eps_fenetres')
+        .eq('etablissement_id', profil.etablissement_id)
+        .maybeSingle();
+      if (!eps.error && Array.isArray(eps.data?.eps_fenetres)) {
+        setFenetres(eps.data.eps_fenetres.map((w: any) => ({ debut: String(w.debut ?? ''), fin: String(w.fin ?? '') })));
+      }
       setLoading(false);
     };
     charger();
@@ -76,11 +87,21 @@ export default function DevoirsNiveauPage() {
         },
         { onConflict: 'etablissement_id' }
       );
+    if (error) {
+      setSaving(false);
+      setMessage({ type: 'error', text: error.message });
+      return;
+    }
+    setDevoirs(propres);
+    const valides = fenetres.filter((w) => w.debut && w.fin && w.debut < w.fin);
+    const r2 = await supabase
+      .from('planning_parametres')
+      .upsert({ etablissement_id: etablissementId, eps_fenetres: valides, updated_at: new Date().toISOString() }, { onConflict: 'etablissement_id' });
     setSaving(false);
-    if (error) setMessage({ type: 'error', text: error.message });
+    if (r2.error) setMessage({ type: 'error', text: "Devoirs enregistrés, mais pas les heures d'EPS : exécutez le script SQL « planning_v5 »." });
     else {
-      setDevoirs(propres);
-      setMessage({ type: 'success', text: 'Enregistré. Ces classes n’auront pas cours sur ces créneaux à la prochaine génération.' });
+      setFenetres(valides);
+      setMessage({ type: 'success', text: 'Enregistré. Valable à la prochaine génération.' });
     }
   };
 
@@ -136,6 +157,24 @@ export default function DevoirsNiveauPage() {
           </div>
         </div>
       ))}
+
+      <div className="border rounded-xl p-3 space-y-2">
+        <div className="font-semibold">EPS en plein air</div>
+        <p className="text-xs text-gray-500">
+          L&apos;EPS n&apos;est placée que dans ces plages (soleil). Une séance de 2 h doit y tenir en entier : de 7h à 10h elle peut être 7h-9h ou 8h-10h.
+          Supprimez toutes les plages pour ne mettre aucune limite.
+        </p>
+        {fenetres.map((w, i) => (
+          <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
+            de
+            <input type="time" value={w.debut} onChange={(e) => setFenetres((l) => l.map((x, k) => (k === i ? { ...x, debut: e.target.value } : x)))} className="border rounded p-1" />
+            à
+            <input type="time" value={w.fin} onChange={(e) => setFenetres((l) => l.map((x, k) => (k === i ? { ...x, fin: e.target.value } : x)))} className="border rounded p-1" />
+            <button onClick={() => setFenetres((l) => l.filter((_, k) => k !== i))} className="px-2 py-1 border rounded text-red-600">Supprimer</button>
+          </div>
+        ))}
+        <button onClick={() => setFenetres((l) => [...l, { debut: '07:00', fin: '10:00' }])} className="px-2 py-1 border rounded text-sm">+ Ajouter une plage</button>
+      </div>
 
       <div className="flex gap-2">
         <button

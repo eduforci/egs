@@ -17,6 +17,7 @@ export type ItemG = {
   profId: string | null;
   cycle: string; // 'college' | 'lycee'
   sansSalle?: boolean; // EPS : pas de salle
+  pleinAir?: boolean; // EPS : seulement aux heures fraîches (voir fenetresEps)
   // EPS : même professeur, même créneau, pour des classes du même niveau (jumelage)
   avec?: { classeId: string; matiereId: string }[];
   jumeleA?: string; // cours jumelé : il est placé avec celui de l'autre classe (rien à placer ici)
@@ -26,6 +27,11 @@ export type SalleG = { id: string; nom: string };
 // Créneau réservé à une classe (devoir de niveau) : aucun cours n'y est placé.
 export type BlocageG = { classeId: string; jour: string; debut: string; fin: string };
 export type OccupeSalleG = { salleId: string; jour: string; debut: string; fin: string };
+
+export const FENETRES_EPS_DEFAUT = [
+  { debut: '07:00', fin: '10:00' },
+  { debut: '16:00', fin: '18:00' },
+];
 
 export type EntreeG = {
   jours: JourG[];
@@ -37,6 +43,8 @@ export type EntreeG = {
   // Sans salle déclarée, la contrainte n'existe pas.
   salles?: SalleG[];
   occupesSalles?: OccupeSalleG[]; // salles déjà prises par les classes non régénérées
+  // Heures où l'EPS est permise (soleil). Par défaut 7h-10h et 16h-18h ; [] = aucune restriction.
+  fenetresEps?: { debut: string; fin: string }[];
   blocages?: BlocageG[]; // devoirs de niveau : créneaux sans cours pour certaines classes
 };
 
@@ -184,6 +192,7 @@ function tenter(entree: EntreeG, graine: number): SortieG & { penalite: number }
     l.push([enMinutes(b.debut), enMinutes(b.fin)]);
     blocClasse.set(k, l);
   }
+  const fenetresEps: Intervalle[] = (entree.fenetresEps ?? FENETRES_EPS_DEFAUT).map((w) => [enMinutes(w.debut), enMinutes(w.fin)] as Intervalle);
   const attache = new Map<string, string>(); // classe -> salle habituelle
   const nbAttaches = new Map<string, number>();
   const sallesLibres = (jour: string, d: number, f: number) =>
@@ -249,6 +258,7 @@ function tenter(entree: EntreeG, graine: number): SortieG & { penalite: number }
             if (prof.maxHeures !== null && (chargeProf.get(prof.id) || 0) + (f - d) / 60 > prof.maxHeures + 1e-6) continue;
           }
           if (toutes.some((c) => (blocClasse.get(c + '|' + jour) || []).some(([a, b]) => d < b && a < f))) continue;
+          if (it.pleinAir && fenetresEps.length > 0 && !fenetresEps.some(([a, b]) => d >= a && f <= b)) continue;
           let malusSalle = 0;
           if (avecSalleIci) {
             const libres = sallesLibres(jour, d, f);
@@ -403,6 +413,7 @@ function tenter(entree: EntreeG, graine: number): SortieG & { penalite: number }
               raison = `Le professeur a atteint son plafond de ${prof.maxHeures} h par semaine.`;
             else raison = 'Le professeur n\'a plus de créneau libre compatible avec cette classe.';
           }
+          if (it.pleinAir && fenetresEps.length > 0 && /compatible|Plus de créneau/.test(raison)) raison += " (EPS : seulement aux heures permises, soleil)";
           for (const cb of [{ classeId: it.classeId, matiereId: it.matiereId }, ...(it.avec ?? [])])
             nonPlaces.push({ classeId: cb.classeId, matiereId: cb.matiereId, matiereNom: it.matiereNom, heures: seances[i], raison });
           penalite += 1000;

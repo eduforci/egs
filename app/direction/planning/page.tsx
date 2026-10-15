@@ -16,15 +16,21 @@ const ETAPES: { href: string; icone: string; titre: string; texte: string; bient
     texte: "Les salles de l'école : une salle n'accueille jamais deux classes en même temps.",
   },
   {
+    href: '/direction/planning/niveaux',
+    icone: '📚',
+    titre: '3. Matières par niveau',
+    texte: "Les matières enseignées dans chaque niveau (6e, 5e, 2nde...), et l'ajout de matières comme TIC ou arabe avec leurs heures.",
+  },
+  {
     href: '/direction/planning/volumes',
     icone: '🧮',
-    titre: '3. Volumes horaires',
+    titre: '4. Volumes horaires',
     texte: 'Heures par semaine de chaque matière : remplies automatiquement avec le tableau officiel.',
   },
   {
     href: '/direction/planning/professeurs',
     icone: '🧑‍🏫',
-    titre: '4. Professeurs et vacataires',
+    titre: '5. Professeurs et vacataires',
     texte: "Qui est vacataire, ses jours et heures de disponibilité, son plafond d'heures.",
   },
   {
@@ -36,13 +42,19 @@ const ETAPES: { href: string; icone: string; titre: string; texte: string; bient
   {
     href: '/direction/planning/generer',
     icone: '⚡',
-    titre: "5. Générer l'emploi du temps",
+    titre: "6. Générer l'emploi du temps",
     texte: 'Le logiciel place les cours des classes dans des salles libres, sans conflit de professeurs.',
+  },
+  {
+    href: '/direction/planning/enseignants',
+    icone: '🖨️',
+    titre: '7. Emplois du temps des enseignants',
+    texte: "Une fois les classes prêtes : voir et imprimer l'emploi du temps de chaque enseignant, ou de tous en une fois.",
   },
   {
     href: '/direction/planning/remplacement',
     icone: '🔁',
-    titre: '6. Remplacer un professeur',
+    titre: '8. Remplacer un professeur',
     texte: 'Un professeur part ou est absent longtemps : reprenez tous ses cours en une fois.',
     bientot: true,
   },

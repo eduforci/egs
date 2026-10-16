@@ -2,6 +2,7 @@
 
 import { useState, ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useLangue } from "@/lib/i18n/provider";
 import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -109,6 +110,7 @@ export default function LoginPage() {
   const [resetEmailDisplay, setResetEmailDisplay] = useState("");
 
   const supabase = createClient();
+  const { t } = useLangue();
 
   async function resolveEmail(value: string): Promise<string | null> {
     const trimmed = value.trim();
@@ -223,7 +225,7 @@ export default function LoginPage() {
             École Gestion System
           </div>
           <div className="text-xs text-chalk/40 italic mt-1">
-            &laquo; La gestion scolaire réinventée &raquo;
+            &laquo; {t("La gestion scolaire réinventée")} &raquo;
           </div>
         </div>
 
@@ -231,23 +233,23 @@ export default function LoginPage() {
           {mode === "login" ? (
             <>
               <h1 className="font-display text-lg font-semibold text-chalk mb-5 text-center">
-                Connexion à votre espace
+                {t("Connexion à votre espace")}
               </h1>
 
               <form onSubmit={handleSubmit} noValidate className="space-y-4">
                 <Input
-                  label="Email ou Identifiant"
+                  label={t("Email ou Identifiant")}
                   type="text"
                   autoComplete="username"
                   required
                   icon={<MailIcon />}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="vous@etablissement.ci ou ENS-0001"
+                  placeholder={t("vous@etablissement.ci ou ENS-0001")}
                 />
 
                 <Input
-                  label="Mot de passe"
+                  label={t("Mot de passe")}
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
                   required
@@ -262,8 +264,8 @@ export default function LoginPage() {
                       className="text-chalk/40 hover:text-chalk p-1.5 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-chalk/30"
                       aria-label={
                         showPassword
-                          ? "Masquer le mot de passe"
-                          : "Afficher le mot de passe"
+                          ? t("Masquer le mot de passe")
+                          : t("Afficher le mot de passe")
                       }
                     >
                       <EyeIcon open={showPassword} />
@@ -279,7 +281,7 @@ export default function LoginPage() {
                       onChange={(e) => setRememberMe(e.target.checked)}
                       className="rounded border-chalk/30 text-chalk focus:ring-chalk/30"
                     />
-                    Se souvenir de moi
+                    {t("Se souvenir de moi")}
                   </label>
                   <button
                     type="button"
@@ -290,36 +292,34 @@ export default function LoginPage() {
                     }}
                     className="text-chalk/60 hover:text-chalk underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-chalk/30 rounded"
                   >
-                    Mot de passe oublié ?
+                    {t("Mot de passe oublié ?")}
                   </button>
                 </div>
 
                 {error && (
                   <p role="alert" aria-live="polite" className="text-red-600 text-sm">
-                    {error}
+                    {t(error)}
                   </p>
                 )}
 
                 <Button type="submit" loading={loading}>
-                  Se connecter
+                  {t("Se connecter")}
                 </Button>
               </form>
             </>
           ) : (
             <>
               <h1 className="font-display text-lg font-semibold text-chalk mb-2 text-center">
-                Mot de passe oublié
+                {t("Mot de passe oublié")}
               </h1>
               <p className="text-sm text-chalk/60 mb-5 text-center">
-                Saisissez votre email, nous vous enverrons un lien de
-                réinitialisation.
+                {t("Saisissez votre email, nous vous enverrons un lien de réinitialisation.")}
               </p>
 
               {resetSent ? (
                 <div className="text-center space-y-4">
                   <p className="text-sm text-chalk bg-chalk/5 rounded-xl p-4">
-                    Un email a été envoyé à <strong>{resetEmailDisplay}</strong>. Suivez le
-                    lien qu'il contient pour choisir un nouveau mot de passe.
+                    {t("Un email a été envoyé à")} <strong>{resetEmailDisplay}</strong>. {t("Suivez le lien qu'il contient pour choisir un nouveau mot de passe.")}
                   </p>
                   <Button
                     type="button"
@@ -329,30 +329,30 @@ export default function LoginPage() {
                       setResetSent(false);
                     }}
                   >
-                    Retour à la connexion
+                    {t("Retour à la connexion")}
                   </Button>
                 </div>
               ) : (
                 <form onSubmit={handleForgotPassword} noValidate className="space-y-4">
                   <Input
-                    label="Email ou Identifiant"
+                    label={t("Email ou Identifiant")}
                     type="text"
                     autoComplete="username"
                     required
                     icon={<MailIcon />}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="vous@etablissement.ci ou ENS-0001"
+                    placeholder={t("vous@etablissement.ci ou ENS-0001")}
                   />
 
                   {error && (
                     <p role="alert" aria-live="polite" className="text-red-600 text-sm">
-                      {error}
+                      {t(error)}
                     </p>
                   )}
 
                   <Button type="submit" loading={loading}>
-                    Envoyer le lien
+                    {t("Envoyer le lien")}
                   </Button>
                   <Button
                     type="button"
@@ -362,7 +362,7 @@ export default function LoginPage() {
                       setError(null);
                     }}
                   >
-                    Annuler
+                    {t("Annuler")}
                   </Button>
                 </form>
               )}
@@ -371,7 +371,7 @@ export default function LoginPage() {
         </Card>
 
         <div className="mt-6 text-center text-sm text-chalk/80 space-y-1">
-          <div className="font-semibold text-chalk">EGS · Besoin d&apos;aide ?</div>
+          <div className="font-semibold text-chalk">EGS · {t("Besoin d'aide ?")}</div>
           <div>
             WhatsApp :{" "}
             <a
@@ -382,7 +382,7 @@ export default function LoginPage() {
             </a>
           </div>
           <div>
-            Téléphone :{" "}
+            {t("Téléphone :")}{" "}
             <a
               href="tel:+2250153109586"
               className="underline underline-offset-2 font-medium text-chalk"

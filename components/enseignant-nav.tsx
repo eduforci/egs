@@ -1,6 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
+import { useLangue } from '@/lib/i18n/provider';
 
 // Barre de navigation commune à toutes les pages de l'espace enseignant.
 // Liens simples (<a>) : ils fonctionnent aussi sans Internet grâce au mode hors ligne.
@@ -22,6 +23,7 @@ const LIENS = [
 
 export default function EnseignantNav() {
   const chemin = usePathname() || '';
+  const { t } = useLangue();
 
   // Un seul lien est actif : celui dont le préfixe correspond le mieux à la page
   let meilleur = '';
@@ -36,7 +38,7 @@ export default function EnseignantNav() {
   }
 
   return (
-    <nav className="flex flex-wrap gap-2 text-sm" aria-label="Espace enseignant">
+    <nav className="flex flex-wrap gap-2 text-sm" aria-label={t('Espace enseignant')}>
       {LIENS.map((l) => {
         const actif = l.href === meilleur;
         return actif ? (
@@ -45,7 +47,7 @@ export default function EnseignantNav() {
             aria-current="page"
             className="px-3 py-1.5 rounded-full bg-gray-800 text-white"
           >
-            {l.libelle}
+            {t(l.libelle)}
           </span>
         ) : (
           <a
@@ -53,7 +55,7 @@ export default function EnseignantNav() {
             href={l.href}
             className="px-3 py-1.5 rounded-full border border-gray-300 text-gray-700 bg-white"
           >
-            {l.libelle}
+            {t(l.libelle)}
           </a>
         );
       })}

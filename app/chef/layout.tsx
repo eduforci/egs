@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { useLangue } from '@/lib/i18n/provider';
+import SelecteurLangue from '@/components/selecteur-langue';
 import EspaceSelecteur from '@/components/espace-selecteur';
 import Avatar from '@/components/avatar';
 
@@ -71,6 +73,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 export default function ChefLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { t } = useLangue();
   const supabase = createClient();
   const [menuOuvert, setMenuOuvert] = useState(false);
   const [nom, setNom] = useState('');
@@ -141,7 +144,7 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
           {NAV_GROUPS.map((groupe) => (
             <div key={groupe.titre}>
               <div className="px-3 mb-1 text-[10px] font-semibold text-neutral-500 tracking-wider">
-                {groupe.titre}
+                {t(groupe.titre)}
               </div>
               <div className="space-y-0.5">
                 {groupe.items.map((item) => {
@@ -157,7 +160,7 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
                       }`}
                     >
                       <span>{item.icon}</span>
-                      {item.label}
+                      {t(item.label)}
                     </Link>
                   );
                 })}
@@ -170,7 +173,7 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
           <Avatar url={avatarUrl} prenom={prenom} nom={nom} />
           <div className="text-xs">
             <div className="font-medium">{prenom} {nom}</div>
-            <div className="text-neutral-400">{ROLE_LABELS[role] || 'Chef d\'établissement'}</div>
+            <div className="text-neutral-400">{t(ROLE_LABELS[role] || 'Chef d\'établissement')}</div>
           </div>
         </div>
       </aside>
@@ -189,7 +192,7 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
           <button
             onClick={() => setMenuOuvert(true)}
             className="md:hidden text-2xl leading-none"
-            aria-label="Ouvrir le menu"
+            aria-label={t('Ouvrir le menu')}
           >
             ☰
           </button>
@@ -197,6 +200,7 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
             <div className="text-xs text-neutral-400 truncate">{etablissementNom}</div>
           </div>
           <EspaceSelecteur />
+          <SelecteurLangue />
         </header>
 
         {/* BANDEAU — visible uniquement si un directeur des études visite une page partagée avec le chef */}
@@ -209,7 +213,7 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
               href="/directeur/dashboard"
               className="text-xs font-medium text-blue-700 hover:text-blue-900 underline underline-offset-2 whitespace-nowrap"
             >
-              ← Retour à mon espace
+              ← {t('Retour à mon espace')}
             </Link>
           </div>
         )}

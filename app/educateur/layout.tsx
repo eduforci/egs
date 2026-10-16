@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { useLangue } from '@/lib/i18n/provider';
+import SelecteurLangue from '@/components/selecteur-langue';
 import Avatar from '@/components/avatar';
 
 type NavItem = { label: string; href: string; icon: string };
@@ -29,6 +31,7 @@ const NAV_GROUPS: NavGroup[] = [
 
 export default function EducateurLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { t } = useLangue();
   const supabase = createClient();
   const [menuOuvert, setMenuOuvert] = useState(false);
   const [nom, setNom] = useState('');
@@ -96,7 +99,7 @@ export default function EducateurLayout({ children }: { children: React.ReactNod
           {NAV_GROUPS.map((groupe) => (
             <div key={groupe.titre}>
               <div className="px-3 mb-1 text-[10px] font-semibold text-neutral-500 tracking-wider">
-                {groupe.titre}
+                {t(groupe.titre)}
               </div>
               <div className="space-y-0.5">
                 {groupe.items.map((item) => {
@@ -112,7 +115,7 @@ export default function EducateurLayout({ children }: { children: React.ReactNod
                       }`}
                     >
                       <span>{item.icon}</span>
-                      {item.label}
+                      {t(item.label)}
                     </Link>
                   );
                 })}
@@ -125,7 +128,7 @@ export default function EducateurLayout({ children }: { children: React.ReactNod
           <Avatar url={avatarUrl} prenom={prenom} nom={nom} />
           <div className="text-xs">
             <div className="font-medium">{prenom} {nom}</div>
-            <div className="text-neutral-400">{role === 'administration' ? 'Administration' : 'Éducateur'}</div>
+            <div className="text-neutral-400">{role === 'administration' ? t('Administration') : t('Éducateur')}</div>
           </div>
         </div>
       </aside>
@@ -142,13 +145,14 @@ export default function EducateurLayout({ children }: { children: React.ReactNod
           <button
             onClick={() => setMenuOuvert(true)}
             className="md:hidden text-2xl leading-none"
-            aria-label="Ouvrir le menu"
+            aria-label={t('Ouvrir le menu')}
           >
             ☰
           </button>
           <div className="flex-1 min-w-0">
             <div className="text-xs text-neutral-400 truncate">{etablissementNom}</div>
           </div>
+          <SelecteurLangue />
         </header>
 
         <main className="flex-1">{children}</main>

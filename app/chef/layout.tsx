@@ -33,6 +33,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Grille horaire', href: '/direction/emploi-du-temps/grille', icon: '⏰' },
       { label: 'Examens', href: '/chef/examens', icon: '📝' },
       { label: 'Bulletins', href: '/chef/bulletins', icon: '📄' },
+      { label: 'Clôture et conseil', href: '/direction/cloture', icon: '🔒' },
     ],
   },
   {

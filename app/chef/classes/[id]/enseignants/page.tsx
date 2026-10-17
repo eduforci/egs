@@ -161,7 +161,21 @@ export default function AffectationsEnseignantsPage() {
         if (insertError) throw new Error(insertError.message);
       }
 
-      setSucces('Affectation enregistrée.');
+      // les cours de cette matière déjà placés dans l'emploi du temps de la classe prennent le nom de l'enseignant
+      let detail = '';
+      try {
+        const r = await fetch('/api/planning/synchroniser', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'creneaux', classeId, matiereId, enseignantId: enseignantId || null }),
+        });
+        const j = await r.json();
+        if (r.ok) {
+          if (j.misAJour > 0) detail = enseignantId ? ` ${j.misAJour} cours de l'emploi du temps mis à jour.` : ` ${j.misAJour} cours de l'emploi du temps sans enseignant.`;
+          if (j.conflits > 0) detail += ` ${j.conflits} cours non modifié(s) : cet enseignant a déjà cours au même moment dans une autre classe.`;
+        }
+      } catch { /* l'affectation est enregistrée */ }
+
+      setSucces('Affectation enregistrée.' + detail);
       charger();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur inconnue');

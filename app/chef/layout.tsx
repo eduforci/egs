@@ -29,6 +29,8 @@ const NAV_GROUPS: NavGroup[] = [
 { label: 'Répartir en classes', href: '/chef/eleves/repartition', icon: '🔀' },
       { label: 'Parents', href: '/chef/parents', icon: '👨‍👩‍👧' },
       { label: 'Personnel', href: '/chef/personnel', icon: '🧑‍💼' },
+      { label: 'Gestion RH', href: '/direction/rh', icon: '🗂️' },
+      { label: 'Rapport d\'activité', href: '/direction/rapport-activite', icon: '📈' },
       { label: 'Emploi du temps', href: '/direction/emploi-du-temps', icon: '📅' },
       { label: 'Grille horaire', href: '/direction/emploi-du-temps/grille', icon: '⏰' },
       { label: 'Examens', href: '/chef/examens', icon: '📝' },

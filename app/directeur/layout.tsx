@@ -55,6 +55,7 @@ const NAV_GROUPS: NavGroup[] = [
     titre: 'SUIVI PÉDAGOGIQUE',
     items: [
       { label: 'Validation des notes', href: '/directeur/notes-validation', icon: '✔️' },
+      { label: 'Suivi des moyennes (CIO)', href: '/direction/cio', icon: '🚦' },
       { label: 'Résultats', href: '/directeur/resultats', icon: '🏆' },
       { label: 'Absences', href: '/directeur/absences', icon: '🚫' },
     ],

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
-import { VOLUMES_OFFICIELS, NIVEAU_LABEL, cleDeMatiere, niveauDeClasse, cycleDuNiveau, groupeNiveau } from "@/lib/volumes-officiels";
+import { VOLUMES_OFFICIELS, NIVEAU_LABEL, cleDeMatiere, disciplineDeMatiere, niveauDeClasse, cycleDuNiveau, groupeNiveau } from "@/lib/volumes-officiels";
 import { indexerConfig, type LigneConfig } from "@/lib/planning-niveaux";
 import { synchroniserAffectations } from "@/lib/planning-affectations";
 
@@ -124,12 +124,26 @@ export async function GET() {
     .select("enseignant_id, jour, heure_debut, heure_fin")
     .eq("etablissement_id", etablissementId);
   const planParId = new Map((planRes.data ?? []).map((p: any) => [p.enseignant_id, p]));
+  const alertesLangues: string[] = [];
   const profs = (ensBruts ?? []).map((e: any) => {
     const p: any = planParId.get(e.id);
-    const siennes = affs.filter((a) => a.enseignant_id === e.id);
+    let siennes = affs.filter((a) => a.enseignant_id === e.id);
+    // un professeur n'enseigne qu'une langue vivante : en cas de mélange, on garde la langue déclarée, sinon la plus fréquente
+    const parLangue = new Map<string, any[]>();
+    siennes.forEach((a) => {
+      const d = disciplineDeMatiere(nomMat.get(a.matiere_id) ?? "");
+      if (d && d.startsWith("lv2_")) parLangue.set(d, [...(parLangue.get(d) ?? []), a]);
+    });
+    if (parLangue.size > 1) {
+      const declarees = (Array.isArray(p?.disciplines) ? p.disciplines : []).filter((x: string) => parLangue.has(x));
+      const gardee = declarees[0] ?? Array.from(parLangue.keys()).sort((x, y) => (parLangue.get(y)!.length - parLangue.get(x)!.length) || x.localeCompare(y))[0];
+      const retirees = new Set(Array.from(parLangue.entries()).filter(([k]) => k !== gardee).flatMap(([, v]) => v));
+      siennes = siennes.filter((a) => !retirees.has(a));
+      alertesLangues.push(`${e.nom ?? ""} ${e.prenom ?? ""}`.trim() + " était affecté à plusieurs langues vivantes : seule « " + gardee.replace("lv2_", "") + " » est conservée, ses autres cours de langue sont confiés à un autre professeur.");
+    }
     const disciplines = new Set<string>(Array.isArray(p?.disciplines) ? p.disciplines : []);
     siennes.forEach((a) => {
-      const cle = cleDeMatiere(nomMat.get(a.matiere_id) ?? "");
+      const cle = disciplineDeMatiere(nomMat.get(a.matiere_id) ?? "");
       if (cle) disciplines.add(cle);
     });
     const nbCycle: Record<string, number> = {};
@@ -158,6 +172,7 @@ export async function GET() {
   const classes: any[] = [];
   const unites: any[] = [];
   const avertissements: string[] = [];
+  avertissements.push(...alertesLangues);
   for (const c of classesToutes) {
     const code = codeDeClasse(c);
     if (!code) {
@@ -239,6 +254,9 @@ export async function GET() {
     }
     classes.push({ id: c.id, nom: c.nom, niveau: c.niveau, cycle, nbMatieres: nb, heures: total, introuvables });
   }
+
+  // discipline précise de chaque cours (Allemand et Espagnol sont deux disciplines différentes)
+  unites.forEach((u: any) => { u.discipline = disciplineDeMatiere(u.matiereNom ?? "") ?? u.cle; });
 
   // Cours déjà enregistrés (servent à éviter les conflits de professeurs avec les classes non régénérées)
   const existants: any[] = [];

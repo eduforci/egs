@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 
 const ETAPES: { href: string; icone: string; titre: string; texte: string; bientot?: boolean }[] = [
@@ -61,6 +62,31 @@ const ETAPES: { href: string; icone: string; titre: string; texte: string; bient
 ];
 
 export default function PlanningAccueilPage() {
+  const [synchro, setSynchro] = useState<{ ok: boolean; texte: string } | null>(null);
+  const [occupe, setOccupe] = useState(false);
+
+  const synchroniser = async () => {
+    setOccupe(true);
+    setSynchro(null);
+    try {
+      const r = await fetch('/api/planning/synchroniser', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Échec.');
+      const n = j.matieresAjoutees + j.affectationsAjoutees + j.affectationsRemplacees;
+      setSynchro({
+        ok: true,
+        texte: n === 0
+          ? 'Tout est déjà à jour : les classes ont déjà les matières et les enseignants de leurs emplois du temps.'
+          : `${j.matieresAjoutees} matière(s) ajoutée(s) aux classes, ${j.affectationsAjoutees} enseignant(s) affecté(s)` +
+            (j.affectationsRemplacees ? `, ${j.affectationsRemplacees} ancienne(s) affectation(s) remplacée(s)` : '') + '.',
+      });
+    } catch (e) {
+      setSynchro({ ok: false, texte: e instanceof Error ? e.message : 'Erreur inconnue' });
+    } finally {
+      setOccupe(false);
+    }
+  };
+
   return (
     <div className="max-w-2xl mx-auto p-4 space-y-4">
       <div>
@@ -87,6 +113,20 @@ export default function PlanningAccueilPage() {
               <p className="text-sm text-gray-600 mt-1">{e.texte}</p>
             </Link>
           )
+        )}
+      </div>
+
+      <div className="border rounded-xl p-4 bg-white space-y-2">
+        <div className="font-semibold">🔗 Mettre à jour les enseignants des classes</div>
+        <p className="text-sm text-gray-600">
+          Les classes reçoivent automatiquement les matières et les enseignants de leurs emplois du temps. Ce bouton remet à jour
+          toutes les classes d'un coup, par exemple pour des emplois du temps déjà enregistrés avant cette fonction.
+        </p>
+        <button onClick={synchroniser} disabled={occupe} className="w-full rounded-md py-2.5 text-sm bg-blue-600 text-white disabled:opacity-50">
+          {occupe ? 'Mise à jour…' : 'Mettre à jour maintenant'}
+        </button>
+        {synchro && (
+          <div className={`text-sm rounded-md p-2 border ${synchro.ok ? 'bg-green-50 border-green-300 text-green-800' : 'bg-red-50 border-red-300 text-red-700'}`}>{synchro.texte}</div>
         )}
       </div>
 

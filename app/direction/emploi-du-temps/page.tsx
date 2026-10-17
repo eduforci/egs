@@ -341,6 +341,13 @@ function EmploiDuTempsContenu() {
       setMessage({ type: 'success', text: 'Créneau ajouté.' });
     }
 
+    // la classe reçoit la matière et l'enseignant de ce cours (page « Enseignants » de la classe)
+    try {
+      await fetch('/api/planning/synchroniser', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ classeIds: [classeId] }),
+      });
+    } catch { /* l'emploi du temps est déjà enregistré */ }
+
     setForm(FORM_VIDE);
     setShowForm(false);
     setEditingId(null);
@@ -787,3 +794,5 @@ export default function EmploiDuTempsDirectionPage() {
   );
                   }
       
+
+       

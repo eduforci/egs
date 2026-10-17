@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
-import { synchroniserAffectations } from '@/lib/planning-affectations';
+import { synchroniserAffectations, conflitLangue, auditerLangues, garderLangue } from '@/lib/planning-affectations';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -20,6 +20,24 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => ({}));
 
+  const admLangue = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  // Contrôle avant d'affecter un enseignant à une matière : une seule langue vivante par enseignant
+  if (body.action === 'verifier') {
+    if (!body.enseignantId || !body.matiereId) return NextResponse.json({ conflit: null });
+    return NextResponse.json({ conflit: await conflitLangue(admLangue, body.enseignantId, body.matiereId) });
+  }
+  if (body.action === 'audit') {
+    return NextResponse.json({ conflits: await auditerLangues(admLangue, profil.etablissement_id as string) });
+  }
+  if (body.action === 'garder_langue') {
+    if (!body.enseignantId || !String(body.langue ?? '').startsWith('lv2_')) return NextResponse.json({ error: 'Paramètres invalides.' }, { status: 400 });
+    const { data: ens } = await admLangue.from('profiles').select('etablissement_id').eq('id', body.enseignantId).single();
+    if (!ens || ens.etablissement_id !== profil.etablissement_id) return NextResponse.json({ error: 'Enseignant introuvable.' }, { status: 404 });
+    return NextResponse.json({ ok: true, ...(await garderLangue(admLangue, profil.etablissement_id as string, body.enseignantId, body.langue)) });
+  }
+
   // Un enseignant vient d'être choisi (ou retiré) pour une matière d'une classe : on met à jour ses cours déjà placés.
   if (body.action === 'creneaux') {
     const adm = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
@@ -34,6 +52,10 @@ export async function POST(req: Request) {
     const { data: cibles } = await adm.from('emploi_du_temps').select('id, jour, heure_debut, heure_fin, enseignant_id')
       .eq('classe_id', classeId).eq('matiere_id', matiereId);
     const aTraiter = (cibles ?? []) as any[];
+    if (profId) {
+      const msg = await conflitLangue(adm, profId, matiereId);
+      if (msg) return NextResponse.json({ error: msg }, { status: 409 });
+    }
     if (!profId) {
       const ids = aTraiter.filter((c) => c.enseignant_id).map((c) => c.id as string);
       if (ids.length > 0) await adm.from('emploi_du_temps').update({ enseignant_id: null }).in('id', ids);

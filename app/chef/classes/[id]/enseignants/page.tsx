@@ -138,6 +138,20 @@ export default function AffectationsEnseignantsPage() {
     const ligne = lignes.find((l) => l.matiere_id === matiereId);
 
     try {
+      // un enseignant n'enseigne qu'une langue vivante (allemand OU espagnol) : on vérifie avant d'enregistrer
+      if (enseignantId) {
+        const rv = await fetch('/api/planning/synchroniser', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'verifier', enseignantId, matiereId }),
+        });
+        const jv = await rv.json().catch(() => ({}));
+        if (rv.ok && jv.conflit) {
+          setError(jv.conflit);
+          setSaving(null);
+          return;
+        }
+      }
+
       if (!enseignantId) {
         if (ligne?.affectation_id) {
           const { error: deleteError } = await supabase

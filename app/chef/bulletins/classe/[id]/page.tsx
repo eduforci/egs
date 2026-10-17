@@ -82,6 +82,13 @@ export default function BulletinsClassePage() {
         {eleves.length} élève(s) — ouvre le bulletin de chacun pour l'imprimer ou l'enregistrer en PDF individuellement.
       </p>
 
+      <Link
+        href={`/chef/bulletins/matrice/${classeId}`}
+        className="mb-4 block border rounded-lg p-3 bg-blue-50 text-sm text-blue-800 hover:bg-blue-100"
+      >
+        📊 Tableau des moyennes de la classe — toutes les matières, rangs, moyennes de classe, impression et Excel →
+      </Link>
+
       <div className="mb-4">
         <label className="block text-xs text-gray-600 mb-1">Trimestre</label>
         <select

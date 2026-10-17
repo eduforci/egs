@@ -42,6 +42,14 @@ export default function MatriceMoyennesPage() {
   const [masquees, setMasquees] = useState<Set<string>>(new Set()); // matières retirées de l'affichage
   const [choixOuvert, setChoixOuvert] = useState(false);
 
+  // trimestre choisi sur la page précédente
+  useEffect(() => {
+    try {
+      const t = Number(new URLSearchParams(window.location.search).get('trimestre'));
+      if ([1, 2, 3].includes(t)) setTrimestre(t);
+    } catch { /* trimestre 1 par défaut */ }
+  }, []);
+
   const charger = useCallback(async () => {
     setChargement(true);
     setErreur(null);
@@ -113,7 +121,7 @@ export default function MatriceMoyennesPage() {
       <div className="print:hidden space-y-3 mb-4">
         <div className="flex items-center justify-between gap-2">
           <h1 className="text-xl font-bold">Tableau des moyennes{donnees ? ` — ${donnees.classe}` : ''}</h1>
-          <Link href={`/chef/bulletins/classe/${classeId}`} className="text-xs text-blue-600 underline whitespace-nowrap">
+          <Link href="/chef/bulletins" className="text-xs text-blue-600 underline whitespace-nowrap">
             ← Bulletins
           </Link>
         </div>

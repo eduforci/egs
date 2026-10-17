@@ -82,6 +82,19 @@ export function niveauDeClasse(c: { niveau?: string | null; nom?: string | null;
   return null;
 }
 
+// Discipline précise d'une matière : la LV2 est séparée par langue, car un professeur d'allemand
+// n'enseigne pas l'espagnol (et inversement). Les autres matières gardent leur clé officielle.
+export function disciplineDeMatiere(nom: string): string | null {
+  const cle = cleDeMatiere(nom);
+  if (cle !== 'lv2') return cle;
+  const n = normaliser(nom);
+  const al = /allemand/.test(n);
+  const es = /espagnol/.test(n);
+  if (al && !es) return 'lv2_allemand';
+  if (es && !al) return 'lv2_espagnol';
+  return 'lv2';
+}
+
 // Nom d'une matière de l'école -> matière du tableau officiel (ou null).
 export function cleDeMatiere(nom: string): CleMatiere | null {
   const n = normaliser(nom);

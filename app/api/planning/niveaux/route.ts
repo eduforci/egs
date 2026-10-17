@@ -9,6 +9,7 @@ import {
   cleDeMatiere,
   type NiveauCode,
 } from "@/lib/volumes-officiels";
+import { groupeDeMatiere } from "@/lib/matieres-groupes";
 import { CLES_ORDRE, LIBELLE_CLE, indexerConfig, normaliserNom, type LigneConfig } from "@/lib/planning-niveaux";
 
 export const dynamic = "force-dynamic";
@@ -217,7 +218,7 @@ export async function POST(request: NextRequest) {
     if (!matiereId) {
       const { data: creee, error } = await admin
         .from("matieres")
-        .insert({ etablissement_id: etablissementId, nom, coefficient_defaut: coefficient, groupe_bilan: "Autres" })
+        .insert({ etablissement_id: etablissementId, nom, coefficient_defaut: coefficient, groupe_bilan: groupeDeMatiere(nom) })
         .select("id")
         .single();
       if (error || !creee) return NextResponse.json({ error: `Création de la matière impossible : ${error?.message ?? ""}` }, { status: 500 });

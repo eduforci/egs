@@ -64,6 +64,41 @@ const ETAPES: { href: string; icone: string; titre: string; texte: string; bient
 export default function PlanningAccueilPage() {
   const [synchro, setSynchro] = useState<{ ok: boolean; texte: string } | null>(null);
   const [occupe, setOccupe] = useState(false);
+  type ConflitLangue = { enseignantId: string; nom: string; langues: { langue: string; libelle: string; classes: string[] }[] };
+  const [conflits, setConflits] = useState<ConflitLangue[] | null>(null);
+  const [infoLangue, setInfoLangue] = useState('');
+
+  const verifierLangues = async () => {
+    setOccupe(true);
+    setInfoLangue('');
+    try {
+      const r = await fetch('/api/planning/synchroniser', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'audit' }) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Échec.');
+      setConflits(j.conflits);
+    } catch (e) {
+      setInfoLangue(e instanceof Error ? e.message : 'Erreur inconnue');
+    } finally {
+      setOccupe(false);
+    }
+  };
+
+  const garder = async (enseignantId: string, langue: string) => {
+    setOccupe(true);
+    try {
+      const r = await fetch('/api/planning/synchroniser', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'garder_langue', enseignantId, langue }) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Échec.');
+      setInfoLangue(`Corrigé : ${j.affectationsRetirees} affectation(s) retirée(s), ${j.coursLiberes} cours sans enseignant à réaffecter.`);
+      const r2 = await fetch('/api/planning/synchroniser', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'audit' }) });
+      const j2 = await r2.json();
+      if (r2.ok) setConflits(j2.conflits);
+    } catch (e) {
+      setInfoLangue(e instanceof Error ? e.message : 'Erreur inconnue');
+    } finally {
+      setOccupe(false);
+    }
+  };
 
   const synchroniser = async () => {
     setOccupe(true);
@@ -128,6 +163,28 @@ export default function PlanningAccueilPage() {
         {synchro && (
           <div className={`text-sm rounded-md p-2 border ${synchro.ok ? 'bg-green-50 border-green-300 text-green-800' : 'bg-red-50 border-red-300 text-red-700'}`}>{synchro.texte}</div>
         )}
+      </div>
+
+      <div className="border rounded-xl p-4 bg-white space-y-2">
+        <div className="font-semibold">🌍 Vérifier les langues vivantes</div>
+        <p className="text-sm text-gray-600">
+          Un enseignant n'enseigne qu'une langue (allemand OU espagnol). Ce contrôle repère ceux qui ont été affectés aux deux.
+        </p>
+        <button onClick={verifierLangues} disabled={occupe} className="w-full rounded-md py-2.5 text-sm border bg-white disabled:opacity-50">Vérifier maintenant</button>
+        {infoLangue && <div className="text-sm rounded-md p-2 border bg-gray-50">{infoLangue}</div>}
+        {conflits && conflits.length === 0 && <div className="text-sm rounded-md p-2 border bg-green-50 border-green-300 text-green-800">Aucune erreur : chaque enseignant n'a qu'une seule langue.</div>}
+        {conflits && conflits.map((c) => (
+          <div key={c.enseignantId} className="border border-red-200 bg-red-50 rounded-md p-2 space-y-1">
+            <div className="text-sm font-medium">{c.nom}</div>
+            {c.langues.map((l) => (
+              <div key={l.langue} className="flex items-center justify-between gap-2 text-xs">
+                <span>{l.libelle} : {l.classes.join(', ')}</span>
+                <button onClick={() => confirm(`Garder seulement ${l.libelle} pour ${c.nom} ? Ses cours dans l'autre langue seront retirés.`) && garder(c.enseignantId, l.langue)}
+                  disabled={occupe} className="border rounded px-2 py-1 bg-white disabled:opacity-50 whitespace-nowrap">Garder {l.libelle}</button>
+              </div>
+            ))}
+          </div>
+        ))}
       </div>
 
       <div className="text-xs text-gray-500 border rounded-lg p-3 bg-gray-50">

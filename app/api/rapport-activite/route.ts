@@ -5,7 +5,7 @@ import { createClient as createAdminClient } from '@supabase/supabase-js';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const ROLES = ['administration', 'directeur', 'directeur_etudes', 'super_admin'];
+const ROLES = ['administration', 'chef', 'directeur', 'directeur_etudes', 'super_admin'];
 
 async function parPaquets(admin: any, table: string, colonne: string, ids: string[], champs: string, filtre?: (q: any) => any): Promise<any[]> {
   const out: any[] = [];

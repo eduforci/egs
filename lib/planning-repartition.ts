@@ -25,7 +25,7 @@ export type ProfR = ProfG & {
   cycleStrict: boolean; // true si l'école a précisé qu'il n'enseigne que dans ce cycle
   affectes: string[]; // "classeId|matiereId" déjà affectés
 };
-export type UniteR = ItemG & { cle: string | null; classeNom: string; groupe?: string };
+export type UniteR = ItemG & { cle: string | null; classeNom: string; groupe?: string; discipline?: string | null };
 export const MAX_CLASSES_EPS_ENSEMBLE = 2;
 export type ChargeR = { profId: string; nom: string; heures: number; vacataire: boolean; cible: number };
 
@@ -56,10 +56,29 @@ export function plafondVacataire(p: ProfR, jours: JourG[], periodes: Record<stri
   return Math.max(1, Math.floor(heuresDisponibles(p, jours, periodes) * 0.7));
 }
 
-function eligible(p: ProfR, u: UniteR): boolean {
+// Un professeur n'enseigne qu'UNE langue vivante : celle qu'il enseigne déjà (affectations, discipline précisée)
+// ou, s'il est déclaré « LV2 » en général, la première langue qui lui est confiée.
+function langueOk(p: ProfR, u: UniteR, langueDe: (p: ProfR) => string | null): boolean {
+  const d = u.discipline ?? u.cle;
+  if (!d || !d.startsWith('lv2_')) return true;
+  const connues = p.disciplines.filter((x) => x.startsWith('lv2_'));
+  if (connues.length > 0) return connues.includes(d);
+  const prise = langueDe(p);
+  return prise === null || prise === d;
+}
+
+function eligible(p: ProfR, u: UniteR, langueDe: (p: ProfR) => string | null): boolean {
   if (p.cycleStrict && p.cycle && p.cycle !== u.cycle) return false;
+  if (!langueOk(p, u, langueDe)) return false;
   if (p.affectes.includes(cleUnite(u))) return true;
-  return u.cle !== null && p.disciplines.includes(u.cle);
+  const d = u.discipline ?? u.cle;
+  if (d === null) return false;
+  if (p.disciplines.includes(d)) return true;
+  // une langue précise (allemand, espagnol) n'est confiée qu'à un professeur de cette langue ;
+  // la discipline générale « lv2 » déclarée par l'école vaut pour toutes les langues
+  if (d.startsWith('lv2_') && p.disciplines.includes('lv2')) return true;
+  if (d === 'lv2' && p.disciplines.some((x) => x.startsWith('lv2'))) return true;
+  return false;
 }
 
 export function repartir(
@@ -95,6 +114,15 @@ export function repartir(
   const charge = new Map<string, number>(profs.map((p) => [p.id, 0]));
   const affecte = new Map<string, string>(); // unité -> prof
   const exclu = (p: ProfR, u: UniteR) => exclusions.get(cleUnite(u))?.has(p.id) === true;
+  // langue vivante déjà confiée à ce professeur dans la répartition en cours
+  const langueDe = (p: ProfR): string | null => {
+    for (const x of unites) {
+      if (affecte.get(cleUnite(x)) !== p.id) continue;
+      const d = x.discipline ?? x.cle;
+      if (d && d.startsWith('lv2_')) return d;
+    }
+    return null;
+  };
 
   // 1) Les vacataires d'abord : ceux qui ont le moins de disponibilités passent en premier.
   const vacataires = profs
@@ -103,7 +131,7 @@ export function repartir(
     .sort((a, b) => (a.p.dispos.length > 0 ? 0 : 1) - (b.p.dispos.length > 0 ? 0 : 1) || a.cap - b.cap);
   for (const { p, cap } of vacataires) {
     const candidats = unites
-      .filter((u) => !affecte.has(cleUnite(u)) && !sansVacataire.has(cleUnite(u)) && !exclu(p, u) && eligible(p, u))
+      .filter((u) => !affecte.has(cleUnite(u)) && !sansVacataire.has(cleUnite(u)) && !exclu(p, u) && eligible(p, u, langueDe))
       .sort(
         (a, b) =>
           Number(p.affectes.includes(cleUnite(b))) - Number(p.affectes.includes(cleUnite(a))) ||
@@ -122,7 +150,7 @@ export function repartir(
   const cible = (p: ProfR) => (p.cycle === 'lycee' ? CIBLE_LYCEE : CIBLE_COLLEGE);
   for (const u of unites) {
     if (affecte.has(cleUnite(u))) continue;
-    const p = permanents.find((x) => x.affectes.includes(cleUnite(u)) && !exclu(x, u) && eligible(x, u));
+    const p = permanents.find((x) => x.affectes.includes(cleUnite(u)) && !exclu(x, u) && eligible(x, u, langueDe));
     if (p) {
       affecte.set(cleUnite(u), p.id);
       charge.set(p.id, (charge.get(p.id) || 0) + u.heures);
@@ -133,7 +161,7 @@ export function repartir(
     .sort((a, b) => b.heures - a.heures || a.classeNom.localeCompare(b.classeNom, 'fr'));
   const sansProf: UniteR[] = [];
   for (const u of restantes) {
-    const candidats = permanents.filter((p) => !exclu(p, u) && eligible(p, u));
+    const candidats = permanents.filter((p) => !exclu(p, u) && eligible(p, u, langueDe));
     if (candidats.length === 0) {
       sansProf.push(u);
       continue;

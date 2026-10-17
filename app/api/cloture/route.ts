@@ -5,7 +5,7 @@ import { createClient as createAdminClient } from '@supabase/supabase-js';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const ROLES = ['administration', 'directeur', 'directeur_etudes', 'super_admin'];
+const ROLES = ['administration', 'chef', 'directeur', 'directeur_etudes', 'super_admin'];
 
 async function contexte(classeId: string) {
   const supabase = await createServerClient();

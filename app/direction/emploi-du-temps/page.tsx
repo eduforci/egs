@@ -293,6 +293,22 @@ function EmploiDuTempsContenu() {
       return;
     }
 
+    // un enseignant n'enseigne qu'une langue vivante (allemand OU espagnol)
+    if (form.enseignant_id && form.matiere_id) {
+      try {
+        const r = await fetch('/api/planning/synchroniser', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'verifier', enseignantId: form.enseignant_id, matiereId: form.matiere_id }),
+        });
+        const j = await r.json();
+        if (r.ok && j.conflit) {
+          setMessage({ type: 'error', text: j.conflit });
+          setSaving(false);
+          return;
+        }
+      } catch { /* si la vérification échoue, l'enregistrement continue */ }
+    }
+
     if (editingId) {
       const { error } = await supabase
         .from('emploi_du_temps')
@@ -794,5 +810,3 @@ export default function EmploiDuTempsDirectionPage() {
   );
                   }
       
-
-       

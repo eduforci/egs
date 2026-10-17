@@ -3,6 +3,7 @@
 // à cette matière dans cette classe (affectations_enseignant).
 
 import { disciplineDeMatiere } from '@/lib/volumes-officiels';
+import { corrigerGroupes } from '@/lib/matieres-groupes';
 
 export type BilanSynchro = { matieresAjoutees: number; affectationsAjoutees: number; affectationsRemplacees: number; ignorees?: string[] };
 
@@ -30,6 +31,8 @@ export async function synchroniserAffectations(admin: any, etablissementId: stri
     parCouple.set(k, e);
   }
   const classes = Array.from(new Set(Array.from(parCouple.values()).map((e) => e.classe)));
+  // les matières des emplois du temps gardent leur bon groupe de bilan (Lettres, Sciences, Autres)
+  await corrigerGroupes(admin, etablissementId, Array.from(new Set(Array.from(parCouple.values()).map((e) => e.matiere))));
 
   const lire = async (table: string, champs: string): Promise<any[]> => {
     const out: any[] = [];

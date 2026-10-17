@@ -7,7 +7,7 @@ import { heuresDePeriode } from "@/lib/planning";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const ROLES = ["administration", "directeur_etudes", "super_admin"];
+const ROLES = ["administration", "chef", "directeur", "directeur_etudes", "super_admin"];
 
 async function contexte() {
   const supabase = await createServerClient();

@@ -3,6 +3,7 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { VOLUMES_OFFICIELS, NIVEAU_LABEL, cleDeMatiere, niveauDeClasse, cycleDuNiveau, groupeNiveau } from "@/lib/volumes-officiels";
 import { indexerConfig, type LigneConfig } from "@/lib/planning-niveaux";
+import { synchroniserAffectations } from "@/lib/planning-affectations";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -332,5 +333,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Enregistrement impossible (ancien emploi du temps conservé) : ${error.message}` }, { status: 500 });
     }
   }
-  return NextResponse.json({ ok: true, nbCreneaux: lignes.length, nbClasses: classeIds.length });
+  // les classes reçoivent aussitôt leurs matières et leurs enseignants d'après cet emploi du temps
+  let synchro: { matieresAjoutees: number; affectationsAjoutees: number; affectationsRemplacees: number } | null = null;
+  let erreurSynchro: string | null = null;
+  try {
+    synchro = await synchroniserAffectations(admin, etablissementId, classeIds);
+  } catch (e) {
+    erreurSynchro = e instanceof Error ? e.message : "Erreur inconnue";
+  }
+  return NextResponse.json({ ok: true, nbCreneaux: lignes.length, nbClasses: classeIds.length, synchro, erreurSynchro });
 }

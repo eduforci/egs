@@ -9,6 +9,7 @@ type MatiereAttachee = {
   matiere_id: string;
   nom: string;
   coefficient: number;
+  coefficient_initial: number; // valeur enregistrée : sert à savoir si le coefficient a été modifié
   groupe_bilan: string | null;
 };
 
@@ -56,6 +57,11 @@ export default function GestionMatieresPage() {
       setClasseNom(classeData.nom);
       setEtablissementId(classeData.etablissement_id);
 
+      // les matières de Lettres et de Sciences restées en « Autres » sont remises dans le bon groupe
+      try {
+        await fetch('/api/classes/matieres', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'corriger_groupes' }) });
+      } catch { /* sans gravité */ }
+
       const { data: attacheesData, error: attacheesError } = await supabase
         .from('classes_matieres')
         .select('id, matiere_id, coefficient, matieres(nom, groupe_bilan)')
@@ -76,6 +82,7 @@ export default function GestionMatieresPage() {
           matiere_id: r.matiere_id,
           nom: m?.nom ?? 'Inconnue',
           coefficient: r.coefficient,
+          coefficient_initial: r.coefficient,
           groupe_bilan: m?.groupe_bilan ?? null,
         };
       });
@@ -180,18 +187,43 @@ export default function GestionMatieresPage() {
     );
   }
 
-  async function enregistrerCoefficient(id: string, coefficient: number) {
+  async function enregistrerCoefficient(id: string, nom: string, coefficient: number) {
     setSaving(true);
     setError(null);
-    const { error: updateError } = await supabase
-      .from('classes_matieres')
-      .update({ coefficient })
-      .eq('id', id);
-    setSaving(false);
-    if (updateError) {
-      setError(`Erreur mise à jour coefficient : ${updateError.message}`);
-    } else {
-      setSucces('Coefficient mis à jour.');
+    setSucces(null);
+    try {
+      const r = await fetch('/api/classes/matieres', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'coefficient', classeMatiereId: id, coefficient }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || 'Échec.');
+      setMatieresAttachees((prev) => prev.map((m) => (m.id === id ? { ...m, coefficient, coefficient_initial: coefficient } : m)));
+      setSucces(`Coefficient de « ${nom} » enregistré : ${coefficient}.`);
+    } catch (err) {
+      setError(`Erreur mise à jour coefficient : ${err instanceof Error ? err.message : 'inconnue'}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function changerGroupe(matiereId: string, groupe: string) {
+    setSaving(true);
+    setError(null);
+    setSucces(null);
+    try {
+      const r = await fetch('/api/classes/matieres', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'groupe', matiereId, groupe }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || 'Échec.');
+      setMatieresAttachees((prev) => prev.map((m) => (m.matiere_id === matiereId ? { ...m, groupe_bilan: groupe } : m)));
+      setSucces(`Groupe enregistré : ${groupe} (valable pour toutes les classes qui ont cette matière).`);
+    } catch (err) {
+      setError(`Erreur changement de groupe : ${err instanceof Error ? err.message : 'inconnue'}`);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -244,7 +276,7 @@ export default function GestionMatieresPage() {
             <tr>
               <th className="text-left px-3 py-2">Matière</th>
               <th className="text-left px-3 py-2">Groupe</th>
-              <th className="text-left px-3 py-2 w-20">Coef.</th>
+              <th className="text-left px-3 py-2 w-24">Coef.</th>
               <th className="px-3 py-2 w-16"></th>
             </tr>
           </thead>
@@ -252,7 +284,16 @@ export default function GestionMatieresPage() {
             {matieresAttachees.map((m) => (
               <tr key={m.id} className="border-t">
                 <td className="px-3 py-2">{m.nom}</td>
-                <td className="px-3 py-2 text-gray-500 text-xs">{m.groupe_bilan ?? 'Autres'}</td>
+                <td className="px-3 py-2">
+                  <select
+                    value={m.groupe_bilan ?? 'Autres'}
+                    onChange={(e) => changerGroupe(m.matiere_id, e.target.value)}
+                    disabled={saving}
+                    className="border rounded px-1 py-0.5 text-xs bg-white"
+                  >
+                    {GROUPES.map((g) => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                </td>
                 <td className="px-3 py-2">
                   <input
                     type="number"
@@ -260,9 +301,25 @@ export default function GestionMatieresPage() {
                     min="0"
                     value={m.coefficient}
                     onChange={(e) => modifierCoefficient(m.id, parseFloat(e.target.value) || 0)}
-                    onBlur={(e) => enregistrerCoefficient(m.id, parseFloat(e.target.value) || 0)}
                     className="w-14 border rounded px-1 py-0.5 text-center"
                   />
+                  {m.coefficient !== m.coefficient_initial && (
+                    <div className="flex gap-1 mt-1">
+                      <button
+                        onClick={() => enregistrerCoefficient(m.id, m.nom, m.coefficient)}
+                        disabled={saving}
+                        className="bg-blue-600 text-white text-[11px] px-2 py-1 rounded disabled:opacity-50"
+                      >
+                        Modifier
+                      </button>
+                      <button
+                        onClick={() => modifierCoefficient(m.id, m.coefficient_initial)}
+                        className="border text-[11px] px-2 py-1 rounded"
+                      >
+                        Annuler
+                      </button>
+                    </div>
+                  )}
                 </td>
                 <td className="px-3 py-2">
                   <button

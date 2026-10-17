@@ -46,6 +46,9 @@ const NAV_GROUPS: NavGroup[] = [
       { label: "Espaces de l'école", href: '/direction/structure', icon: '🧭' },
       { label: 'Examens', href: '/chef/examens', icon: '📝' },
       { label: 'Bulletins', href: '/chef/bulletins', icon: '📄' },
+      { label: 'Clôture et conseil de classe', href: '/direction/cloture', icon: '🔒' },
+      { label: 'Gestion RH', href: '/direction/rh', icon: '🗂️' },
+      { label: "Rapport d'activité", href: '/direction/rapport-activite', icon: '📈' },
     ],
   },
   {

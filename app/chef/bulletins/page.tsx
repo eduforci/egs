@@ -133,6 +133,15 @@ export default function BulletinsAccueil() {
       </div>
 
       {classeId && (
+        <Link
+          href={`/chef/bulletins/matrice/${classeId}?trimestre=${trimestre}`}
+          className="mt-4 block bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800 hover:bg-blue-100"
+        >
+          📊 Tableau des moyennes de la classe — toutes les matières, rangs, moyennes de classe, impression et Excel →
+        </Link>
+      )}
+
+      {classeId && (
         <div className="mt-6">
           <h2 className="text-sm font-semibold text-neutral-500 uppercase mb-3">
             Élèves

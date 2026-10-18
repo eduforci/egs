@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { OptionsPeriodes } from '@/components/periodes';
 
 type Enfant = { id: string; classe_id: string; nom: string; prenom: string; classe_nom: string };
 
@@ -59,9 +60,7 @@ export default function BulletinsParentAccueil() {
           onChange={(e) => setTrimestre(e.target.value)}
           className="w-full border rounded-lg p-2"
         >
-          <option value="1">Trimestre 1</option>
-          <option value="2">Trimestre 2</option>
-          <option value="3">Trimestre 3</option>
+          <OptionsPeriodes />
         </select>
       </div>
 

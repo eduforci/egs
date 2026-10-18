@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { OptionsPeriodes } from '@/components/periodes';
 
 type Matiere = { id: string; nom: string; nbNotes: number; valide: boolean };
 type EleveEtat = {
@@ -146,9 +147,7 @@ export default function ClotureClassePage() {
 
       <div className="flex flex-wrap items-end gap-2">
         <select value={trimestre} onChange={(e) => setTrimestre(Number(e.target.value))} className="border rounded-md px-3 py-2 text-sm">
-          <option value={1}>Trimestre 1</option>
-          <option value={2}>Trimestre 2</option>
-          <option value={3}>Trimestre 3</option>
+          <OptionsPeriodes />
         </select>
         {cloture && <span className="text-xs bg-gray-800 text-white px-2 py-1 rounded-full">🔒 Clôturé</span>}
       </div>
@@ -168,11 +167,11 @@ export default function ClotureClassePage() {
       {etat && !chargement && onglet === 'cloture' && (
         <section className="space-y-3">
           <p className="text-sm text-gray-600">
-            Clôturer le trimestre valide d'office toutes les matières de la classe : les enseignants ne peuvent plus modifier ni
+            Clôturer la période valide d'office toutes les matières de la classe : les enseignants ne peuvent plus modifier ni
             déverrouiller leurs notes. Vous pouvez rouvrir la période si une correction est nécessaire.
           </p>
           <div className="border rounded-lg divide-y">
-            {etat.matieres.length === 0 && <p className="p-3 text-sm text-gray-400">Aucune note saisie ce trimestre.</p>}
+            {etat.matieres.length === 0 && <p className="p-3 text-sm text-gray-400">Aucune note saisie cette période.</p>}
             {etat.matieres.map((m) => (
               <div key={m.id} className="flex items-center justify-between px-3 py-2 text-sm">
                 <span>{m.nom} <span className="text-xs text-gray-400">({m.nbNotes} notes)</span></span>
@@ -186,11 +185,11 @@ export default function ClotureClassePage() {
             </p>
           )}
           {cloture ? (
-            <button disabled={occupe} onClick={() => confirm('Rouvrir ce trimestre ? Les enseignants pourront à nouveau déverrouiller leurs notes.') && appeler({ action: 'rouvrir' }, 'Trimestre rouvert.')}
-              className="w-full border rounded-md py-2.5 text-sm bg-white disabled:opacity-50">Rouvrir le trimestre</button>
+            <button disabled={occupe} onClick={() => confirm('Rouvrir cette période ? Les enseignants pourront à nouveau déverrouiller leurs notes.') && appeler({ action: 'rouvrir' }, 'Période rouverte.')}
+              className="w-full border rounded-md py-2.5 text-sm bg-white disabled:opacity-50">Rouvrir la période</button>
           ) : (
-            <button disabled={occupe || etat.matieres.length === 0} onClick={() => confirm('Clôturer ce trimestre pour cette classe ?') && appeler({ action: 'cloturer' }, 'Trimestre clôturé.')}
-              className="w-full rounded-md py-2.5 text-sm bg-blue-600 text-white disabled:opacity-50">Clôturer le trimestre</button>
+            <button disabled={occupe || etat.matieres.length === 0} onClick={() => confirm('Clôturer cette période pour cette classe ?') && appeler({ action: 'cloturer' }, 'Période clôturée.')}
+              className="w-full rounded-md py-2.5 text-sm bg-blue-600 text-white disabled:opacity-50">Clôturer la période</button>
           )}
         </section>
       )}
@@ -198,7 +197,7 @@ export default function ClotureClassePage() {
       {etat && !chargement && onglet === 'conseil' && (
         <section className="space-y-3">
           <p className="text-sm text-gray-600">
-            Mention et appréciation de chaque élève pour le trimestre. Cochez « Non classé » pour un élève qui n'a pas assez de notes
+            Mention et appréciation de chaque élève pour la période. Cochez « Non classé » pour un élève qui n'a pas assez de notes
             (arrivé en cours d'année, absent aux compositions…).
           </p>
           <div className="flex gap-2">
@@ -239,7 +238,7 @@ export default function ClotureClassePage() {
       {etat && !chargement && onglet === 'annee' && (
         <section className="space-y-3">
           <p className="text-sm text-gray-600">
-            Décision de fin d'année pour chaque élève, puis passage dans les classes de l'année suivante. Ces décisions ne dépendent pas du trimestre choisi.
+            Décision de fin d'année pour chaque élève, puis passage dans les classes de l'année suivante. Ces décisions ne dépendent pas de la période choisie.
           </p>
           <button disabled={occupe} onClick={calculerAnnuel} className="border rounded-md px-3 py-2 text-xs bg-white disabled:opacity-50">
             Proposer d'après la moyenne annuelle (10/20 = admis)

@@ -8,8 +8,11 @@ import { useLangue } from '@/lib/i18n/provider';
 import SelecteurLangue from '@/components/selecteur-langue';
 import EspaceSelecteur from '@/components/espace-selecteur';
 import Avatar from '@/components/avatar';
+import { useEspace } from '@/lib/use-espace';
+import type { EspaceCode } from '@/lib/espaces';
 
-type NavItem = { label: string; href: string; icon: string };
+// espace : si renseigné, le menu n'apparaît que pour les écoles qui ont cet espace de travail (cycle).
+type NavItem = { label: string; href: string; icon: string; espace?: EspaceCode };
 type NavGroup = { titre: string; items: NavItem[] };
 
 // Visible uniquement pour le compte administration : création des comptes de l'école
@@ -49,6 +52,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Bulletins', href: '/chef/bulletins', icon: '📄' },
       { label: 'Modèle de bulletin', href: '/direction/modele-bulletin', icon: '🎨' },
       { label: 'Clôture et conseil de classe', href: '/direction/cloture', icon: '🔒' },
+      { label: 'Études universitaires', href: '/direction/universite', icon: '🎓', espace: 'superieur' },
       { label: 'Gestion RH', href: '/direction/rh', icon: '🗂️' },
       { label: "Rapport d'activité", href: '/direction/rapport-activite', icon: '📈' },
     ],
@@ -123,10 +127,15 @@ export default function DirecteurLayout({ children }: { children: React.ReactNod
   const [fonction, setFonction] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
-  const groupesAffiches =
+  const { visibles } = useEspace();
+  const groupesAffiches0 =
     role === 'administration'
       ? [NAV_GROUPS[0], GROUPE_COMPTES, ...NAV_GROUPS.slice(1)]
       : NAV_GROUPS;
+  const groupesAffiches = groupesAffiches0.map((g) => ({
+    ...g,
+    items: g.items.filter((i) => !i.espace || visibles.includes(i.espace)),
+  }));
 
   useEffect(() => {
     const charger = async () => {

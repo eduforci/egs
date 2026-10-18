@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { abregerMatiere } from '@/lib/matieres-abrev';
+import { OptionsPeriodes, usePeriodes } from '@/components/periodes';
 
 type Ens = { id: string; nom: string; prenom: string };
 type Case = { faits: number; enseignants: Ens[] } | null;
@@ -20,6 +21,7 @@ const EMOJI: Record<Etat, string> = { rouge: '🔴', jaune: '🟡', vert: '🟢'
 const nomEns = (e: Ens) => `${e.prenom} ${e.nom}`.trim() || 'Enseignant';
 
 export default function CioPage() {
+  const { libelle } = usePeriodes();
   const [trimestre, setTrimestre] = useState(1);
   const [d, setD] = useState<Donnees | null>(null);
   const [erreur, setErreur] = useState('');
@@ -89,8 +91,8 @@ export default function CioPage() {
       .sort((a, b) => (a[0] === '_sans' ? 1 : b[0] === '_sans' ? -1 : a[1].nom.localeCompare(b[1].nom, 'fr')))
       .map(([id, e]) => `${id === '_sans' ? '⚠️' : '👤'} *${e.nom}*\n` +
         e.lignes.map((l) => `• ${l.classe} – ${l.matiere} : ${l.faits}/${l.eff} ${EMOJI[l.etat]}`).join('\n'));
-    if (blocs.length === 0) return `✅ Trimestre ${d.trimestre} : toutes les moyennes ont été remontées (${quand}). Merci à tous !`;
-    return `📊 *Moyennes du trimestre ${d.trimestre}* (point du ${quand})\n🔴 aucune moyenne remontée · 🟡 en cours\n\n${blocs.join('\n\n')}\n\nMerci de remonter les moyennes manquantes au plus vite.`;
+    if (blocs.length === 0) return `✅ ${libelle(d.trimestre)} : toutes les moyennes ont été remontées (${quand}). Merci à tous !`;
+    return `📊 *Moyennes du ${libelle(d.trimestre).toLowerCase()}* (point du ${quand})\n🔴 aucune moyenne remontée · 🟡 en cours\n\n${blocs.join('\n\n')}\n\nMerci de remonter les moyennes manquantes au plus vite.`;
   }, [d, retards]);
 
   const copier = async () => {
@@ -114,7 +116,7 @@ export default function CioPage() {
 
         <div className="flex flex-wrap items-center gap-2">
           <select value={trimestre} onChange={(e) => setTrimestre(Number(e.target.value))} className="border rounded-md px-3 py-2 text-sm">
-            <option value={1}>Trimestre 1</option><option value={2}>Trimestre 2</option><option value={3}>Trimestre 3</option>
+            <OptionsPeriodes />
           </select>
           <label className="flex items-center gap-1.5 text-sm"><input type="checkbox" checked={manque} onChange={(e) => setManque(e.target.checked)} /> Seulement les classes en retard</label>
           <button onClick={() => window.print()} className="border rounded-md px-3 py-2 text-sm bg-white">Imprimer</button>

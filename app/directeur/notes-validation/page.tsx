@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { OptionsPeriodes } from '@/components/periodes';
 
 type Combo = {
   classe_id: string;
@@ -278,15 +279,13 @@ export default function NotesValidationPage() {
 
       {!comboOuverte && (
         <div>
-          <label className="block text-sm font-medium mb-1">Trimestre</label>
+          <label className="block text-sm font-medium mb-1">Période</label>
           <select
             value={trimestre}
             onChange={(e) => setTrimestre(parseInt(e.target.value))}
             className="w-full border rounded-lg p-2"
           >
-            <option value={1}>Trimestre 1</option>
-            <option value={2}>Trimestre 2</option>
-            <option value={3}>Trimestre 3</option>
+            <OptionsPeriodes />
           </select>
         </div>
       )}
@@ -304,7 +303,7 @@ export default function NotesValidationPage() {
       {!loading && !comboOuverte && (
         <div className="space-y-2">
           {combos.length === 0 && (
-            <p className="text-gray-500 text-sm">Aucune note saisie pour ce trimestre.</p>
+            <p className="text-gray-500 text-sm">Aucune note saisie pour cette période.</p>
           )}
           {combos.map((c) => (
             <button

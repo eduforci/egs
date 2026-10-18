@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { OptionsPeriodes } from '@/components/periodes';
 
 type Classe = { id: string; nom: string };
 type ResultatEleve = {
@@ -128,15 +129,13 @@ export default function ResultatsPage() {
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1">Trimestre</label>
+          <label className="block text-sm font-medium mb-1">Période</label>
           <select
             value={trimestre}
             onChange={(e) => setTrimestre(parseInt(e.target.value))}
             className="w-full border rounded-lg p-2"
           >
-            <option value={1}>Trimestre 1</option>
-            <option value={2}>Trimestre 2</option>
-            <option value={3}>Trimestre 3</option>
+            <OptionsPeriodes />
           </select>
         </div>
       </div>
@@ -150,7 +149,7 @@ export default function ResultatsPage() {
       {loading && <p className="text-gray-500 text-sm">Chargement...</p>}
 
       {!loading && classeId && resultats.length === 0 && (
-        <p className="text-gray-500 text-sm">Aucun résultat disponible pour cette classe/trimestre.</p>
+        <p className="text-gray-500 text-sm">Aucun résultat disponible pour cette classe/période.</p>
       )}
 
       {!loading && resultats.length > 0 && (

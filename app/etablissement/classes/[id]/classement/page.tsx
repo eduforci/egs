@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { OptionsPeriodes, usePeriodes } from '@/components/periodes';
 
 type LigneClassement = {
   eleve_id: string;
@@ -17,6 +18,7 @@ type LigneClassement = {
 const ANNEES_SCOLAIRES = ['2024-2025', '2025-2026', '2026-2027'];
 
 export default function ClassementClassePage() {
+  const { libelle } = usePeriodes();
   const params = useParams();
   const classeId = params?.id as string;
 
@@ -113,21 +115,19 @@ export default function ClassementClassePage() {
         Classement {classeNom ? `— ${classeNom}` : ''}
       </h1>
       <p className="text-sm text-gray-500 mb-4">
-        Trimestre {trimestre} · Année {anneeScolaire}
+        {libelle(trimestre)} · Année {anneeScolaire}
       </p>
 
       {/* Filtres */}
       <div className="flex flex-wrap gap-3 mb-6">
         <div>
-          <label className="block text-xs text-gray-600 mb-1">Trimestre</label>
+          <label className="block text-xs text-gray-600 mb-1">Période</label>
           <select
             value={trimestre}
             onChange={(e) => setTrimestre(Number(e.target.value))}
             className="border rounded-md px-3 py-2 text-sm"
           >
-            <option value={1}>Trimestre 1</option>
-            <option value={2}>Trimestre 2</option>
-            <option value={3}>Trimestre 3</option>
+            <OptionsPeriodes />
           </select>
         </div>
 
@@ -172,7 +172,7 @@ export default function ClassementClassePage() {
       {/* Vide */}
       {!loading && !error && classement.length === 0 && (
         <p className="text-sm text-gray-500">
-          Aucune note trouvée pour ce trimestre et cette année scolaire.
+          Aucune note trouvée pour cette période et cette année scolaire.
         </p>
       )}
 

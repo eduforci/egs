@@ -231,6 +231,8 @@ export default function ClotureClassePage() {
           </div>
           <button disabled={occupe} onClick={() => appeler({ action: 'conseil', eleves }, 'Conseil de classe enregistré.')}
             className="w-full rounded-md py-2.5 text-sm bg-blue-600 text-white disabled:opacity-50">Enregistrer le conseil de classe</button>
+          <Link href={`/direction/cloture/${classeId}/conseil-documents`}
+            className="block w-full text-center border rounded-md py-2.5 text-sm bg-white">Fiche de conseil et procès-verbal (impression)</Link>
         </section>
       )}
 

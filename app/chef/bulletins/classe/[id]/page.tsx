@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { OptionsPeriodes } from '@/components/periodes';
 
 type Eleve = {
   id: string;
@@ -90,15 +91,13 @@ export default function BulletinsClassePage() {
       </Link>
 
       <div className="mb-4">
-        <label className="block text-xs text-gray-600 mb-1">Trimestre</label>
+        <label className="block text-xs text-gray-600 mb-1">Période</label>
         <select
           value={trimestre}
           onChange={(e) => setTrimestre(Number(e.target.value))}
           className="border rounded-md px-3 py-2 text-sm"
         >
-          <option value={1}>Trimestre 1</option>
-          <option value={2}>Trimestre 2</option>
-          <option value={3}>Trimestre 3</option>
+          <OptionsPeriodes />
         </select>
       </div>
 

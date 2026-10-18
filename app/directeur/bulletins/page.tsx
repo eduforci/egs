@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { OptionsPeriodes } from '@/components/periodes';
 
 type ClasseStatut = {
   classe_id: string;
@@ -105,15 +106,13 @@ export default function BulletinsAPreparerPage() {
       <h1 className="text-2xl font-bold">Bulletins à préparer</h1>
 
       <div>
-        <label className="block text-sm font-medium mb-1">Trimestre</label>
+        <label className="block text-sm font-medium mb-1">Période</label>
         <select
           value={trimestre}
           onChange={(e) => setTrimestre(parseInt(e.target.value))}
           className="w-full border rounded-lg p-2"
         >
-          <option value={1}>Trimestre 1</option>
-          <option value={2}>Trimestre 2</option>
-          <option value={3}>Trimestre 3</option>
+          <OptionsPeriodes />
         </select>
       </div>
 

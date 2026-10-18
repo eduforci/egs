@@ -4,6 +4,9 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
+import { usePeriodes } from '@/components/periodes';
+import { useModeleBulletin } from '@/components/modele-bulletin';
+
 type MatiereLigne = {
   matiere: string;
   coefficient: number;
@@ -96,6 +99,8 @@ function fmt(n: number | null | undefined) {
 }
 
 export default function BulletinParentPage() {
+  const { libelle, nb } = usePeriodes();
+  const modele = useModeleBulletin();
   const params = useParams();
   const eleveId = params?.eleveId as string;
   const trimestre = Number(params?.trimestre);
@@ -180,24 +185,34 @@ export default function BulletinParentPage() {
     <tr key={i} className="border-t">
       <td className="px-1.5 py-1">{m.matiere}</td>
       <td className="px-1.5 py-1 text-center">{fmt(m.moyenne)}</td>
-      <td className="px-1.5 py-1 text-center">{fmt(m.coefficient)}</td>
-      <td className="px-1.5 py-1 text-center">{fmt(m.total)}</td>
-      <td className="px-1.5 py-1 text-center">{m.rang ? `${m.rang}e` : '-'}</td>
-      <td className="px-1.5 py-1">{m.appreciation ?? '-'}</td>
-      <td className="px-1.5 py-1 text-[9px]">{m.professeur ?? '-'}</td>
+      {modele.col_coef && <td className="px-1.5 py-1 text-center">{fmt(m.coefficient)}</td>}
+      {modele.col_total && <td className="px-1.5 py-1 text-center">{fmt(m.total)}</td>}
+      {modele.col_rang && <td className="px-1.5 py-1 text-center">{m.rang ? `${m.rang}e` : '-'}</td>}
+      {modele.col_appreciation && <td className="px-1.5 py-1">{m.appreciation ?? '-'}</td>}
+      {modele.col_professeur && <td className="px-1.5 py-1 text-[9px]">{m.professeur ?? '-'}</td>}
     </tr>
   );
 
-  const renderLigneBilan = (label: string, bilan: BilanGroupe | undefined) => (
-    <tr className="bg-gray-100 font-semibold border-t border-b">
-      <td className="px-1.5 py-1" colSpan={2}>{label}</td>
-      <td className="px-1.5 py-1 text-center">{bilan ? `${bilan.moyenne}/20` : '-'}</td>
-      <td className="px-1.5 py-1 text-center">{bilan ? bilan.total : '-'}</td>
-      <td className="px-1.5 py-1 text-center" colSpan={3}>
-        RANG : {bilan ? `${bilan.rang}e` : '-'}
-      </td>
-    </tr>
-  );
+  // colonnes à droite de Total (rang, appréciation, professeur) : un seul bloc pour le rang du bilan
+  const nbColsDroite = [modele.col_rang, modele.col_appreciation, modele.col_professeur].filter(Boolean).length;
+
+  const renderLigneBilan = (label: string, bilan: BilanGroupe | undefined) => {
+    if (!modele.bilans) return null;
+    return (
+      <tr className="bg-gray-100 font-semibold border-t border-b">
+        <td className="px-1.5 py-1" colSpan={2}>
+          {label}{!modele.col_coef ? ` : ${bilan ? `${bilan.moyenne}/20` : '-'}` : ''}
+        </td>
+        {modele.col_coef && <td className="px-1.5 py-1 text-center">{bilan ? `${bilan.moyenne}/20` : '-'}</td>}
+        {modele.col_total && <td className="px-1.5 py-1 text-center">{bilan ? bilan.total : '-'}</td>}
+        {nbColsDroite > 0 && (
+          <td className="px-1.5 py-1 text-center" colSpan={nbColsDroite}>
+            RANG : {bilan ? `${bilan.rang}e` : '-'}
+          </td>
+        )}
+      </tr>
+    );
+  };
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto print:p-0 print:max-w-none">
@@ -226,7 +241,7 @@ export default function BulletinParentPage() {
       <div className="border rounded-lg p-4 md:p-6 print:p-0 print:border-none bg-white text-[11px] print:text-[9px] leading-tight">
         <div className="flex justify-between items-start border-b pb-2 mb-2">
           <div className="flex items-center gap-2">
-            {bulletin.etablissement.logo_url && (
+            {modele.logo && bulletin.etablissement.logo_url && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={bulletin.etablissement.logo_url}
@@ -234,6 +249,7 @@ export default function BulletinParentPage() {
                 className="h-12 w-12 print:h-9 print:w-9 object-contain"
               />
             )}
+            {modele.ministere && (
             <div>
               <p className="text-[9px] font-semibold uppercase leading-tight">
                 Ministère de l&apos;Éducation Nationale, de l&apos;Enseignement
@@ -244,6 +260,7 @@ export default function BulletinParentPage() {
                 <p className="text-[9px] text-gray-600">{bulletin.etablissement.dren}</p>
               )}
             </div>
+            )}
           </div>
           <div className="text-right text-[9px]">
             <p>Année scolaire</p>
@@ -254,8 +271,8 @@ export default function BulletinParentPage() {
         </div>
 
         <div className="text-center mb-2">
-          <h1 className="text-sm font-bold">BULLETIN TRIMESTRIEL DE NOTES</h1>
-          <p className="text-[10px]">Trimestre {bulletin.trimestre}</p>
+          <h1 className="text-sm font-bold">{modele.titre || `BULLETIN ${nb === 2 ? 'SEMESTRIEL' : 'TRIMESTRIEL'} DE NOTES`}</h1>
+          <p className="text-[10px]">{libelle(bulletin.trimestre)}</p>
         </div>
 
         <div className="text-[9px] mb-2">
@@ -279,8 +296,10 @@ export default function BulletinParentPage() {
               <p>Redoublant(e) : {bulletin.eleve.redoublant ? 'Oui' : 'Non'}</p>
             </div>
           </div>
+          {(modele.qr || modele.photo) && (
           <div className="flex flex-col items-center gap-1 flex-shrink-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {modele.qr && (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={`https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(
                 `EGS|${bulletin.eleve.matricule}|T${bulletin.trimestre}|${bulletin.annee_scolaire}`
@@ -288,7 +307,8 @@ export default function BulletinParentPage() {
               alt="QR code de vérification"
               className="h-10 w-10 print:h-9 print:w-9"
             />
-            {bulletin.eleve.photo_url ? (
+            )}
+            {modele.photo && (bulletin.eleve.photo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={bulletin.eleve.photo_url}
@@ -299,8 +319,9 @@ export default function BulletinParentPage() {
               <div className="h-16 w-14 print:h-14 print:w-12 border flex items-center justify-center text-[8px] text-gray-400 flex-shrink-0">
                 Photo
               </div>
-            )}
+            ))}
           </div>
+          )}
         </div>
 
         <table className="w-full border">
@@ -308,11 +329,11 @@ export default function BulletinParentPage() {
             <tr>
               <th className="px-1.5 py-1 text-left">Matière</th>
               <th className="px-1.5 py-1">Moy.</th>
-              <th className="px-1.5 py-1">Coef</th>
-              <th className="px-1.5 py-1">Total</th>
-              <th className="px-1.5 py-1">Rang</th>
-              <th className="px-1.5 py-1 text-left">Appréciation</th>
-              <th className="px-1.5 py-1 text-left">Professeur</th>
+              {modele.col_coef && <th className="px-1.5 py-1">Coef</th>}
+              {modele.col_total && <th className="px-1.5 py-1">Total</th>}
+              {modele.col_rang && <th className="px-1.5 py-1">Rang</th>}
+              {modele.col_appreciation && <th className="px-1.5 py-1 text-left">Appréciation</th>}
+              {modele.col_professeur && <th className="px-1.5 py-1 text-left">Professeur</th>}
             </tr>
           </thead>
           <tbody>
@@ -327,40 +348,43 @@ export default function BulletinParentPage() {
           <tfoot>
             <tr className="bg-gray-800 text-white font-bold">
               <td className="px-1.5 py-1" colSpan={2}>TOTAUX</td>
-              <td className="px-1.5 py-1 text-center">{bulletin.totaux?.coef_total ?? '-'}</td>
-              <td className="px-1.5 py-1 text-center">{bulletin.totaux?.total_general ?? '-'}</td>
-              <td className="px-1.5 py-1 text-center" colSpan={3}></td>
+              {modele.col_coef && <td className="px-1.5 py-1 text-center">{bulletin.totaux?.coef_total ?? '-'}</td>}
+              {modele.col_total && <td className="px-1.5 py-1 text-center">{bulletin.totaux?.total_general ?? '-'}</td>}
+              {nbColsDroite > 0 && <td className="px-1.5 py-1 text-center" colSpan={nbColsDroite}></td>}
             </tr>
           </tfoot>
         </table>
 
-        <div className="grid grid-cols-2 gap-2 mt-2">
+        <div className={`grid ${modele.stats_classe ? 'grid-cols-2' : 'grid-cols-1'} gap-2 mt-2`}>
           <div className="border rounded p-1.5">
-            <p className="font-semibold">Moyenne trimestrielle</p>
+            <p className="font-semibold">Moyenne {nb === 2 ? 'semestrielle' : 'trimestrielle'}</p>
             {bulletin.totaux ? (
               <>
                 <p className="text-sm font-bold">{bulletin.totaux.moyenne_generale}/20</p>
                 <p>Rang : {bulletin.totaux.rang}e sur {bulletin.eleve.effectif}</p>
-                <p>Mention : {bulletin.totaux.mention}</p>
-                <p className="font-semibold">
-                  Décision :{' '}
-                  <span className={bulletin.totaux.decision === 'Admis(e)' ? 'text-green-600' : 'text-red-600'}>
-                    {bulletin.totaux.decision}
-                  </span>
-                </p>
+                {bulletin.totaux.mention && <p>Mention : {bulletin.totaux.mention}</p>}
+                {modele.decision_fin_annee && bulletin.totaux.decision && (
+                  <p className="font-semibold">
+                    Décision :{' '}
+                    <span className={bulletin.totaux.decision === 'Admis(e)' ? 'text-green-600' : 'text-red-600'}>
+                      {bulletin.totaux.decision}
+                    </span>
+                  </p>
+                )}
               </>
             ) : (
               <p className="text-gray-400">Aucune note saisie ce trimestre.</p>
             )}
           </div>
-          <div className="border rounded p-1.5">
+          {modele.stats_classe && <div className="border rounded p-1.5">
             <p className="font-semibold">Résultats de classe</p>
             <p>Moyenne classe : {fmt(bulletin.classe_stats.moyenne_classe)}/20</p>
             <p>Moyenne mini : {fmt(bulletin.classe_stats.moyenne_mini)}/20</p>
             <p>Moyenne maxi : {fmt(bulletin.classe_stats.moyenne_maxi)}/20</p>
-          </div>
+          </div>}
         </div>
 
+        {modele.assiduite && (
         <div className="border rounded p-1.5 mt-2">
           <p className="font-semibold">Assiduité</p>
           <p>
@@ -369,6 +393,9 @@ export default function BulletinParentPage() {
           </p>
         </div>
 
+        )}
+
+        {modele.mentions_conseil && (
         <div className="border rounded p-1.5 mt-2">
           <p className="font-semibold mb-1">Mentions du conseil de classe</p>
           <div className="grid grid-cols-2 gap-0.5">
@@ -386,9 +413,13 @@ export default function BulletinParentPage() {
           </div>
         </div>
 
+        )}
+
         <div className="border rounded p-1.5 mt-2">
+          {modele.appreciation_conseil && (<>
           <p className="font-semibold">Appréciation du conseil de classe</p>
           <p>{bulletin.conseil.appreciation ?? "-"}</p>
+          </>)}
           <p className="text-gray-500">
             Professeur principal : {bulletin.conseil.professeur_principal ?? "-"}
           </p>
@@ -398,11 +429,12 @@ export default function BulletinParentPage() {
           <p>Fait le {bulletin.date_edition}</p>
           <div className="text-center">
             <p className="font-semibold">
-              {bulletin.etablissement.titre_responsable}
+              {modele.libelle_signataire || bulletin.etablissement.titre_responsable}
             </p>
             <p className="mt-4">{bulletin.chef_etablissement ?? ""}</p>
           </div>
         </div>
+        {modele.texte_pied && <p className="text-[8px] text-center mt-2">{modele.texte_pied}</p>}
       </div>
     </div>
   );

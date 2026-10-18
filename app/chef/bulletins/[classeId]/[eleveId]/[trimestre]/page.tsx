@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
 import { usePeriodes } from '@/components/periodes';
+import { useModeleBulletin } from '@/components/modele-bulletin';
 
 type MatiereLigne = {
   matiere: string;
@@ -109,6 +110,7 @@ function fmtDate(d: string | null | undefined) {
 }
 export default function BulletinPage() {
   const { libelle, abrev, adjectif, nb } = usePeriodes();
+  const modele = useModeleBulletin();
   const params = useParams();
   const classeId = params?.classeId as string;
   const eleveId = params?.eleveId as string;
@@ -291,26 +293,36 @@ const { data: classeRow, error: classeError } = await supabase
           </div>
         </td>
         <td className="px-1.5 py-1 text-center">{fmt(m.moyenne)}</td>
-        <td className="px-1.5 py-1 text-center">{fmt(m.coefficient)}</td>
-        <td className="px-1.5 py-1 text-center">{fmt(m.total)}</td>
-        <td className="px-1.5 py-1 text-center">{m.rang ? `${m.rang}e` : '-'}</td>
-        <td className="px-1.5 py-1">{m.appreciation ?? '-'}</td>
-        <td className="px-1.5 py-1 text-[9px]">{m.professeur ?? '-'}</td>
-        <td className="px-1.5 py-1 border-l"></td>
+        {modele.col_coef && <td className="px-1.5 py-1 text-center">{fmt(m.coefficient)}</td>}
+        {modele.col_total && <td className="px-1.5 py-1 text-center">{fmt(m.total)}</td>}
+        {modele.col_rang && <td className="px-1.5 py-1 text-center">{m.rang ? `${m.rang}e` : '-'}</td>}
+        {modele.col_appreciation && <td className="px-1.5 py-1">{m.appreciation ?? '-'}</td>}
+        {modele.col_professeur && <td className="px-1.5 py-1 text-[9px]">{m.professeur ?? '-'}</td>}
+        {modele.col_signature && <td className="px-1.5 py-1 border-l"></td>}
       </tr>
     );
   };
 
-  const renderLigneBilan = (label: string, bilan: BilanGroupe | undefined) => (
-    <tr className="bg-gray-100 font-semibold border-t border-b">
-      <td className="px-1.5 py-1" colSpan={2}>{label}</td>
-      <td className="px-1.5 py-1 text-center">{bilan ? `${fmt(bilan.moyenne)}/20` : '-'}</td>
-      <td className="px-1.5 py-1 text-center">{bilan ? bilan.total : '-'}</td>
-      <td className="px-1.5 py-1 text-center" colSpan={4}>
-        RANG : {bilan ? `${bilan.rang}e` : '-'}
-      </td>
-    </tr>
-  );
+  // colonnes à droite de Total (rang, appréciation, professeur, signature) : un seul bloc pour le rang du bilan
+  const nbColsDroite = [modele.col_rang, modele.col_appreciation, modele.col_professeur, modele.col_signature].filter(Boolean).length;
+
+  const renderLigneBilan = (label: string, bilan: BilanGroupe | undefined) => {
+    if (!modele.bilans) return null;
+    return (
+      <tr className="bg-gray-100 font-semibold border-t border-b">
+        <td className="px-1.5 py-1" colSpan={2}>
+          {label}{!modele.col_coef ? ` : ${bilan ? `${fmt(bilan.moyenne)}/20` : '-'}` : ''}
+        </td>
+        {modele.col_coef && <td className="px-1.5 py-1 text-center">{bilan ? `${fmt(bilan.moyenne)}/20` : '-'}</td>}
+        {modele.col_total && <td className="px-1.5 py-1 text-center">{bilan ? bilan.total : '-'}</td>}
+        {nbColsDroite > 0 && (
+          <td className="px-1.5 py-1 text-center" colSpan={nbColsDroite}>
+            RANG : {bilan ? `${bilan.rang}e` : '-'}
+          </td>
+        )}
+      </tr>
+    );
+  };
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto print:p-0 print:max-w-none">
@@ -434,7 +446,7 @@ const { data: classeRow, error: classeError } = await supabase
         {/* En-tête ministériel */}
         <div className="flex justify-between items-start border-b pb-2 mb-2">
           <div className="flex items-center gap-2">
-            {bulletin.etablissement.logo_url && (
+            {modele.logo && bulletin.etablissement.logo_url && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={bulletin.etablissement.logo_url}
@@ -442,6 +454,7 @@ const { data: classeRow, error: classeError } = await supabase
                 className="h-12 w-12 print:h-9 print:w-9 object-contain"
               />
             )}
+            {modele.ministere && (
             <div>
               <p className="text-[9px] font-semibold uppercase leading-tight">
                 Ministère de l&apos;Éducation Nationale, de l&apos;Enseignement
@@ -452,6 +465,7 @@ const { data: classeRow, error: classeError } = await supabase
                 <p className="text-[9px] text-gray-600">{bulletin.etablissement.dren}</p>
               )}
             </div>
+            )}
           </div>
           <div className="text-right text-[9px]">
             <p>Année scolaire</p>
@@ -462,7 +476,7 @@ const { data: classeRow, error: classeError } = await supabase
         </div>
 
         <div className="text-center mb-2">
-          <h1 className="text-sm font-bold">BULLETIN TRIMESTRIEL DE NOTES</h1>
+          <h1 className="text-sm font-bold">{modele.titre || `BULLETIN ${nb === 2 ? 'SEMESTRIEL' : 'TRIMESTRIEL'} DE NOTES`}</h1>
           <p className="text-[10px]">{libelle(bulletin.trimestre)}</p>
         </div>
 
@@ -489,8 +503,10 @@ const { data: classeRow, error: classeError } = await supabase
               <p>Redoublant(e) : {bulletin.eleve.redoublant ? 'Oui' : 'Non'}</p>
             </div>
           </div>
+          {(modele.qr || modele.photo) && (
           <div className="flex flex-col items-center gap-1 flex-shrink-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {modele.qr && (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={`https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(
                 `EGS|${bulletin.eleve.matricule}|T${bulletin.trimestre}|${bulletin.annee_scolaire}`
@@ -498,7 +514,8 @@ const { data: classeRow, error: classeError } = await supabase
               alt="QR code de vérification"
               className="h-10 w-10 print:h-9 print:w-9"
             />
-            {bulletin.eleve.photo_url ? (
+            )}
+            {modele.photo && (bulletin.eleve.photo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={bulletin.eleve.photo_url}
@@ -509,8 +526,9 @@ const { data: classeRow, error: classeError } = await supabase
               <div className="h-16 w-14 print:h-14 print:w-12 border flex items-center justify-center text-[8px] text-gray-400 flex-shrink-0">
                 Photo
               </div>
-            )}
+            ))}
           </div>
+          )}
         </div>
 
         {/* Tableau des matières */}
@@ -520,12 +538,12 @@ const { data: classeRow, error: classeError } = await supabase
             <tr>
               <th className="px-1.5 py-1 text-left">Matière</th>
               <th className="px-1.5 py-1">Moy.</th>
-              <th className="px-1.5 py-1">Coef</th>
-              <th className="px-1.5 py-1">Total</th>
-              <th className="px-1.5 py-1">Rang</th>
-              <th className="px-1.5 py-1 text-left">Appréciation</th>
-              <th className="px-1.5 py-1 text-left">Professeur</th>
-              <th className="px-1.5 py-1 text-left print:w-16">Signature</th>
+              {modele.col_coef && <th className="px-1.5 py-1">Coef</th>}
+              {modele.col_total && <th className="px-1.5 py-1">Total</th>}
+              {modele.col_rang && <th className="px-1.5 py-1">Rang</th>}
+              {modele.col_appreciation && <th className="px-1.5 py-1 text-left">Appréciation</th>}
+              {modele.col_professeur && <th className="px-1.5 py-1 text-left">Professeur</th>}
+              {modele.col_signature && <th className="px-1.5 py-1 text-left print:w-16">Signature</th>}
             </tr>
           </thead>
           <tbody>
@@ -538,12 +556,12 @@ const { data: classeRow, error: classeError } = await supabase
             {matieresAutres.map(renderLigneMatiere)}
             {matieresAutres.length > 0 && renderLigneBilan('BILAN AUTRES', bilanAutres)}
           </tbody>
-   <tfoot>
+          <tfoot>
                         <tr className="bg-gray-800 text-white font-bold">
-               <td className="px-1.5 py-1" colSpan={2}>TOTAUX</td>
-              <td className="px-1.5 py-1 text-center">{bulletin.totaux?.coef_total ?? '-'}</td>
-              <td className="px-1.5 py-1 text-center">{fmt(bulletin.totaux?.total_general ?? null)}</td>
-              <td className="px-1.5 py-1 text-center" colSpan={4}></td>
+              <td className="px-1.5 py-1" colSpan={2}>TOTAUX</td>
+              {modele.col_coef && <td className="px-1.5 py-1 text-center">{bulletin.totaux?.coef_total ?? '-'}</td>}
+              {modele.col_total && <td className="px-1.5 py-1 text-center">{fmt(bulletin.totaux?.total_general ?? null)}</td>}
+              {nbColsDroite > 0 && <td className="px-1.5 py-1 text-center" colSpan={nbColsDroite}></td>}
             </tr>
           </tfoot>
         </table>
@@ -553,7 +571,7 @@ const { data: classeRow, error: classeError } = await supabase
         <table className="w-full border mt-2">
           <tbody>
             <tr>
-              <td className="border-r px-1.5 py-1 align-top w-1/2">
+              <td className={`${modele.stats_classe ? 'border-r w-1/2' : 'w-full'} px-1.5 py-1 align-top`}>
                 <p className="font-semibold">Moyenne {adjectif} ({abrev(trimestre)})</p>
                 {bulletin.totaux ? (
                   <>
@@ -567,18 +585,18 @@ const { data: classeRow, error: classeError } = await supabase
                   <p className="text-gray-400">Aucune note saisie ce trimestre.</p>
                 )}
               </td>
-              <td className="px-1.5 py-1 align-top w-1/2">
+              {modele.stats_classe && <td className="px-1.5 py-1 align-top w-1/2">
                 <p className="font-semibold">Résultats de classe</p>
                 <p>Moyenne classe : <span className="font-bold">{fmt(bulletin.classe_stats.moyenne_classe)}/20</span></p>
                 <p>Moyenne mini : <span className="font-bold">{fmt(bulletin.classe_stats.moyenne_mini)}/20</span></p>
                 <p>Moyenne maxi : <span className="font-bold">{fmt(bulletin.classe_stats.moyenne_maxi)}/20</span></p>
-              </td>
+              </td>}
             </tr>
           </tbody>
         </table>
 
         {/* Résultats annuels - uniquement à la dernière période de l'année */}
-        {trimestre === nb && bulletinAnnuel && (
+        {trimestre === nb && modele.resultats_annuels && bulletinAnnuel && (
           <table className="w-full border mt-2">
             <thead className="bg-gray-50">
               <tr>
@@ -615,7 +633,7 @@ const { data: classeRow, error: classeError } = await supabase
         )}
 
         {/* Décision de fin d'année - dernière période uniquement */}
-        {trimestre === nb && (
+        {trimestre === nb && modele.decision_fin_annee && (
           <table className="w-full border mt-2">
             <tbody>
               <tr>
@@ -630,6 +648,7 @@ const { data: classeRow, error: classeError } = await supabase
         )}
 
         {/* Assiduité */}
+        {modele.assiduite && (
         <table className="w-full border mt-2">
           <tbody>
             <tr>
@@ -644,7 +663,10 @@ const { data: classeRow, error: classeError } = await supabase
           </tbody>
         </table>
 
+        )}
+
         {/* Mentions du conseil */}
+        {modele.mentions_conseil && (
         <table className="w-full border mt-2">
           <tbody>
             <tr>
@@ -695,7 +717,10 @@ const { data: classeRow, error: classeError } = await supabase
           </tbody>
         </table>
 
+        )}
+
         {/* Appréciation */}
+        {modele.appreciation_conseil && (
         <table className="w-full border mt-2">
           <tbody>
             <tr>
@@ -707,6 +732,8 @@ const { data: classeRow, error: classeError } = await supabase
           </tbody>
         </table>
 
+        )}
+
         {/* Pied de page */}
         <table className="w-full border mt-2">
           <tbody>
@@ -717,12 +744,15 @@ const { data: classeRow, error: classeError } = await supabase
               <td className="px-1.5 py-1 text-[8px] text-right w-1/2">
                 <p>Fait le {fmtDate(bulletin.date_edition)}</p>
                 <p className="font-semibold">{bulletin.chef_etablissement || '-'}</p>
-                <p>Chef d'établissement</p>
+                <p>{modele.libelle_signataire || "Chef d'établissement"}</p>
               </td>
             </tr>
           </tbody>
         </table>
+        {modele.texte_pied && <p className="text-[8px] text-center mt-2">{modele.texte_pied}</p>}
       </div>
     </div>
   );
                                     }
+
+          

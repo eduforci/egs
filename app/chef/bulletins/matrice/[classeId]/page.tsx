@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { abregerMatiere } from '@/lib/matieres-abrev';
+import { OptionsPeriodes, usePeriodes } from '@/components/periodes';
 
 type Colonne = { matiere: string; coefficient: number; groupe: string | null };
 type Stat = { moyenne: number | null; mini: number | null; maxi: number | null; nb: number };
@@ -33,6 +34,7 @@ type Donnees = {
 const fmt = (v: number | null | undefined) => (typeof v === 'number' ? v.toFixed(2).replace('.', ',') : '');
 
 export default function MatriceMoyennesPage() {
+  const { libelle, abrev } = usePeriodes();
   const params = useParams();
   const classeId = params?.classeId as string;
   const [trimestre, setTrimestre] = useState(1);
@@ -87,7 +89,7 @@ export default function MatriceMoyennesPage() {
     const sep = ';';
     const esc = (v: string) => `"${String(v).replace(/"/g, '""')}"`;
     const rows: string[][] = [];
-    rows.push([`${donnees.ecole} - ${donnees.classe} - Trimestre ${donnees.trimestre} - ${donnees.annee}`]);
+    rows.push([`${donnees.ecole} - ${donnees.classe} - ${libelle(donnees.trimestre)} - ${donnees.annee}`]);
     rows.push(['Rang', 'Matricule', 'Nom et prénoms', ...visibles.map(({ c }) => abregerMatiere(c.matiere)), 'Moyenne', 'Mention', 'Décision']);
     rows.push(['', '', 'Coefficient', ...visibles.map(({ c }) => String(c.coefficient)), '', '', '']);
     donnees.lignes.forEach((l) =>
@@ -108,7 +110,7 @@ export default function MatriceMoyennesPage() {
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `moyennes-${donnees.classe}-T${donnees.trimestre}.csv`.replace(/\s+/g, '_');
+    a.download = `moyennes-${donnees.classe}-${abrev(donnees.trimestre)}.csv`.replace(/\s+/g, '_');
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   };
@@ -128,11 +130,9 @@ export default function MatriceMoyennesPage() {
 
         <div className="flex flex-wrap items-end gap-2">
           <div>
-            <label className="block text-xs text-gray-600 mb-1">Trimestre</label>
+            <label className="block text-xs text-gray-600 mb-1">Période</label>
             <select value={trimestre} onChange={(e) => setTrimestre(Number(e.target.value))} className="border rounded-md px-3 py-2 text-sm">
-              <option value={1}>Trimestre 1</option>
-              <option value={2}>Trimestre 2</option>
-              <option value={3}>Trimestre 3</option>
+              <OptionsPeriodes />
             </select>
           </div>
           <button onClick={() => setChoixOuvert(!choixOuvert)} className="border rounded-md px-3 py-2 text-sm bg-white">
@@ -172,7 +172,7 @@ export default function MatriceMoyennesPage() {
           <div className="hidden print:block text-center mb-2">
             <div className="font-bold text-sm">{donnees.ecole}</div>
             <div className="text-xs">
-              Moyennes de la classe {donnees.classe} — Trimestre {donnees.trimestre} — Année {donnees.annee}
+              Moyennes de la classe {donnees.classe} — {libelle(donnees.trimestre)} — Année {donnees.annee}
             </div>
           </div>
 

@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
+import { usePeriodes } from '@/components/periodes';
+
 type MatiereLigne = {
   matiere: string;
   coefficient: number;
@@ -106,6 +108,7 @@ function fmtDate(d: string | null | undefined) {
   return `${jour}/${mois}/${annee}`;
 }
 export default function BulletinPage() {
+  const { libelle, abrev, adjectif, nb } = usePeriodes();
   const params = useParams();
   const classeId = params?.classeId as string;
   const eleveId = params?.eleveId as string;
@@ -180,8 +183,8 @@ const { data: classeRow, error: classeError } = await supabase
 
       setBulletin(bulletinData);
 
-      // 🔽 Récupérer les données annuelles si c'est le 3ème trimestre
-      if (trimestre === 3) {
+      // 🔽 Récupérer les données annuelles à la dernière période de l'année (T3 ou S2)
+      if (trimestre === nb) {
         const { data: annuelData, error: annuelError } = await supabase.rpc('generer_bulletin_annuel', {
           p_eleve_id: eleveId,
           p_annee_scolaire: classeRow.annee_scolaire,
@@ -203,7 +206,7 @@ const { data: classeRow, error: classeError } = await supabase
     } finally {
       setLoading(false);
     }
-  }, [eleveId, trimestre, supabase]);
+  }, [eleveId, trimestre, supabase, nb]);
 
   useEffect(() => {
     chargerBulletin();
@@ -460,7 +463,7 @@ const { data: classeRow, error: classeError } = await supabase
 
         <div className="text-center mb-2">
           <h1 className="text-sm font-bold">BULLETIN TRIMESTRIEL DE NOTES</h1>
-          <p className="text-[10px]">Trimestre {bulletin.trimestre}</p>
+          <p className="text-[10px]">{libelle(bulletin.trimestre)}</p>
         </div>
 
         {/* Infos établissement */}
@@ -535,7 +538,7 @@ const { data: classeRow, error: classeError } = await supabase
             {matieresAutres.map(renderLigneMatiere)}
             {matieresAutres.length > 0 && renderLigneBilan('BILAN AUTRES', bilanAutres)}
           </tbody>
-          <tfoot>
+   <tfoot>
                         <tr className="bg-gray-800 text-white font-bold">
                <td className="px-1.5 py-1" colSpan={2}>TOTAUX</td>
               <td className="px-1.5 py-1 text-center">{bulletin.totaux?.coef_total ?? '-'}</td>
@@ -551,12 +554,12 @@ const { data: classeRow, error: classeError } = await supabase
           <tbody>
             <tr>
               <td className="border-r px-1.5 py-1 align-top w-1/2">
-                <p className="font-semibold">Moyenne trimestrielle (T{trimestre})</p>
+                <p className="font-semibold">Moyenne {adjectif} ({abrev(trimestre)})</p>
                 {bulletin.totaux ? (
                   <>
                     <p className="text-sm font-bold">{fmt(bulletin.totaux.moyenne_generale)}/20</p>
                     <p>Rang : <span className="font-bold">{bulletin.totaux.rang}e</span> sur {bulletin.eleve.effectif}</p>
-                    {bulletin.trimestre === 3 && bulletin.totaux?.mention && (
+                    {bulletin.trimestre === nb && bulletin.totaux?.mention && (
                       <p>Mention : {bulletin.totaux.mention}</p>
                     )}
                   </>
@@ -574,31 +577,33 @@ const { data: classeRow, error: classeError } = await supabase
           </tbody>
         </table>
 
-        {/* Résultats annuels - uniquement pour le 3ème trimestre */}
-        {trimestre === 3 && bulletinAnnuel && (
+        {/* Résultats annuels - uniquement à la dernière période de l'année */}
+        {trimestre === nb && bulletinAnnuel && (
           <table className="w-full border mt-2">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-1.5 py-1" colSpan={4}>Résultats annuels</th>
+                <th className="px-1.5 py-1" colSpan={nb === 3 ? 4 : 3}>Résultats annuels</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td className="border-r px-1.5 py-1 text-center">
-                  <p className="font-medium text-[8px]">T1</p>
+                  <p className="font-medium text-[8px]">{abrev(1)}</p>
                   <p className="font-bold text-sm">{fmt(bulletinAnnuel.trimestre1?.moyenne)}/20</p>
                   <p className="text-[9px]">Rang {bulletinAnnuel.trimestre1?.rang || '-'}</p>
                 </td>
                 <td className="border-r px-1.5 py-1 text-center">
-                  <p className="font-medium text-[8px]">T2</p>
+                  <p className="font-medium text-[8px]">{abrev(2)}</p>
                   <p className="font-bold text-sm">{fmt(bulletinAnnuel.trimestre2?.moyenne)}/20</p>
                   <p className="text-[9px]">Rang {bulletinAnnuel.trimestre2?.rang || '-'}</p>
                 </td>
-                <td className="border-r px-1.5 py-1 text-center">
-                  <p className="font-medium text-[8px]">T3</p>
-                  <p className="font-bold text-sm">{fmt(bulletinAnnuel.trimestre3?.moyenne)}/20</p>
-                  <p className="text-[9px]">Rang {bulletinAnnuel.trimestre3?.rang || '-'}</p>
-                </td>
+                {nb === 3 && (
+                  <td className="border-r px-1.5 py-1 text-center">
+                    <p className="font-medium text-[8px]">T3</p>
+                    <p className="font-bold text-sm">{fmt(bulletinAnnuel.trimestre3?.moyenne)}/20</p>
+                    <p className="text-[9px]">Rang {bulletinAnnuel.trimestre3?.rang || '-'}</p>
+                  </td>
+                )}
                 <td className="px-1.5 py-1 text-center">
                   <p className="font-bold text-[8px]">Annuel</p>
                   <p className="font-bold text-sm">{fmt(bulletinAnnuel.annuel?.moyenne)}/20</p>
@@ -609,8 +614,8 @@ const { data: classeRow, error: classeError } = await supabase
           </table>
         )}
 
-        {/* Décision de fin d'année - 3ème trimestre uniquement */}
-        {trimestre === 3 && (
+        {/* Décision de fin d'année - dernière période uniquement */}
+        {trimestre === nb && (
           <table className="w-full border mt-2">
             <tbody>
               <tr>

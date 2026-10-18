@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import EnseignantNav from "@/components/enseignant-nav";
+import { libellePeriode, listePeriodes, normaliserNb } from "@/lib/periodes";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ export default async function ChoixTrimestre({
 
   const { data: classe } = await supabase
     .from("classes")
-    .select("nom, niveau")
+    .select("nom, niveau, etablissement_id")
     .eq("id", classeId)
     .single();
 
@@ -23,7 +24,13 @@ export default async function ChoixTrimestre({
     .eq("id", matiereId)
     .single();
 
-  const trimestres = [1, 2, 3];
+  const { data: parametres } = await supabase
+    .from("parametres_pedagogiques")
+    .select("nb_trimestres")
+    .eq("etablissement_id", classe?.etablissement_id ?? "")
+    .maybeSingle();
+  const nbPeriodes = normaliserNb(parametres?.nb_trimestres);
+  const trimestres = listePeriodes(nbPeriodes);
 
   return (
     <main className="p-8">
@@ -33,7 +40,7 @@ export default async function ChoixTrimestre({
       <h1 className="font-display text-3xl font-semibold mb-1">
         {classe?.nom} — {matiere?.nom}
       </h1>
-      <p className="text-neutral-500 mb-6">Choisissez un trimestre</p>
+      <p className="text-neutral-500 mb-6">Choisissez une période</p>
 
       <div className="grid grid-cols-1 gap-3 max-w-md">
         {trimestres.map((t) => (
@@ -42,7 +49,7 @@ export default async function ChoixTrimestre({
             href={`/prof/classe/${classeId}/matiere/${matiereId}/trimestre/${t}`}
             className="bg-white border rounded-xl p-4 font-medium hover:bg-neutral-50"
           >
-            {t}er/ème trimestre
+            {libellePeriode(nbPeriodes, t)}
           </a>
         ))}
       </div>

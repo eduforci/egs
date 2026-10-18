@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { OptionsPeriodes, usePeriodes } from '@/components/periodes';
 
 type EleveLigne = {
   eleve_id: string;
@@ -15,6 +16,7 @@ type EleveLigne = {
 };
 
 export default function SaisieConduitePage() {
+  const { libelle } = usePeriodes();
   const params = useParams();
   const classeId = params?.id as string;
 
@@ -230,18 +232,16 @@ export default function SaisieConduitePage() {
   return (
     <main className="p-4 md:p-6 max-w-2xl mx-auto">
       <h1 className="text-xl font-bold mb-1">Conduite — {classeNom}</h1>
-      <p className="text-sm text-gray-500 mb-4">Trimestre {trimestre} · {anneeScolaire}</p>
+      <p className="text-sm text-gray-500 mb-4">{libelle(trimestre)} · {anneeScolaire}</p>
 
       <div className="mb-4">
-        <label className="block text-xs text-gray-600 mb-1">Trimestre</label>
+        <label className="block text-xs text-gray-600 mb-1">Période</label>
         <select
           value={trimestre}
           onChange={(e) => setTrimestre(Number(e.target.value))}
           className="border rounded-md px-3 py-2 text-sm"
         >
-          <option value={1}>Trimestre 1</option>
-          <option value={2}>Trimestre 2</option>
-          <option value={3}>Trimestre 3</option>
+          <OptionsPeriodes />
         </select>
       </div>
 

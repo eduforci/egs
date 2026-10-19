@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { ESPACES_CODES, espaceDeClasse, estEspaceValide, type EspaceCode } from '@/lib/espaces';
+import { ESPACES_CODES, espaceDeClasse, estEspaceValide, formuleDef, type EspaceCode, type FormuleDef } from '@/lib/espaces';
 
 const CLE_STOCKAGE = 'egs_espace_actif';
 const EVENEMENT = 'egs-espace-change';
 
-type Contexte = { actifs: EspaceCode[]; disponibles: EspaceCode[] };
+type Contexte = { actifs: EspaceCode[]; disponibles: EspaceCode[]; formule: FormuleDef | null };
 
 let cache: Promise<Contexte> | null = null;
 
@@ -31,14 +31,14 @@ function ecrireChoix(valeur: string) {
 async function chargerContexte(): Promise<Contexte> {
   const supabase = createClient();
   const { data: userData } = await supabase.auth.getUser();
-  if (!userData?.user) return { actifs: [], disponibles: [] };
+  if (!userData?.user) return { actifs: [], disponibles: [], formule: null };
 
   const { data: profil } = await supabase
     .from('profiles')
     .select('role, etablissement_id')
     .eq('id', userData.user.id)
     .single();
-  if (!profil?.etablissement_id) return { actifs: [], disponibles: [] };
+  if (!profil?.etablissement_id) return { actifs: [], disponibles: [], formule: null };
 
   // Lectures séparées : si le script SQL « espaces » n'est pas installé, l'école reste à un seul espace.
   const { data: etab, error: erreurEtab } = await supabase
@@ -48,6 +48,14 @@ async function chargerContexte(): Promise<Contexte> {
     .single();
   const brut = erreurEtab ? [] : (((etab as any)?.espaces_actifs as string[] | null) ?? []);
   const actifs = ESPACES_CODES.filter((c) => brut.includes(c));
+
+  // Formule du secondaire : lecture à part, sans effet si la colonne n'existe pas encore
+  const { data: fo, error: erreurFo } = await supabase
+    .from('etablissements')
+    .select('formule_secondaire')
+    .eq('id', profil.etablissement_id)
+    .single();
+  const formule = erreurFo ? null : formuleDef((fo as any)?.formule_secondaire) ?? null;
 
   let autorises: string[] | null = null;
   if (profil.role !== 'administration' && profil.role !== 'super_admin') {
@@ -61,7 +69,7 @@ async function chargerContexte(): Promise<Contexte> {
 
   const disponibles =
     autorises && autorises.length > 0 ? actifs.filter((c) => autorises!.includes(c)) : actifs;
-  return { actifs, disponibles };
+  return { actifs, disponibles, formule };
 }
 
 // Espaces de travail de l'utilisateur et espace actuellement choisi.
@@ -71,7 +79,7 @@ export function useEspace() {
   const [choix, setChoix] = useState('');
 
   useEffect(() => {
-    if (!cache) cache = chargerContexte().catch(() => ({ actifs: [], disponibles: [] }));
+    if (!cache) cache = chargerContexte().catch(() => ({ actifs: [], disponibles: [], formule: null }));
     let vivant = true;
     cache.then((c) => {
       if (vivant) setContexte(c);
@@ -108,6 +116,7 @@ export function useEspace() {
     filtrer,
     actifs,
     disponibles,
+    formule: contexte?.formule ?? null,
     espace,
     visibles,
     changerEspace,

@@ -128,3 +128,47 @@ export function espaceDeClasse(
   return 'secondaire';
     }
                                 
+
+
+// Formules du secondaire : ce que l'école a choisi à sa création (et ce qu'elle paie).
+// Elles limitent les cycles et les types d'enseignement proposés à l'école.
+export type FormuleSecondaire = 'college' | 'college_lycee' | 'college_lycee_tp';
+
+export type FormuleDef = {
+  code: FormuleSecondaire;
+  label: string;
+  description: string;
+  cycles: CycleCode[];
+  types: TypeEnseignement[];
+};
+
+export const FORMULES_SECONDAIRE: FormuleDef[] = [
+  {
+    code: 'college',
+    label: 'Secondaire, 1er cycle',
+    description: 'Collège : de la 6e à la 3e, enseignement général.',
+    cycles: ['college'],
+    types: ['general'],
+  },
+  {
+    code: 'college_lycee',
+    label: 'Secondaire, 1er et 2nd cycle',
+    description: 'Collège et lycée : de la 6e à la Terminale, enseignement général.',
+    cycles: ['college', 'lycee'],
+    types: ['general'],
+  },
+  {
+    code: 'college_lycee_tp',
+    label: 'Secondaire, 1er et 2nd cycle : général, technique et professionnel',
+    description: 'De la 6e à la Terminale, avec les enseignements général, technique et professionnel.',
+    cycles: ['college', 'lycee'],
+    types: ['general', 'technique', 'professionnel'],
+  },
+];
+
+export function formuleDef(code: unknown): FormuleDef | undefined {
+  return FORMULES_SECONDAIRE.find((f) => f.code === code);
+}
+
+// Une école du secondaire sans formule enregistrée garde le comportement historique (tout est permis).
+export const FORMULE_PAR_DEFAUT: FormuleSecondaire = 'college_lycee_tp';

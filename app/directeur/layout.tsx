@@ -11,8 +11,9 @@ import Avatar from '@/components/avatar';
 import { useEspace } from '@/lib/use-espace';
 import type { EspaceCode } from '@/lib/espaces';
 
-// espace : si renseigné, le menu n'apparaît que pour les écoles qui ont cet espace de travail (cycle).
-type NavItem = { label: string; href: string; icon: string; espace?: EspaceCode };
+// espace : le menu n'apparaît que pour les écoles qui ont cet espace de travail (cycle).
+// sauf: 'superieur' : menu propre aux cycles scolaires (examens, bulletins, DESPS...), caché pour une école uniquement supérieure.
+type NavItem = { label: string; href: string; icon: string; espace?: EspaceCode; sauf?: 'superieur' };
 type NavGroup = { titre: string; items: NavItem[] };
 
 // Visible uniquement pour le compte administration : création des comptes de l'école
@@ -48,10 +49,10 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Établissement', href: '/direction/etablissement', icon: '🏛️' },
       { label: 'Périodes (trimestres / semestres)', href: '/direction/periodes', icon: '🗓️' },
       { label: "Espaces de l'école", href: '/direction/structure', icon: '🧭' },
-      { label: 'Examens', href: '/chef/examens', icon: '📝' },
-      { label: 'Bulletins', href: '/chef/bulletins', icon: '📄' },
-      { label: 'Modèle de bulletin', href: '/direction/modele-bulletin', icon: '🎨' },
-      { label: 'Clôture et conseil de classe', href: '/direction/cloture', icon: '🔒' },
+      { label: 'Examens', href: '/chef/examens', icon: '📝', sauf: 'superieur' },
+      { label: 'Bulletins', href: '/chef/bulletins', icon: '📄', sauf: 'superieur' },
+      { label: 'Modèle de bulletin', href: '/direction/modele-bulletin', icon: '🎨', sauf: 'superieur' },
+      { label: 'Clôture et conseil de classe', href: '/direction/cloture', icon: '🔒', sauf: 'superieur' },
       { label: 'Études universitaires', href: '/direction/universite', icon: '🎓', espace: 'superieur' },
       { label: 'Gestion RH', href: '/direction/rh', icon: '🗂️' },
       { label: "Rapport d'activité", href: '/direction/rapport-activite', icon: '📈' },
@@ -60,26 +61,26 @@ const NAV_GROUPS: NavGroup[] = [
   {
     titre: 'SUIVI PÉDAGOGIQUE',
     items: [
-      { label: 'Validation des notes', href: '/directeur/notes-validation', icon: '✔️' },
-      { label: 'Suivi des moyennes (CIO)', href: '/direction/cio', icon: '🚦' },
-      { label: 'Résultats', href: '/directeur/resultats', icon: '🏆' },
+      { label: 'Validation des notes', href: '/directeur/notes-validation', icon: '✔️', sauf: 'superieur' },
+      { label: 'Suivi des moyennes (CIO)', href: '/direction/cio', icon: '🚦', sauf: 'superieur' },
+      { label: 'Résultats', href: '/directeur/resultats', icon: '🏆', sauf: 'superieur' },
       { label: 'Absences', href: '/directeur/absences', icon: '🚫' },
     ],
   },
   {
     titre: 'ADMINISTRATION OFFICIELLE',
     items: [
-      { label: 'Statistiques DESPS', href: '/directeur-etudes/desps', icon: '📈' },
+      { label: 'Statistiques DESPS', href: '/directeur-etudes/desps', icon: '📈', sauf: 'superieur' },
       { label: 'Code établissement', href: '/directeur-etudes/etablissement', icon: '🏷️' },
     ],
   },
   {
     titre: 'AGFNE',
     items: [
-      { label: 'Élèves sans matricule', href: '/directeur-etudes/agfne/sans-matricule', icon: '❓' },
-      { label: 'Comparer (GAP)', href: '/directeur-etudes/agfne/comparer', icon: '🔍' },
-      { label: 'Suivi immatriculation', href: '/directeur-etudes/agfne/immatriculation', icon: '🆔' },
-      { label: 'Transferts', href: '/directeur-etudes/agfne/transferts', icon: '🔁' },
+      { label: 'Élèves sans matricule', href: '/directeur-etudes/agfne/sans-matricule', icon: '❓', sauf: 'superieur' },
+      { label: 'Comparer (GAP)', href: '/directeur-etudes/agfne/comparer', icon: '🔍', sauf: 'superieur' },
+      { label: 'Suivi immatriculation', href: '/directeur-etudes/agfne/immatriculation', icon: '🆔', sauf: 'superieur' },
+      { label: 'Transferts', href: '/directeur-etudes/agfne/transferts', icon: '🔁', sauf: 'superieur' },
     ],
   },
   {
@@ -132,10 +133,15 @@ export default function DirecteurLayout({ children }: { children: React.ReactNod
     role === 'administration'
       ? [NAV_GROUPS[0], GROUPE_COMPTES, ...NAV_GROUPS.slice(1)]
       : NAV_GROUPS;
-  const groupesAffiches = groupesAffiches0.map((g) => ({
-    ...g,
-    items: g.items.filter((i) => !i.espace || visibles.includes(i.espace)),
-  }));
+  const uniquementSuperieur = visibles.length > 0 && visibles.every((e) => e === 'superieur');
+  const groupesAffiches = groupesAffiches0
+    .map((g) => ({
+      ...g,
+      items: g.items.filter(
+        (i) => (!i.espace || visibles.includes(i.espace)) && !(i.sauf === 'superieur' && uniquementSuperieur)
+      ),
+    }))
+    .filter((g) => g.items.length > 0);
 
   useEffect(() => {
     const charger = async () => {

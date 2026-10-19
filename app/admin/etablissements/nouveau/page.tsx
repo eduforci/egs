@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import EspacesCheckboxes, { typeHistorique } from "@/components/espaces-checkboxes";
-import type { EspaceCode } from "@/lib/espaces";
+import { inferCycle, formuleDef, FORMULE_PAR_DEFAUT, type EspaceCode, type FormuleSecondaire } from "@/lib/espaces";
 
 const STATUTS = ["actif", "en_attente", "suspendu", "expire"] as const;
 const SYSTEMES = [{ value: "ivoirien", label: "Ivoirien" }];
@@ -19,6 +19,7 @@ export default function NouvelEtablissement() {
   const [statut, setStatut] = useState<(typeof STATUTS)[number]>("en_attente");
   const [dateDebut, setDateDebut] = useState("");
   const [espaces, setEspaces] = useState<EspaceCode[]>(["secondaire"]);
+  const [formule, setFormule] = useState<FormuleSecondaire | null>(FORMULE_PAR_DEFAUT);
   const [systeme, setSysteme] = useState("ivoirien");
   const [anneeScolaire, setAnneeScolaire] = useState("2025-2026");
   const [nomChef, setNomChef] = useState("");
@@ -77,11 +78,28 @@ export default function NouvelEtablissement() {
     // Espaces de travail ouverts (si le SQL « espaces » n'est pas encore exécuté, on continue sans bloquer)
     await supabase.from("etablissements").update({ espaces_actifs: espaces }).eq("id", nouvelEtab.id);
 
+    // Formule du secondaire (écriture à part : sans effet tant que le SQL « formules » n'est pas lancé)
+    const formuleChoisie = espaces.includes("secondaire") ? formule : null;
+    await supabase.from("etablissements").update({ formule_secondaire: formuleChoisie }).eq("id", nouvelEtab.id);
+
     // Initialisation automatique : classes, matières, barèmes, paramètres, trimestres
     const { data: initData, error: initError } = await supabase.rpc(
       "initialiser_etablissement",
       { p_etablissement_id: nouvelEtab.id }
     );
+
+    // Formule « 1er cycle » : on retire les classes de lycée créées par l'initialisation (elles sont encore vides)
+    const defFormule = espaces.includes("secondaire") ? formuleDef(formule) : undefined;
+    if (!initError && defFormule && !defFormule.cycles.includes("lycee") && !espaces.includes("superieur")) {
+      const { data: classesInit } = await supabase
+        .from("classes")
+        .select("id, niveau, cycle")
+        .eq("etablissement_id", nouvelEtab.id);
+      const aRetirer = (classesInit ?? [])
+        .filter((c: any) => (c.cycle || inferCycle(c.niveau || "")) === "lycee")
+        .map((c: any) => c.id);
+      if (aRetirer.length) await supabase.from("classes").delete().in("id", aRetirer);
+    }
 
     if (initError) {
       setChargement(false);
@@ -193,7 +211,7 @@ export default function NouvelEtablissement() {
           <p className="text-xs text-gray-500 mb-2">
             Coche les cycles que cette école gère. Le promoteur les verra, sans pouvoir les modifier.
           </p>
-          <EspacesCheckboxes value={espaces} onChange={setEspaces} />
+          <EspacesCheckboxes value={espaces} onChange={setEspaces} formule={formule} onFormule={setFormule} />
         </div>
 
         <div className="grid grid-cols-1 gap-4">

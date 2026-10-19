@@ -50,7 +50,7 @@ export default function ClassesPage() {
   const [typeEnseignement, setTypeEnseignement] = useState('general');
   const [typeParClasse, setTypeParClasse] = useState<Record<string, string>>({});
   const [espaceForm, setEspaceForm] = useState('');
-  const { pret, filtrer, visibles, espace, classeVisible } = useEspace();
+  const { pret, filtrer, actifs, formule, visibles, espace, classeVisible } = useEspace();
 
   const [selection, setSelection] = useState<Record<string, Selection>>({});
   const [classeModele, setClasseModele] = useState('');
@@ -165,6 +165,14 @@ export default function ClassesPage() {
     }));
   }, [cycle, matieresEtablissement]);
 
+  // École à un seul espace dont le cycle est unique (ex. maternelle) : le cycle se remplit tout seul.
+  useEffect(() => {
+    if (filtrer || actifs.length !== 1 || cycle) return;
+    const def = espaceDef(actifs[0]);
+    if (def && def.cycles.length === 1) setCycle(def.cycles[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtrer, actifs.join(','), cycle]);
+
   function handleNiveauChange(valeur: string) {
     setNiveau(valeur);
     const cycleDeduit = inferCycle(valeur);
@@ -234,7 +242,7 @@ export default function ClassesPage() {
         serie: serie.trim() || null,
         annee_scolaire: anneeActive,
         // Envoyé seulement s'il n'est pas « général » : rien ne change tant que le SQL n'est pas installé
-        ...(filtrer && typeEnseignement !== 'general' ? { type_enseignement: typeEnseignement } : {}),
+        ...((filtrer || formuleActive) && typeEnseignement !== 'general' ? { type_enseignement: typeEnseignement } : {}),
       })
       .select('id')
       .single();
@@ -295,10 +303,19 @@ export default function ClassesPage() {
     charger();
   }
 
-  const defForm = filtrer ? espaceDef(espaceForm) : undefined;
+  // École à un seul espace : on ne propose que les cycles de cet espace.
+  // École du secondaire avec formule : cycles et types limités à ce qu'elle a choisi.
+  const espaceUnique = !filtrer && actifs.length === 1 ? espaceDef(actifs[0]) : undefined;
+  const defForm = filtrer ? espaceDef(espaceForm) : espaceUnique;
+  const formuleActive = defForm?.code === 'secondaire' ? formule : null;
+  const cyclesPermis = (c: string) =>
+    (!defForm || (defForm.cycles as string[]).includes(c)) &&
+    (!formuleActive || (formuleActive.cycles as string[]).includes(c));
   const cyclesProposes = defForm
-    ? CYCLES_LEGACY.filter((c) => c.value !== '' && (defForm.cycles as string[]).includes(c.value))
+    ? CYCLES_LEGACY.filter((c) => c.value !== '' && cyclesPermis(c.value))
     : CYCLES_LEGACY;
+  const typesProposes = formuleActive ? formuleActive.types : defForm?.types ?? [];
+  const niveauxPermis = (n: string) => !formuleActive || (formuleActive.cycles as string[]).includes(inferCycle(n));
   const classesAffichees = classes.filter((c) => classeVisible(c.cycle, typeParClasse[c.id], c.niveau));
 
   const nbSelectionnees = Object.values(selection).filter((s) => s.checked).length;
@@ -418,7 +435,7 @@ export default function ClassesPage() {
               className="w-full border rounded-md px-3 py-2 text-sm"
             />
             <datalist id="niveaux-suggestions">
-              {(defForm?.niveauxParType?.[typeEnseignement as 'general' | 'technique' | 'professionnel'] ?? defForm?.niveaux ?? []).map((n) => (
+              {(defForm?.niveauxParType?.[typeEnseignement as 'general' | 'technique' | 'professionnel'] ?? defForm?.niveaux ?? []).filter(niveauxPermis).map((n) => (
                 <option key={n} value={n} />
               ))}
             </datalist>
@@ -427,19 +444,22 @@ export default function ClassesPage() {
               onChange={(e) => setCycle(e.target.value)}
               className="w-full border rounded-md px-3 py-2 text-sm"
             >
+              {cyclesProposes.length > 1 && !cyclesProposes.some((c) => c.value === '') && (
+                <option value="">Cycle (selon le niveau)</option>
+              )}
               {cyclesProposes.map((c) => (
                 <option key={c.value} value={c.value}>{c.label}</option>
               ))}
             </select>
           </div>
 
-          {defForm && defForm.types.length > 1 && (
+          {typesProposes.length > 1 && (
             <select
               value={typeEnseignement}
               onChange={(e) => setTypeEnseignement(e.target.value)}
               className="w-full border rounded-md px-3 py-2 text-sm"
             >
-              {defForm.types.map((t) => (
+              {typesProposes.map((t) => (
                 <option key={t} value={t}>{TYPES_LABEL[t]}</option>
               ))}
             </select>
@@ -507,7 +527,7 @@ export default function ClassesPage() {
                           modifierCoefficientSelection(m.id, parseFloat(e.target.value) || 0)
                         }
                         disabled={!sel.checked}
-                        className="w-14 border rounded px-1 py-0.5 text-center text-xs disabled:opacity-40"
+                    className="w-14 border rounded px-1 py-0.5 text-center text-xs disabled:opacity-40"
                       />
                     </label>
                   );

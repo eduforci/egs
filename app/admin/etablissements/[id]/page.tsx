@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import EspacesCheckboxes from "@/components/espaces-checkboxes";
-import { estEspaceValide, type EspaceCode } from "@/lib/espaces";
+import { estEspaceValide, formuleDef, type EspaceCode, type FormuleSecondaire } from "@/lib/espaces";
 
 const STATUTS = ["actif", "en_attente", "suspendu", "expire"] as const;
 
@@ -47,6 +47,7 @@ export default function ModifierEtablissement() {
   const [initialise, setInitialise] = useState(false);
   const [typeEtablissement, setTypeEtablissement] = useState<string | null>(null);
   const [espaces, setEspaces] = useState<EspaceCode[]>([]);
+  const [formule, setFormule] = useState<FormuleSecondaire | null>(null);
   const [systeme, setSysteme] = useState<string | null>(null);
 
   const [classes, setClasses] = useState<Classe[]>([]);
@@ -85,6 +86,7 @@ export default function ModifierEtablissement() {
         ? ((data as any).espaces_actifs as string[]).filter(estEspaceValide)
         : [];
       setEspaces(actifs as EspaceCode[]);
+      setFormule(formuleDef((data as any).formule_secondaire)?.code ?? null);
 
       const { data: classesData } = await supabase
         .from("classes")
@@ -139,6 +141,10 @@ export default function ModifierEtablissement() {
     await supabase
       .from("etablissements")
       .update({ espaces_actifs: espaces })
+      .eq("id", id);
+    await supabase
+      .from("etablissements")
+      .update({ formule_secondaire: espaces.includes("secondaire") ? formule : null })
       .eq("id", id);
 
     const { error } = await supabase
@@ -281,7 +287,7 @@ export default function ModifierEtablissement() {
               Paramètres pédagogiques
             </h3>
             <p className="text-sm">
-              {parametres.nb_trimestres} trimestres · barème /{parametres.bareme_max} ·
+              {parametres.nb_trimestres} {parametres.nb_trimestres === 2 ? 'semestres' : 'trimestres'} · barème /{parametres.bareme_max} ·
               admission dès {parametres.moyenne_admission}/20
             </p>
             {parametres.regle_decision && (
@@ -364,7 +370,7 @@ export default function ModifierEtablissement() {
 
         <div>
           <label className="block text-sm font-medium mb-1">Espaces de travail de l'école</label>
-          <EspacesCheckboxes value={espaces} onChange={setEspaces} />
+          <EspacesCheckboxes value={espaces} onChange={setEspaces} formule={formule} onFormule={setFormule} />
         </div>
 
         <div>

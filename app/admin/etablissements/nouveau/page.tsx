@@ -88,15 +88,21 @@ export default function NouvelEtablissement() {
       { p_etablissement_id: nouvelEtab.id }
     );
 
-    // Formule « 1er cycle » : on retire les classes de lycée créées par l'initialisation (elles sont encore vides)
+    // L'initialisation crée des classes d'enseignement général (6e à Terminale), encore vides à ce stade :
+    // on retire celles que la formule choisie n'autorise pas (lycée en 1er cycle, tout en technique/professionnel).
     const defFormule = espaces.includes("secondaire") ? formuleDef(formule) : undefined;
-    if (!initError && defFormule && !defFormule.cycles.includes("lycee") && !espaces.includes("superieur")) {
+    if (!initError && defFormule && !espaces.includes("superieur")) {
       const { data: classesInit } = await supabase
         .from("classes")
         .select("id, niveau, cycle")
         .eq("etablissement_id", nouvelEtab.id);
+      const sansGeneral = !defFormule.types.includes("general");
       const aRetirer = (classesInit ?? [])
-        .filter((c: any) => (c.cycle || inferCycle(c.niveau || "")) === "lycee")
+        .filter((c: any) => {
+          if (sansGeneral) return true;
+          const cy = c.cycle || inferCycle(c.niveau || "");
+          return cy !== "" && !(defFormule.cycles as string[]).includes(cy);
+        })
         .map((c: any) => c.id);
       if (aRetirer.length) await supabase.from("classes").delete().in("id", aRetirer);
     }

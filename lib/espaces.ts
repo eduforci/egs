@@ -132,7 +132,7 @@ export function espaceDeClasse(
 
 // Formules du secondaire : ce que l'école a choisi à sa création (et ce qu'elle paie).
 // Elles limitent les cycles et les types d'enseignement proposés à l'école.
-export type FormuleSecondaire = 'college' | 'college_lycee' | 'college_lycee_tp';
+export type FormuleSecondaire = 'college' | 'college_lycee' | 'college_lycee_tp' | 'technique_professionnel';
 
 export type FormuleDef = {
   code: FormuleSecondaire;
@@ -163,6 +163,13 @@ export const FORMULES_SECONDAIRE: FormuleDef[] = [
     description: 'De la 6e à la Terminale, avec les enseignements général, technique et professionnel.',
     cycles: ['college', 'lycee'],
     types: ['general', 'technique', 'professionnel'],
+  },
+  {
+    code: 'technique_professionnel',
+    label: 'Secondaire technique et professionnel uniquement',
+    description: "Établissement sans enseignement général : technique (séries E, F, G...) et professionnel (CAP, BEP, BT, Bac pro).",
+    cycles: ['lycee'],
+    types: ['technique', 'professionnel'],
   },
 ];
 

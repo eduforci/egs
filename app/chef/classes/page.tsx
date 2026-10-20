@@ -165,6 +165,13 @@ export default function ClassesPage() {
     }));
   }, [cycle, matieresEtablissement]);
 
+  // École technique et professionnelle uniquement : le type par défaut n'est pas « général »
+  useEffect(() => {
+    if (!formule || formule.types.length === 0) return;
+    if (!(formule.types as string[]).includes(typeEnseignement)) setTypeEnseignement(formule.types[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formule, typeEnseignement]);
+
   // École à un seul espace dont le cycle est unique (ex. maternelle) : le cycle se remplit tout seul.
   useEffect(() => {
     if (filtrer || actifs.length !== 1 || cycle) return;
@@ -315,7 +322,10 @@ export default function ClassesPage() {
     ? CYCLES_LEGACY.filter((c) => c.value !== '' && cyclesPermis(c.value))
     : CYCLES_LEGACY;
   const typesProposes = formuleActive ? formuleActive.types : defForm?.types ?? [];
-  const niveauxPermis = (n: string) => !formuleActive || (formuleActive.cycles as string[]).includes(inferCycle(n));
+  const niveauxPermis = (n: string) => {
+    const c = inferCycle(n); // '1ère année', CAP... : cycle non déduit, on les laisse
+    return !formuleActive || !c || (formuleActive.cycles as string[]).includes(c);
+  };
   const classesAffichees = classes.filter((c) => classeVisible(c.cycle, typeParClasse[c.id], c.niveau));
 
   const nbSelectionnees = Object.values(selection).filter((s) => s.checked).length;
@@ -517,7 +527,7 @@ export default function ClassesPage() {
                         checked={sel.checked}
                         onChange={() => toggleMatiere(m.id)}
                       />
-                      <span className="flex-1">{m.nom}</span>
+    <span className="flex-1">{m.nom}</span>
                       <input
                         type="number"
                         step="0.5"
@@ -527,7 +537,7 @@ export default function ClassesPage() {
                           modifierCoefficientSelection(m.id, parseFloat(e.target.value) || 0)
                         }
                         disabled={!sel.checked}
-                    className="w-14 border rounded px-1 py-0.5 text-center text-xs disabled:opacity-40"
+                        className="w-14 border rounded px-1 py-0.5 text-center text-xs disabled:opacity-40"
                       />
                     </label>
                   );

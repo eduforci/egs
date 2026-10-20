@@ -35,6 +35,7 @@ export default function EtudiantsPage() {
     <main className="max-w-xl mx-auto p-4 pb-16 space-y-4">
       <Link href="/direction/universite" className="text-sm text-blue-700">← Études universitaires</Link>
       <h1 className="text-xl font-bold">Étudiants</h1>
+      <Link href="/direction/universite/etudiants/import" className="block border rounded-md py-2 text-sm text-center bg-white">📥 Importer une liste (Excel, CSV ou texte collé)</Link>
       {msg && <div className="text-sm rounded-md p-3 border bg-red-50 border-red-300 text-red-700">{msg}</div>}
 
       <section className="border rounded-lg p-3 space-y-2">

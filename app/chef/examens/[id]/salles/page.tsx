@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import {
-  CANDIDATS_PAR_SALLE, anneeCourte, genererNumeros, prefixeExamen, repartirSalles,
+  anneeCourte, genererNumeros, prefixeExamen, repartirSalles,
 } from '@/lib/examens-salles';
 
 type Cand = {
@@ -41,6 +41,8 @@ export default function SallesExamenPage() {
   const [erreur, setErreur] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [colonnesOk, setColonnesOk] = useState(true);
+  // Nombre de candidats par salle, choisi librement par l'école (champ vide tant qu'aucun choix n'est enregistré)
+  const [parSalle, setParSalle] = useState('');
 
   const charger = useCallback(async () => {
     setLoading(true); setErreur(null);
@@ -48,6 +50,7 @@ export default function SallesExamenPage() {
       const { data: ex, error: e1 } = await supabase.from('examens').select('*').eq('id', examenId).single();
       if (e1) throw new Error(e1.message);
       setExamen(ex);
+      setParSalle(ex.candidats_par_salle ? String(ex.candidats_par_salle) : '');
       const { data: et } = await supabase.from('etablissements').select('nom').eq('id', ex.etablissement_id).single();
       setEtab(et?.nom ?? '');
 
@@ -114,12 +117,21 @@ export default function SallesExamenPage() {
   const prefixe = prefixeExamen(examen?.nom ?? '', examen?.type);
 
   async function generer() {
+    const taille = Math.floor(Number(parSalle));
+    if (!Number.isFinite(taille) || taille < 1) {
+      setErreur('Indiquez d’abord le nombre de candidats par salle (1 ou plus).');
+      return;
+    }
     if (cands.some((c) => c.numero_table) &&
       !window.confirm('Recalculer les N° de table et les salles ? Les anciennes valeurs seront remplacées.')) return;
     setBusy(true); setErreur(null); setInfo(null);
     try {
+      // On garde le choix de l'école pour cet examen
+      const rs = await supabase.from('examens').update({ candidats_par_salle: taille }).eq('id', examenId);
+      if (rs.error) throw new Error(rs.error.message);
+
       const nums = genererNumeros(cands.map((c) => ({ ...c })), prefixe, anneeCourte(examen?.annee_scolaire));
-      const aff = repartirSalles(cands.map((c) => ({ ...c })), nums, estBac);
+      const aff = repartirSalles(cands.map((c) => ({ ...c })), nums, estBac, taille);
       const r0 = await supabase.from('examens_candidats')
         .update({ numero_table: null, salle: null, salle_serie: null }).eq('examen_id', examenId);
       if (r0.error) throw new Error(r0.error.message + ' — avez-vous exécuté le SQL examens_tables ?');
@@ -130,7 +142,7 @@ export default function SallesExamenPage() {
         const bad = res.find((x) => x.error);
         if (bad?.error) throw new Error(bad.error.message);
       }
-      setInfo(`${aff.length} candidats répartis en ${new Set(aff.map((a) => a.salle)).size} salle(s).`);
+      setInfo(`${aff.length} candidats répartis en ${new Set(aff.map((a) => a.salle)).size} salle(s) de ${taille} candidats maximum.`);
       await charger();
     } catch (e: any) { setErreur(e.message); } finally { setBusy(false); }
   }
@@ -186,9 +198,17 @@ export default function SallesExamenPage() {
         <Link href={`/chef/examens/${examenId}`} className="text-sm text-blue-600">← Retour à l&apos;examen</Link>
         <h1 className="text-xl font-bold my-2">N° de table, salles et émargement</h1>
         <p className="text-xs text-gray-600 mb-3">
-          N° de table = {prefixe} + année + 4 derniers chiffres du matricule + lettre finale. Salles de {CANDIDATS_PAR_SALLE} candidats maximum
-          {estBac ? ', séries jamais mélangées.' : '.'}
+          N° de table = {prefixe} + année + 4 derniers chiffres du matricule + lettre finale.
+          {estBac ? ' Séries jamais mélangées dans une même salle.' : ''}
         </p>
+        <div className="flex flex-wrap items-center gap-2 mb-3 text-sm">
+          <label htmlFor="par-salle" className="font-medium">Candidats par salle (maximum)</label>
+          <input id="par-salle" type="number" inputMode="numeric" min={1} step={1}
+            value={parSalle} placeholder="ex. 20"
+            onChange={(e) => setParSalle(e.target.value)}
+            className="border rounded p-1.5 w-24" />
+          <span className="text-xs text-gray-500">Choix libre de l’école, enregistré pour cet examen.</span>
+        </div>
         {!colonnesOk && <div className="bg-amber-50 border border-amber-300 text-sm p-2 rounded mb-2">Exécutez d&apos;abord le SQL « examens_tables » dans Supabase.</div>}
         {erreur && <div className="bg-red-50 border border-red-300 text-sm p-2 rounded mb-2">{erreur}</div>}
         {info && <div className="bg-green-50 border border-green-300 text-sm p-2 rounded mb-2">{info}</div>}
@@ -332,5 +352,4 @@ export default function SallesExamenPage() {
       )}
     </div>
   );
-  }
-          
+}

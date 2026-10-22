@@ -1,6 +1,13 @@
-// N° de table et répartition en salles (15 candidats maximum par salle).
+// N° de table et répartition en salles (nombre de candidats par salle choisi par l'école).
 
+// Valeur de secours, utilisée seulement si l'école n'a rien choisi.
 export const CANDIDATS_PAR_SALLE = 15;
+
+// Rend un nombre de candidats par salle valide (entier >= 1), sinon la valeur de secours.
+export function nombreParSalle(valeur: unknown): number {
+  const n = Math.floor(Number(valeur));
+  return Number.isFinite(n) && n >= 1 ? n : CANDIDATS_PAR_SALLE;
+}
 
 export function prefixeExamen(nom: string, type?: string | null): string {
   const base = (type && /^(cepe|bepc|bac)/i.test(type) ? type : nom) || '';
@@ -50,10 +57,13 @@ export function genererNumeros(
 
 export type Affectation = { id: string; salle: number; salle_serie: string | null };
 
-// Séries séparées si `separerSeries` (BAC) ; salles numérotées 1..n ; max 15.
+// Séries séparées si `separerSeries` (BAC) ; salles numérotées 1..n ;
+// `parSalle` = nombre de candidats par salle, choisi librement par l'école.
 export function repartirSalles(
   candidats: CandidatT[], numeros: Map<string, string>, separerSeries: boolean,
+  parSalle: number = CANDIDATS_PAR_SALLE,
 ): Affectation[] {
+  const taille = nombreParSalle(parSalle);
   const cle = (c: CandidatT) => (separerSeries ? (c.serie ?? '').trim().toUpperCase() || 'SANS SÉRIE' : '');
   const groupes = new Map<string, CandidatT[]>();
   for (const c of candidats) {
@@ -66,9 +76,9 @@ export function repartirSalles(
   for (const k of Array.from(groupes.keys()).sort()) {
     const l = groupes.get(k)!.sort((a, b) =>
       (numeros.get(a.id) ?? '').localeCompare(numeros.get(b.id) ?? ''));
-    for (let i = 0; i < l.length; i += CANDIDATS_PAR_SALLE) {
+    for (let i = 0; i < l.length; i += taille) {
       salle++;
-      for (const c of l.slice(i, i + CANDIDATS_PAR_SALLE))
+      for (const c of l.slice(i, i + taille))
         out.push({ id: c.id, salle, salle_serie: separerSeries ? k : null });
     }
   }

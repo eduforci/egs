@@ -134,6 +134,7 @@ const navGroups: NavGroup[] = [
       { label: "Établissements", href: "/admin/etablissements", icon: IconBuilding },
       { label: "Utilisateurs", href: "/admin/utilisateurs", icon: IconUsers },
       { label: "Abonnements", href: "/admin/abonnements", icon: IconCard },
+      { label: "Tarifs", href: "/admin/tarifs", icon: IconCard },
     ],
   },
   {

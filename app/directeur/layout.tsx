@@ -87,6 +87,8 @@ const NAV_GROUPS: NavGroup[] = [
     titre: 'FINANCES',
     items: [
       { label: 'Comptabilité', href: '/chef/comptabilite', icon: '💰' },
+      { label: 'Vacations (pointages à valider)', href: '/direction/vacations', icon: '⏱️' },
+      { label: 'Contrats des vacataires', href: '/direction/vacations/contrats', icon: '🤝' },
     ],
   },
   {

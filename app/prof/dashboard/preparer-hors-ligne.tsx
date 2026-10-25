@@ -133,6 +133,7 @@ export default function PreparerHorsLigne({ cibles }: { cibles: Cible[] }) {
       { url: '/prof/dashboard', nom: 'Tableau de bord' },
       { url: '/enseignant/appel', nom: 'Appel' },
       { url: '/enseignant/cahier-texte', nom: 'Cahier de texte' },
+      { url: '/enseignant/pointage-vacation', nom: 'Pointage vacation' },
     ];
     cibles.forEach((c) => {
       pages.push({

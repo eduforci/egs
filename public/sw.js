@@ -1,12 +1,12 @@
 // Service worker EGS : permet d'ouvrir l'appel, le cahier de texte et la saisie
 // des notes sans connexion.
 // Pour forcer une mise à jour chez tous les utilisateurs, changer VERSION.
-const VERSION = 'v4';
+const VERSION = 'v5';
 const CACHE_PAGES = 'egs-pages-' + VERSION;
 const CACHE_STATIC = 'egs-static-' + VERSION;
 
 // Seules ces pages sont gardées en cache (pas les pages des autres rôles)
-const PAGES_EXACTES = ['/enseignant/appel', '/enseignant/cahier-texte', '/prof/dashboard'];
+const PAGES_EXACTES = ['/enseignant/appel', '/enseignant/cahier-texte', '/enseignant/pointage-vacation', '/prof/dashboard'];
 const ID = '[0-9a-fA-F-]+';
 const PAGES_NOTES = [
   new RegExp('^/prof/classe/' + ID + '/matiere/' + ID + '/?$'),

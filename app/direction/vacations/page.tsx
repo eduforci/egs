@@ -26,6 +26,15 @@ type Paiement = {
   montant_total: number;
 };
 
+type Cahier = {
+  enseignant_id: string;
+  classe_id: string;
+  matiere_id: string;
+  date_cours: string;
+  contenu: string;
+  travail_a_faire: string | null;
+};
+
 type Nom = { id: string; nom: string };
 type Caisse = { id: string; libelle: string };
 type Compte = { id: string; libelle: string };
@@ -69,6 +78,7 @@ export default function VacationsPage() {
   const [profs, setProfs] = useState<Nom[]>([]);
   const [classes, setClasses] = useState<Nom[]>([]);
   const [matieres, setMatieres] = useState<Nom[]>([]);
+  const [cahiers, setCahiers] = useState<Cahier[]>([]);
   const [caisses, setCaisses] = useState<Caisse[]>([]);
   const [comptes, setComptes] = useState<Compte[]>([]);
 
@@ -92,6 +102,15 @@ export default function VacationsPage() {
   );
   const nomClasse = (id: string | null) => classes.find((c) => c.id === id)?.nom ?? 'Classe';
   const nomMatiere = (id: string | null) => matieres.find((m) => m.id === id)?.nom ?? 'Matière';
+  // Entrées du cahier de texte du même enseignant, même classe, même matière, même jour
+  const cahierDe = (p: Pointage) =>
+    cahiers.filter(
+      (c) =>
+        c.enseignant_id === p.enseignant_id &&
+        c.classe_id === p.classe_id &&
+        c.matiere_id === p.matiere_id &&
+        c.date_cours === p.date_cours
+    );
 
   // ---------- Chargement ----------
 
@@ -142,6 +161,15 @@ export default function VacationsPage() {
       } else {
         setProfs([]);
       }
+
+      // Cahier de texte du mois : permet de voir ce qui a été fait pendant chaque cours pointé
+      const { data: cah } = await supabase
+        .from('cahier_texte')
+        .select('enseignant_id, classe_id, matiere_id, date_cours, contenu, travail_a_faire')
+        .eq('etablissement_id', etab)
+        .gte('date_cours', debut)
+        .lt('date_cours', fin);
+      setCahiers((cah || []) as Cahier[]);
 
       const { data: cl } = await supabase.from('classes').select('id, nom').eq('etablissement_id', etab);
       setClasses((cl || []) as Nom[]);
@@ -414,6 +442,32 @@ export default function VacationsPage() {
                   <span className={`text-xs px-2 py-0.5 rounded-full ${st.classe}`}>{st.label}</span>
                   {p.paiement_id && <span className="text-xs text-gray-500">Payé</span>}
                 </div>
+                {(() => {
+                  const cah = cahierDe(p);
+                  if (cah.length === 0) {
+                    return (
+                      <div className="text-xs rounded-md bg-amber-50 border border-amber-200 text-amber-800 p-2">
+                        Cahier de texte non rempli pour ce cours.
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="text-xs rounded-md bg-gray-50 border p-2 space-y-1">
+                      <div className="font-semibold text-gray-700">Cahier de texte</div>
+                      {cah.map((c, i) => (
+                        <div key={i} className="space-y-0.5">
+                          <div className="text-gray-700 whitespace-pre-line">{c.contenu}</div>
+                          {c.travail_a_faire && (
+                            <div className="text-gray-600">
+                              <span className="font-medium">À faire : </span>
+                              {c.travail_a_faire}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
                 {p.statut === 'rejete' && p.motif_rejet && (
                   <div className="text-xs text-red-700">Motif : {p.motif_rejet}</div>
                 )}
@@ -520,7 +574,7 @@ export default function VacationsPage() {
                   </tr>
                 </thead>
                 <tbody>
-               {resume.map((r) => (
+                  {resume.map((r) => (
                     <tr key={r.id} className="border-t align-top">
                       <td className="p-2">
                         <div className="font-medium">{r.nom}</div>

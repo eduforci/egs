@@ -18,6 +18,11 @@ const LIENS = [
     libelle: 'Emploi du temps',
     prefixes: ['/enseignant/emploi-du-temps'],
   },
+  {
+    href: '/enseignant/pointage-vacation',
+    libelle: 'Pointage vacation',
+    prefixes: ['/enseignant/pointage-vacation'],
+  },
   { href: '/prof/profil', libelle: 'Mon profil', prefixes: ['/prof/profil'] },
 ];
 

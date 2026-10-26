@@ -190,6 +190,12 @@ export default function ExamenDetailsPage() {
           N° table / Salles
         </Link>
         <Link
+          href={`/chef/examens/${examenId}/pv-epreuve`}
+          className="border rounded-lg p-3 text-center text-sm font-medium hover:bg-gray-50"
+        >
+          PV de l&apos;épreuve
+        </Link>
+        <Link
           href={`/chef/examens/${examenId}/parametres`}
           className="border rounded-lg p-3 text-center text-sm font-medium hover:bg-gray-50"
         >

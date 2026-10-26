@@ -37,8 +37,12 @@ export default function PvEpreuvePage() {
   const [cols, setCols] = useState<Record<string, Col[]>>({});
   const [salleSel, setSalleSel] = useState<number | 'toutes'>('toutes');
   const [epreuveSel, setEpreuveSel] = useState<string>('toutes');
-  const [nbSurveillants, setNbSurveillants] = useState(3);
-  const [nbCopies, setNbCopies] = useState(4);
+  // Saisis comme du texte pour pouvoir effacer et retaper librement ; bornés entre 1 et 30 à l'affichage
+  const [nbSurvTxt, setNbSurvTxt] = useState('3');
+  const [nbCopiesTxt, setNbCopiesTxt] = useState('4');
+  const borne = (t: string) => Math.min(30, Math.max(1, parseInt(t, 10) || 1));
+  const nbSurveillants = borne(nbSurvTxt);
+  const nbCopies = borne(nbCopiesTxt);
   const [loading, setLoading] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
   const pret = useRef(false);
@@ -245,14 +249,16 @@ export default function PvEpreuvePage() {
         </div>
         <div className="flex flex-wrap items-center gap-3 mb-3 text-sm">
           <label className="flex items-center gap-1">Lignes surveillants
-            <input type="number" min={1} max={10} value={nbSurveillants}
-              onChange={(e) => setNbSurveillants(Math.min(10, Math.max(1, Number(e.target.value) || 1)))}
-              className="border rounded p-1 w-14" />
+            <input type="text" inputMode="numeric" value={nbSurvTxt}
+              onChange={(e) => setNbSurvTxt(e.target.value.replace(/\D/g, '').slice(0, 2))}
+              onBlur={() => setNbSurvTxt(String(nbSurveillants))}
+              className="border rounded p-1 w-14 text-center" />
           </label>
           <label className="flex items-center gap-1">Lignes réception des copies
-            <input type="number" min={1} max={10} value={nbCopies}
-              onChange={(e) => setNbCopies(Math.min(10, Math.max(1, Number(e.target.value) || 1)))}
-              className="border rounded p-1 w-14" />
+            <input type="text" inputMode="numeric" value={nbCopiesTxt}
+              onChange={(e) => setNbCopiesTxt(e.target.value.replace(/\D/g, '').slice(0, 2))}
+              onBlur={() => setNbCopiesTxt(String(nbCopies))}
+              className="border rounded p-1 w-14 text-center" />
           </label>
         </div>
         <div className="flex flex-wrap gap-2 mb-4">
@@ -285,10 +291,14 @@ export default function PvEpreuvePage() {
               <div className="text-center" style={{ width: '48%' }}>
                 <p className="font-bold uppercase">République de Côte d&apos;Ivoire</p>
                 <p className="italic">Union - Discipline - Travail</p>
-                <div className="flex items-center justify-center gap-1 mt-2">Année scolaire : {champ(g.annee, (x) => majGlob('annee', x), '45%', 'text-center')}</div>
-                <div className="flex items-center justify-center gap-1 mt-1">
-                  Code : {champ(g.code, (x) => majGlob('code', x), '30%', 'text-center', '—')}
-                  Statut : {champ(g.statut, (x) => majGlob('statut', x), '28%', 'text-center', '—')}
+                <div className="flex flex-wrap items-center justify-center gap-1 mt-2">
+                  <span>Année scolaire :</span>{champ(g.annee, (x) => majGlob('annee', x), 100, 'text-center')}
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-1 mt-1">
+                  <span>Code :</span>{champ(g.code, (x) => majGlob('code', x), 100, 'text-center', '—')}
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-1 mt-1">
+                  <span>Statut :</span>{champ(g.statut, (x) => majGlob('statut', x), 100, 'text-center', '—')}
                 </div>
               </div>
             </div>

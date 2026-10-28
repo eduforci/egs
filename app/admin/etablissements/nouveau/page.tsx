@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import EspacesCheckboxes, { typeHistorique } from "@/components/espaces-checkboxes";
-import { inferCycle, formuleDef, FORMULE_PAR_DEFAUT, type EspaceCode, type FormuleSecondaire } from "@/lib/espaces";
+import { inferCycle, formuleDef, FORMULE_PAR_DEFAUT, ESPACES, type EspaceCode, type FormuleSecondaire } from "@/lib/espaces";
 
 const STATUTS = ["actif", "en_attente", "suspendu", "expire"] as const;
 const SYSTEMES = [{ value: "ivoirien", label: "Ivoirien" }];
@@ -75,37 +75,14 @@ export default function NouvelEtablissement() {
       return;
     }
 
-    // Espaces de travail ouverts (si le SQL « espaces » n'est pas encore exécuté, on continue sans bloquer)
     await supabase.from("etablissements").update({ espaces_actifs: espaces }).eq("id", nouvelEtab.id);
-
-    // Formule du secondaire (écriture à part : sans effet tant que le SQL « formules » n'est pas lancé)
     const formuleChoisie = espaces.includes("secondaire") ? formule : null;
     await supabase.from("etablissements").update({ formule_secondaire: formuleChoisie }).eq("id", nouvelEtab.id);
 
-    // Initialisation automatique : classes, matières, barèmes, paramètres, trimestres
     const { data: initData, error: initError } = await supabase.rpc(
       "initialiser_etablissement",
       { p_etablissement_id: nouvelEtab.id }
     );
-
-    // L'initialisation crée des classes d'enseignement général (6e à Terminale), encore vides à ce stade :
-    // on retire celles que la formule choisie n'autorise pas (lycée en 1er cycle, tout en technique/professionnel).
-    const defFormule = espaces.includes("secondaire") ? formuleDef(formule) : undefined;
-    if (!initError && defFormule && !espaces.includes("superieur")) {
-      const { data: classesInit } = await supabase
-        .from("classes")
-        .select("id, niveau, cycle")
-        .eq("etablissement_id", nouvelEtab.id);
-      const sansGeneral = !defFormule.types.includes("general");
-      const aRetirer = (classesInit ?? [])
-        .filter((c: any) => {
-          if (sansGeneral) return true;
-          const cy = c.cycle || inferCycle(c.niveau || "");
-          return cy !== "" && !(defFormule.cycles as string[]).includes(cy);
-        })
-        .map((c: any) => c.id);
-      if (aRetirer.length) await supabase.from("classes").delete().in("id", aRetirer);
-    }
 
     if (initError) {
       setChargement(false);
@@ -115,7 +92,50 @@ export default function NouvelEtablissement() {
       return;
     }
 
-    // Création automatique du compte chef d'établissement
+    // FIX : supprime les classes qui ne correspondent pas aux espaces cochés
+    const { data: classesInit } = await supabase
+      .from("classes")
+      .select("id, niveau, cycle")
+      .eq("etablissement_id", nouvelEtab.id);
+
+    if (classesInit && classesInit.length > 0) {
+      const cyclesAutorises = ESPACES.filter(es => espaces.includes(es.code)).flatMap(es => es.cycles);
+      const defFormule = espaces.includes("secondaire") ? formuleDef(formule) : undefined;
+      const sansGeneral = defFormule ? !defFormule.types.includes("general") : false;
+
+      const aRetirer = classesInit
+        .filter((c: any) => {
+          const cy = (c.cycle || inferCycle(c.niveau || "")) as string;
+          if (cy && !cyclesAutorises.includes(cy as any)) return true;
+          if (defFormule && cy) {
+            if (sansGeneral) return true;
+            if (!(defFormule.cycles as string[]).includes(cy)) return true;
+          }
+          return false;
+        })
+        .map((c: any) => c.id);
+
+      if (aRetirer.length) {
+        await supabase.from("classes").delete().in("id", aRetirer);
+      }
+
+      const classesRestantes = classesInit.length - aRetirer.length;
+      if (classesRestantes === 0 && !espaces.includes("secondaire")) {
+        const niveauxACreer = ESPACES.filter(es => espaces.includes(es.code)).flatMap(es =>
+          es.niveaux.map(n => ({ niveau: n, cycle: es.cycles[0] }))
+        );
+        for (const cl of niveauxACreer) {
+          await supabase.from("classes").insert({
+            etablissement_id: nouvelEtab.id,
+            nom: cl.niveau,
+            niveau: cl.niveau,
+            cycle: cl.cycle,
+            type_enseignement: "general",
+          });
+        }
+      }
+    }
+
     const reponseChef = await fetch("/api/admin/creer-directeur", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -127,7 +147,6 @@ export default function NouvelEtablissement() {
     });
 
     const dataChef = await reponseChef.json();
-
     setChargement(false);
 
     if (!reponseChef.ok) {
@@ -338,6 +357,4 @@ export default function NouvelEtablissement() {
       </form>
     </main>
   );
-        }
-
-        
+}

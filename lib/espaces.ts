@@ -16,8 +16,8 @@ export type EspaceDef = {
   types: TypeEnseignement[];
   niveaux: string[]; // suggestions pour le champ « niveau »
   series: string[]; // suggestions pour le champ « série / filière »
-  seriesParType?: Partial<Record<TypeEnseignement, string[]>>; // si les séries dépendent du type d'enseignement
-  niveauxParType?: Partial<Record<TypeEnseignement, string[]>>; // idem pour les niveaux
+  seriesParType?: Partial<Record<TypeEnseignement, string[]>>;
+  niveauxParType?: Partial<Record<TypeEnseignement, string[]>>;
 };
 
 export const ESPACES: EspaceDef[] = [
@@ -102,36 +102,45 @@ export function estEspaceValide(code: unknown): code is EspaceCode {
 }
 
 // Devine le cycle à partir du nom du niveau (6ème, CM2, Terminale...).
-export function inferCycle(niveauBrut: string): string {
+export function inferCycle(niveauBrut: string): CycleCode | '' {
   const n = (niveauBrut || '').trim().toLowerCase();
   if (!n) return '';
-  if (/(petite section|moyenne section|grande section|maternelle)/.test(n)) return 'maternelle';
-  if (/(^cp|^ce1|^ce2|^cm1|^cm2)/.test(n)) return 'primaire';
-  if (/(licence|master|doctorat|bts|ing[ée]nieur)/.test(n)) return 'superieur';
-  if (/(6\s*e|6ème|5\s*e|5ème|4\s*e|4ème|3\s*e|3ème)/.test(n)) return 'college';
-  if (/(seconde|2nde|premi[eè]re|terminale|tle)/.test(n)) return 'lycee';
+  if (/(petite section|moyenne section|grande section|maternelle|ps|ms|gs)/.test(n)) return 'maternelle';
+  if (/(^cp\s*1|^cp\s*2|^cp1|^cp2|^ce\s*1|^ce1|^ce\s*2|^ce2|^cm\s*1|^cm1|^cm\s*2|^cm2|primaire)/.test(n)) return 'primaire';
+  if (/(licence|master|doctorat|bts|ing[ée]nieur|superieur|supérieur)/.test(n)) return 'superieur';
+  if (/(6\s*e|6ème|6eme|5\s*e|5ème|5eme|4\s*e|4ème|4eme|3\s*e|3ème|3eme)/.test(n)) return 'college';
+  if (/(seconde|2nde|premi[eè]re|terminale|tle|bac)/.test(n)) return 'lycee';
   return '';
 }
 
-// Espace d'une classe. Une classe sans cycle renseigné est rangée selon son niveau,
-// et à défaut dans le secondaire (comportement historique d'EGS).
-// Le type d'enseignement (général, technique, professionnel) reste un choix propre à chaque classe du secondaire.
+// FIX PRINCIPAL : ne force plus 'lycee' par défaut
+// Une classe vide ne doit pas être rangée en secondaire pour une école primaire
 export function espaceDeClasse(
   cycle: string | null | undefined,
   type: string | null | undefined,
   niveau?: string | null
 ): EspaceCode {
-  const c = cycle || inferCycle(niveau || '') || 'lycee';
+  const c = (cycle || inferCycle(niveau || '') || '').toLowerCase() as CycleCode | '';
   if (c === 'maternelle') return 'maternelle';
   if (c === 'primaire') return 'primaire';
   if (c === 'superieur') return 'superieur';
+  if (c === 'college' || c === 'lycee') return 'secondaire';
+  // Si on ne sait pas, on retourne secondaire par compatibilité historique,
+  // MAIS la création de classe doit utiliser espaceParDefaut() ci-dessous
   return 'secondaire';
-    }
-                                
+}
 
+// NOUVEAU : pour la création de classe, prend le premier espace actif de l'école
+export function espaceParDefaut(actifs: EspaceCode[]): EspaceCode {
+  if (!actifs || actifs.length === 0) return 'primaire';
+  if (actifs.length === 1) return actifs[0];
+  // Groupe scolaire : priorité au primaire si présent, sinon secondaire
+  if (actifs.includes('primaire')) return 'primaire';
+  if (actifs.includes('maternelle')) return 'maternelle';
+  return actifs[0];
+}
 
-// Formules du secondaire : ce que l'école a choisi à sa création (et ce qu'elle paie).
-// Elles limitent les cycles et les types d'enseignement proposés à l'école.
+// Formules du secondaire
 export type FormuleSecondaire = 'college' | 'college_lycee' | 'college_lycee_tp' | 'technique_professionnel';
 
 export type FormuleDef = {
@@ -177,5 +186,4 @@ export function formuleDef(code: unknown): FormuleDef | undefined {
   return FORMULES_SECONDAIRE.find((f) => f.code === code);
 }
 
-// Une école du secondaire sans formule enregistrée garde le comportement historique (tout est permis).
 export const FORMULE_PAR_DEFAUT: FormuleSecondaire = 'college_lycee_tp';

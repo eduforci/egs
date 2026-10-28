@@ -33,7 +33,8 @@ function genererJetonEmail() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { nom, prenom, matricule, classe_id, date_naissance } = body ?? {};
+    // AJOUT ICI : photo_url
+    const { nom, prenom, matricule, classe_id, date_naissance, photo_url } = body ?? {};
 
     if (!nom || !prenom || !classe_id) {
       return NextResponse.json(
@@ -46,17 +47,11 @@ export async function POST(request: NextRequest) {
     const aUnMatricule = matriculeNettoye.length > 0;
 
     const supabase = await createClient();
-
-    // 1. Vérification de l'utilisateur connecté
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "Non connecté." }, { status: 401 });
     }
 
-    // 2. Récupération du profil
     const { data: profile, error: profileFetchError } = await supabase
       .from("profiles")
       .select("role, etablissement_id")
@@ -64,29 +59,18 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (profileFetchError || !profile) {
-      return NextResponse.json(
-        { error: "Profil utilisateur introuvable." },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: "Profil utilisateur introuvable." }, { status: 403 });
     }
 
     const rolesAutorises = ["administration", "chef", "directeur_etudes", "secretaire", "super_admin"];
-
     if (!rolesAutorises.includes(profile.role)) {
-      return NextResponse.json(
-        { error: "Vous n'êtes pas autorisé à créer un compte élève." },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: "Vous n'êtes pas autorisé à créer un compte élève." }, { status: 403 });
     }
 
     if (!profile.etablissement_id) {
-      return NextResponse.json(
-        { error: "Aucun établissement associé à votre compte." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Aucun établissement associé à votre compte." }, { status: 400 });
     }
 
-    // 3. Vérification de la classe
     const { data: classe, error: classeError } = await supabase
       .from("classes")
       .select("id, etablissement_id")
@@ -94,15 +78,10 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (classeError || !classe || classe.etablissement_id !== profile.etablissement_id) {
-      return NextResponse.json(
-        { error: "Classe invalide pour votre établissement." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Classe invalide pour votre établissement." }, { status: 400 });
     }
 
-    // 4. Récupération de l'année scolaire active
     const aujourdHui = new Date().toISOString().slice(0, 10);
-
     const { data: anneeScolaire, error: anneeError } = await supabase
       .from("annees_scolaires")
       .select("id, libelle, date_debut_inscriptions, date_debut, date_fin, active")
@@ -111,61 +90,36 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (anneeError || !anneeScolaire) {
-      return NextResponse.json(
-        { error: "Aucune année scolaire active n'est configurée pour cet établissement." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Aucune année scolaire active n'est configurée." }, { status: 400 });
     }
 
-    // 5. Vérification de la période d'inscription
-    const dateDebutInscriptions =
-      anneeScolaire.date_debut_inscriptions || anneeScolaire.date_debut;
-
+    const dateDebutInscriptions = anneeScolaire.date_debut_inscriptions || anneeScolaire.date_debut;
     if (aujourdHui < dateDebutInscriptions || aujourdHui > anneeScolaire.date_fin) {
       return NextResponse.json(
-        {
-          error: `Les inscriptions pour l'année scolaire ${anneeScolaire.libelle} ne sont pas ouvertes à cette date.`,
-        },
+        { error: `Les inscriptions pour l'année ${anneeScolaire.libelle} ne sont pas ouvertes.` },
         { status: 400 }
       );
     }
 
     const admin = createAdminClient();
-
-    // 6. Vérification du matricule / identifiant
     let identifiant = aUnMatricule ? matriculeNettoye : genererIdentifiantProvisoire();
 
     if (aUnMatricule) {
-      const { data: matriculeExistant } = await admin
-        .from("profiles")
-        .select("id")
-        .eq("identifiant", matriculeNettoye)
-        .maybeSingle();
-
+      const { data: matriculeExistant } = await admin.from("profiles").select("id").eq("identifiant", matriculeNettoye).maybeSingle();
       if (matriculeExistant) {
-        return NextResponse.json(
-          { error: `Le matricule "${matriculeNettoye}" est déjà utilisé par un autre compte.` },
-          { status: 409 }
-        );
+        return NextResponse.json({ error: `Le matricule "${matriculeNettoye}" est déjà utilisé.` }, { status: 409 });
       }
     } else {
       for (let tentative = 0; tentative < 5; tentative++) {
-        const { data: collision } = await admin
-          .from("profiles")
-          .select("id")
-          .eq("identifiant", identifiant)
-          .maybeSingle();
-
+        const { data: collision } = await admin.from("profiles").select("id").eq("identifiant", identifiant).maybeSingle();
         if (!collision) break;
         identifiant = genererIdentifiantProvisoire();
       }
     }
 
-    // 7. Création du mot de passe et de l'email technique
     const motDePasse = genererMotDePasseTemporaire();
     const emailSynthetique = `eleve-${genererJetonEmail()}@eleves.egs.local`;
 
-    // 8. Création du compte Auth
     const { data: created, error: createError } = await admin.auth.admin.createUser({
       email: emailSynthetique,
       password: motDePasse,
@@ -173,15 +127,11 @@ export async function POST(request: NextRequest) {
     });
 
     if (createError || !created?.user) {
-      return NextResponse.json(
-        { error: createError?.message || "Erreur lors de la création du compte." },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: createError?.message || "Erreur création compte." }, { status: 500 });
     }
 
     const userId = created.user.id;
 
-    // 9. Création du profil
     const { error: profileInsertError } = await admin.from("profiles").insert({
       id: userId,
       role: "eleve",
@@ -197,11 +147,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: profileInsertError.message }, { status: 500 });
     }
 
-    // 10. Création de l'élève
-    // Note : PAS d'insertion manuelle dans "inscriptions" ici — le trigger
-    // trg_synchroniser_inscription se déclenche automatiquement sur cet INSERT
-    // et crée déjà la ligne d'inscription correspondante. Une insertion manuelle
-    // en plus créerait un doublon.
+    // MODIF ICI : ajout photo_url
     const { error: eleveError } = await admin.from("eleves").insert({
       id: userId,
       etablissement_id: profile.etablissement_id,
@@ -211,6 +157,7 @@ export async function POST(request: NextRequest) {
       statut: "actif",
       nom,
       prenom,
+      photo_url: photo_url || null, // <-- C'EST LA LIGNE QUI MANQUAIT
     });
 
     if (eleveError) {
@@ -226,10 +173,9 @@ export async function POST(request: NextRequest) {
       cibleType: "eleve",
       cibleId: userId,
       cibleLibelle: `${prenom} ${nom}`,
-      details: { identifiant, provisoire: !aUnMatricule },
+      details: { identifiant, provisoire: !aUnMatricule, photo_url },
     });
 
-    // 11. Réponse finale
     return NextResponse.json({
       matricule: identifiant,
       motDePasse,
@@ -243,5 +189,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-        }
-        
+}

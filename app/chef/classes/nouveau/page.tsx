@@ -35,8 +35,16 @@ export default function NouvelleClassePage() {
     setError(null);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const { data: profile } = await supabase.from("profiles").select("etablissement_id").eq("id", user.id).single();
+      if (!user) throw new Error("Non authentifié");
       
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("etablissement_id")
+        .eq("id", user.id)
+        .single();
+      
+      if (!profile?.etablissement_id) throw new Error("Pas d'établissement");
+
       let cycle: string = espace;
       if (espace === 'secondaire') {
         if (/6|5|4|3/.test(niveau)) cycle = 'college';
@@ -48,7 +56,7 @@ export default function NouvelleClassePage() {
         niveau,
         cycle,
         type_enseignement: 'general',
-        etablissement_id: profile?.etablissement_id,
+        etablissement_id: profile.etablissement_id,
       });
       if (error) throw error;
       router.push("/chef/classes");
@@ -67,12 +75,10 @@ export default function NouvelleClassePage() {
       <p className="text-sm text-neutral-500 mb-6">
         Espaces actifs : {actifs.map(a => ESPACES.find(x=>x.code===a)?.label).join(', ')}
       </p>
-
       {error && <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm mb-4">{error}</div>}
-
       <form onSubmit={handleSubmit} className="space-y-4 bg-white border rounded-xl p-6">
         <div>
-          <label className="text-sm font-medium">Type d'établissement / Espace</label>
+          <label className="text-sm font-medium">Espace</label>
           <select value={espace} onChange={e => {
             const ne = e.target.value as EspaceCode;
             setEspace(ne);
@@ -84,19 +90,16 @@ export default function NouvelleClassePage() {
             ))}
           </select>
         </div>
-
         <div>
           <label className="text-sm font-medium">Niveau</label>
           <select value={niveau} onChange={e => setNiveau(e.target.value)} className="w-full mt-1 border rounded-lg p-2.5" required>
             {niveauxDisponibles.map(n => <option key={n} value={n}>{n}</option>)}
           </select>
         </div>
-
         <div>
           <label className="text-sm font-medium">Nom de la classe</label>
           <input value={nom} onChange={e => setNom(e.target.value)} placeholder={niveau ? `${niveau} A` : "Ex: CP1 A"} className="w-full mt-1 border rounded-lg p-2.5" />
         </div>
-
         <button disabled={loading} className="w-full bg-black text-white rounded-lg py-2.5">
           {loading ? 'Création...' : `Créer classe ${defCourant?.label || ''}`}
         </button>

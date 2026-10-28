@@ -42,10 +42,9 @@ export default function ListeElevesPage() {
         setAnnees(anneesData ?? []);
         const active = anneesData?.find((a:any) => a.active)?.libelle || anneesData?.[0]?.libelle || "";
         const anneeFinale = anneeChoisie || active;
-        setAnneeChoisie(anneeFinale);
+        if (anneeFinale && anneeFinale !== anneeChoisie) setAnneeChoisie(anneeFinale);
         if(!anneeFinale) { setLoading(false); return; }
 
-        // On charge les élèves directement - sans se compliquer avec inscriptions
         const { data: elevesData, error } = await supabase
           .from("eleves")
           .select("id, matricule, statut, photo_url, classe_id, nom, prenom, classes(nom, cycle, niveau, type_enseignement)")
@@ -64,8 +63,8 @@ export default function ListeElevesPage() {
             cycle: cl?.cycle ?? null,
             niveau: cl?.niveau ?? null,
             type_enseignement: cl?.type_enseignement ?? null,
-            nom: e.nom,
-            prenom: e.prenom,
+            nom: e.nom || "",
+            prenom: e.prenom || "",
           };
         });
 
@@ -78,12 +77,14 @@ export default function ListeElevesPage() {
       }
     };
     init();
-  }, [anneeChoisie]); // se relance quand tu changes d'année
+  }, [anneeChoisie]);
 
   const elevesDeLEspace = eleves.filter((e) => classeVisible(e.cycle, e.type_enseignement, e.niveau));
+  
+  // FIX ICI
   const filtres = elevesDeLEspace.filter((e) => {
-    const q = recherche.toLowerCase();
-    return e.nom.toLowerCase().includes(q) || e.prenom.toLowerCase().includes(q) || (e.matricule || "").toLowerCase().includes(q);
+    const q = (recherche || "").toLowerCase();
+    return (e.nom || "").toLowerCase().includes(q) || (e.prenom || "").toLowerCase().includes(q) || (e.matricule || "").toLowerCase().includes(q);
   });
 
   return (
@@ -110,7 +111,14 @@ export default function ListeElevesPage() {
             <Link key={e.id} href={`/chef/eleves/${e.id}`} className="block bg-white border rounded-lg p-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  {e.photo_url ? <img src={e.photo_url} className="w-10 h-10 rounded-full object-cover" /> : <div className="w-10 h-10 rounded-full bg-neutral-100 flex items-center justify-center text-xs">{e.prenom[0]}{e.nom[0]}</div>}
+                  {e.photo_url ? (
+                    <img src={e.photo_url} alt="" className="w-10 h-10 rounded-full object-cover border" />
+                  ) : (
+                    // FIX ICI
+                    <div className="w-10 h-10 rounded-full bg-neutral-100 flex items-center justify-center text-xs font-medium">
+                      {(e.prenom?.[0] || "E") + (e.nom?.[0] || "")}
+                    </div>
+                  )}
                   <div><p className="font-medium">{e.prenom} {e.nom}</p><p className="text-xs text-neutral-400">{e.matricule} · {e.classe_nom}</p></div>
                 </div>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700">{e.statut}</span>

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { useEspace } from '@/lib/use-espace';
-import { ESPACES, CYCLES_LABEL, TYPES_LABEL, espaceDef, inferCycle } from '@/lib/espaces';
+import { ESPACES, FORMULES_SUPERIEUR, CYCLES_LABEL, TYPES_LABEL, espaceDef, inferCycle } from '@/lib/espaces';
 
 type Classe = {
   id: string;
@@ -40,6 +40,7 @@ export default function ClassesPage() {
 
   const [etablissementId, setEtablissementId] = useState<string | null>(null);
   const [anneeActive, setAnneeActive] = useState('');
+  const [formuleSup, setFormuleSup] = useState('');
   const [classes, setClasses] = useState<Classe[]>([]);
   const [matieresEtablissement, setMatieresEtablissement] = useState<MatiereOption[]>([]);
 
@@ -51,7 +52,6 @@ export default function ClassesPage() {
   const [typeParClasse, setTypeParClasse] = useState<Record<string, string>>({});
   const [espaceForm, setEspaceForm] = useState('');
   const { pret, filtrer, actifs, formule, visibles, espace, classeVisible } = useEspace();
-
   const [selection, setSelection] = useState<Record<string, Selection>>({});
   const [classeModele, setClasseModele] = useState('');
 
@@ -73,18 +73,19 @@ export default function ClassesPage() {
         .select('etablissement_id')
         .eq('id', user.id)
         .single();
-
       if (profileError) throw new Error(`Erreur profil : ${profileError.message}`);
+
       setEtablissementId(profile.etablissement_id);
 
       const { data: etab, error: etabError } = await supabase
         .from('etablissements')
-        .select('annee_scolaire_active')
+        .select('annee_scolaire_active, formule_superieur')
         .eq('id', profile.etablissement_id)
         .single();
-
       if (etabError) throw new Error(`Erreur établissement : ${etabError.message}`);
+
       setAnneeActive(etab.annee_scolaire_active);
+      setFormuleSup(etab.formule_superieur ?? '');
 
       const { data: classesData, error: classesError } = await supabase
         .from('classes')
@@ -92,8 +93,8 @@ export default function ClassesPage() {
         .eq('etablissement_id', profile.etablissement_id)
         .eq('annee_scolaire', etab.annee_scolaire_active)
         .order('niveau');
-
       if (classesError) throw new Error(`Erreur classes : ${classesError.message}`);
+
       setClasses(classesData ?? []);
 
       // Type d'enseignement des classes (sans jamais bloquer la page si le script SQL n'est pas installé).
@@ -115,8 +116,8 @@ export default function ClassesPage() {
         .select('id, nom, coefficient_defaut')
         .eq('etablissement_id', profile.etablissement_id)
         .order('nom');
-
       if (matieresError) throw new Error(`Erreur matières : ${matieresError.message}`);
+
       setMatieresEtablissement(matieresData ?? []);
 
       const selectionInitiale: Record<string, Selection> = {};
@@ -235,6 +236,7 @@ export default function ClassesPage() {
       setError('Nom et niveau sont obligatoires.');
       return;
     }
+
     setSaving(true);
     setError(null);
     setSucces(null);
@@ -315,6 +317,10 @@ export default function ClassesPage() {
   const espaceUnique = !filtrer && actifs.length === 1 ? espaceDef(actifs[0]) : undefined;
   const defForm = filtrer ? espaceDef(espaceForm) : espaceUnique;
   const formuleActive = defForm?.code === 'secondaire' ? formule : null;
+
+  // Supérieur : grande école ou université LMD (niveaux et filières adaptés)
+  const defSup = defForm?.code === 'superieur' ? FORMULES_SUPERIEUR.find((f) => f.code === formuleSup) : undefined;
+
   const cyclesPermis = (c: string) =>
     (!defForm || (defForm.cycles as string[]).includes(c)) &&
     (!formuleActive || (formuleActive.cycles as string[]).includes(c));
@@ -326,8 +332,8 @@ export default function ClassesPage() {
     const c = inferCycle(n); // '1ère année', CAP... : cycle non déduit, on les laisse
     return !formuleActive || !c || (formuleActive.cycles as string[]).includes(c);
   };
-  const classesAffichees = classes.filter((c) => classeVisible(c.cycle, typeParClasse[c.id], c.niveau));
 
+  const classesAffichees = classes.filter((c) => classeVisible(c.cycle, typeParClasse[c.id], c.niveau));
   const nbSelectionnees = Object.values(selection).filter((s) => s.checked).length;
 
   if (loading) return <p className="p-6 text-sm text-gray-500">Chargement...</p>;
@@ -412,12 +418,13 @@ export default function ClassesPage() {
       {/* Créer une classe */}
       <div className="border rounded-lg p-4">
         <p className="font-semibold text-sm mb-3">Créer une classe</p>
+
         <div className="space-y-3">
           <input
             type="text"
             value={nom}
             onChange={(e) => setNom(e.target.value)}
-            placeholder="Nom de la classe (ex: 6ème A, 6e 2, Tle D5...)"
+            placeholder={defSup ? 'Nom de la classe (ex: Génie civil 1ère année, Licence 1 Droit)' : 'Nom de la classe (ex: 6ème A, 6e 2, Tle D5...)'}
             className="w-full border rounded-md px-3 py-2 text-sm"
           />
 
@@ -445,10 +452,11 @@ export default function ClassesPage() {
               className="w-full border rounded-md px-3 py-2 text-sm"
             />
             <datalist id="niveaux-suggestions">
-              {(defForm?.niveauxParType?.[typeEnseignement as 'general' | 'technique' | 'professionnel'] ?? defForm?.niveaux ?? []).filter(niveauxPermis).map((n) => (
+              {(defSup?.niveaux ?? defForm?.niveauxParType?.[typeEnseignement as 'general' | 'technique' | 'professionnel'] ?? defForm?.niveaux ?? []).filter(niveauxPermis).map((n) => (
                 <option key={n} value={n} />
               ))}
             </datalist>
+
             <select
               value={cycle}
               onChange={(e) => setCycle(e.target.value)}
@@ -481,13 +489,14 @@ export default function ClassesPage() {
             value={serie}
             onChange={(e) => setSerie(e.target.value)}
             placeholder={(() => {
-              const sugg = defForm?.seriesParType?.[typeEnseignement as 'general' | 'technique' | 'professionnel'] ?? defForm?.series ?? [];
+              const sugg = defSup?.filieres ?? defForm?.seriesParType?.[typeEnseignement as 'general' | 'technique' | 'professionnel'] ?? defForm?.series ?? [];
+              if (defSup) return sugg.length ? `Filière (ex: ${sugg.slice(0, 3).join(', ')})` : 'Filière';
               return sugg.length ? `Série ou filière (ex: ${sugg.slice(0, 3).join(', ')})` : 'Série (optionnel, ex: A2, C, D)';
             })()}
             className="w-full border rounded-md px-3 py-2 text-sm"
           />
           <datalist id="filieres-suggestions">
-            {(defForm?.seriesParType?.[typeEnseignement as 'general' | 'technique' | 'professionnel'] ?? defForm?.series ?? []).map((f) => (
+            {(defSup?.filieres ?? defForm?.seriesParType?.[typeEnseignement as 'general' | 'technique' | 'professionnel'] ?? defForm?.series ?? []).map((f) => (
               <option key={f} value={f} />
             ))}
           </datalist>
@@ -516,7 +525,7 @@ export default function ClassesPage() {
                 Aucune matière n'existe encore pour cet établissement. Tu pourras en créer depuis
                 la page "Matières" d'une classe.
               </p>
-            ) : (
+    ) : (
               <div className="border rounded-md divide-y max-h-64 overflow-y-auto">
                 {matieresEtablissement.map((m) => {
                   const sel = selection[m.id] ?? { checked: false, coefficient: m.coefficient_defaut ?? 1 };
@@ -527,7 +536,7 @@ export default function ClassesPage() {
                         checked={sel.checked}
                         onChange={() => toggleMatiere(m.id)}
                       />
-    <span className="flex-1">{m.nom}</span>
+                      <span className="flex-1">{m.nom}</span>
                       <input
                         type="number"
                         step="0.5"
@@ -557,5 +566,4 @@ export default function ClassesPage() {
       </div>
     </main>
   );
-        }
-        
+}

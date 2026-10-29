@@ -4,6 +4,7 @@
 export type EspaceCode = 'maternelle' | 'primaire' | 'secondaire' | 'superieur';
 
 export type CycleCode = 'maternelle' | 'primaire' | 'college' | 'lycee' | 'superieur';
+
 export type TypeEnseignement = 'general' | 'technique' | 'professionnel';
 
 export type EspaceDef = {
@@ -188,21 +189,42 @@ export function formuleDef(code: unknown): FormuleDef | undefined {
 
 export const FORMULE_PAR_DEFAUT: FormuleSecondaire = 'college_lycee_tp';
 
+// Formules du supérieur : grande école (filières avec leurs matières) ou université LMD
 export type FormuleSuperieur = 'grande_ecole' | 'universite_lmd';
 
-export const FORMULES_SUPERIEUR = [
+export type FormuleSuperieurDef = {
+  code: FormuleSuperieur;
+  label: string;
+  description: string;
+  niveaux: string[]; // suggestions pour le champ « niveau »
+  filieres: string[]; // suggestions pour le champ « filière » (libre : l'admin peut en saisir d'autres)
+};
+
+export const FORMULES_SUPERIEUR: FormuleSuperieurDef[] = [
   {
-    code: 'grande_ecole' as FormuleSuperieur,
+    code: 'grande_ecole',
     label: 'Grande école',
-    description: 'BTS, cycle ingénieur, management : chaque filière a ses matières.',
+    description: 'BTS, cycle ingénieur, management : chaque filière a ses propres matières.',
     niveaux: ['BTS 1', 'BTS 2', 'Ingénieur 1', 'Ingénieur 2', 'Ingénieur 3', 'Ingénieur 4', 'Ingénieur 5'],
-    filieres: ['Comptabilité et gestion', 'Informatique de gestion', 'Commerce international', 'Logistique et transport', 'Génie civil', 'Génie électrique', 'Génie informatique'],
+    filieres: [
+      'Comptabilité et gestion',
+      'Informatique de gestion',
+      'Commerce international',
+      'Logistique et transport',
+      'Génie civil',
+      'Génie électrique',
+      'Génie informatique',
+    ],
   },
   {
-    code: 'universite_lmd' as FormuleSuperieur,
+    code: 'universite_lmd',
     label: 'Université (système LMD)',
     description: 'Licence, Master, Doctorat, par parcours.',
     niveaux: ['Licence 1', 'Licence 2', 'Licence 3', 'Master 1', 'Master 2', 'Doctorat 1', 'Doctorat 2', 'Doctorat 3'],
     filieres: ['Droit', 'Sciences économiques', 'Lettres modernes', 'Sciences et technologies', 'Informatique'],
   },
 ];
+
+export function formuleSuperieurDef(code: unknown): FormuleSuperieurDef | undefined {
+  return FORMULES_SUPERIEUR.find((f) => f.code === code);
+}

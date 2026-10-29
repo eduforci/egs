@@ -12,6 +12,8 @@ type Cand = {
   id: string; eleve_id: string; nom: string; prenom: string; matricule: string | null;
   serie: string | null; classe_nom: string | null;
   numero_table: string | null; salle: number | null; salle_serie: string | null;
+  dateNaissance: string | null; lieuNaissance: string | null;
+  genre: 'M' | 'F' | null; photo: string | null;
 };
 type Col = { m: string; h: string };
 type ColsParSalle = Record<string, Col[]>;
@@ -23,11 +25,58 @@ function serieDe(nomClasse: string | null, serieClasse: string | null, serieExam
   return serieExamen ? serieExamen.toUpperCase() : null;
 }
 
+// ---- Aides pour les étiquettes ----
+function lire(o: any, cles: string[]): any {
+  if (!o) return null;
+  for (const k of cles) {
+    const v = o[k];
+    if (v !== undefined && v !== null && String(v).trim() !== '') return v;
+  }
+  return null;
+}
+function fmtDate(v: any): string | null {
+  if (!v) return null;
+  const s = String(v);
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
+}
+function normGenre(v: any): 'M' | 'F' | null {
+  if (!v) return null;
+  const s = String(v).trim().toLowerCase();
+  if (s.startsWith('f')) return 'F';
+  if (s.startsWith('m') || s.startsWith('g') || s.startsWith('h')) return 'M';
+  return null;
+}
+function urlPhoto(v: any): string | null {
+  if (!v) return null;
+  const s = String(v);
+  return /^(https?:|data:|\/)/.test(s) ? s : null;
+}
+function libelleType(t: any): string {
+  const s = String(t ?? '').toLowerCase();
+  if (s.includes('blanc')) return 'EXAMEN BLANC';
+  if (s.includes('local')) return 'EXAMEN LOCAL';
+  if (s.includes('test')) return 'TEST';
+  return s ? s.toUpperCase() : 'EXAMEN';
+}
+
+function Silhouette({ genre }: { genre: 'M' | 'F' | null }) {
+  return (
+    <svg viewBox="0 0 72 90" aria-hidden="true">
+      <rect width="72" height="90" fill="#e6ebf2" />
+      {genre === 'F' && <path d="M18 64c-4-28 2-46 18-46s22 18 18 46z" fill="#64748b" />}
+      <path d="M8 90c0-20 12-28 28-28s28 8 28 28z" fill="#94a3b8" />
+      <circle cx="36" cy="36" r="14" fill="#cbd5e1" />
+      {genre === 'M' && <path d="M22 34c0-10 6-16 14-16s14 6 14 16c-4-6-9-8-14-8s-10 2-14 8z" fill="#64748b" />}
+      {genre === 'F' && <path d="M22 36c0-12 6-18 14-18s14 6 14 18c-3-7-8-10-14-10s-11 3-14 10z" fill="#64748b" />}
+    </svg>
+  );
+}
+
 export default function SallesExamenPage() {
   const params = useParams();
   const examenId = params?.id as string;
   const supabase = useMemo(() => createClient(), []);
-
   const [examen, setExamen] = useState<any>(null);
   const [etab, setEtab] = useState('');
   const [cands, setCands] = useState<Cand[]>([]);
@@ -53,19 +102,18 @@ export default function SallesExamenPage() {
       setParSalle(ex.candidats_par_salle ? String(ex.candidats_par_salle) : '');
       const { data: et } = await supabase.from('etablissements').select('nom').eq('id', ex.etablissement_id).single();
       setEtab(et?.nom ?? '');
-
       // candidats (pagination 1000)
       let brut: any[] = [];
       let avecSerie = true;
       for (let d = 0; ; d += 1000) {
         let r: { data: any[] | null; error: any } = await supabase
           .from('examens_candidats')
-          .select('id, eleve_id, numero_table, salle, salle_serie, eleves(matricule, classes(nom, serie))')
+          .select('id, eleve_id, numero_table, salle, salle_serie, eleves(*, classes(nom, serie))')
           .eq('examen_id', examenId).range(d, d + 999);
         if (r.error) {
           avecSerie = false;
           r = await supabase.from('examens_candidats')
-            .select('id, eleve_id, eleves(matricule, classes(nom))')
+            .select('id, eleve_id, eleves(*, classes(nom))')
             .eq('examen_id', examenId).range(d, d + 999);
           setColonnesOk(false);
         }
@@ -74,27 +122,31 @@ export default function SallesExamenPage() {
         if ((r.data ?? []).length < 1000) break;
       }
       void avecSerie;
-
       const ids = brut.map((b) => b.eleve_id);
       const profils = new Map<string, any>();
       for (let i = 0; i < ids.length; i += 100) {
-        const { data } = await supabase.from('profiles').select('id, nom, prenom').in('id', ids.slice(i, i + 100));
+        const { data } = await supabase.from('profiles').select('*').in('id', ids.slice(i, i + 100));
         (data ?? []).forEach((p: any) => profils.set(p.id, p));
       }
       const liste: Cand[] = brut.map((b) => {
         const el = Array.isArray(b.eleves) ? b.eleves[0] : b.eleves;
         const cl = el?.classes ? (Array.isArray(el.classes) ? el.classes[0] : el.classes) : null;
         const p = profils.get(b.eleve_id);
+        const trouve = (cles: string[]) => lire(el, cles) ?? lire(p, cles);
+        const lieu = trouve(['lieu_naissance', 'lieu_de_naissance', 'lieu']);
         return {
           id: b.id, eleve_id: b.eleve_id, nom: p?.nom ?? 'Inconnu', prenom: p?.prenom ?? '',
           matricule: el?.matricule ?? null, classe_nom: cl?.nom ?? null,
           serie: serieDe(cl?.nom ?? null, cl?.serie ?? null, ex.serie ?? null),
           numero_table: b.numero_table ?? null, salle: b.salle ?? null, salle_serie: b.salle_serie ?? null,
+          dateNaissance: fmtDate(trouve(['date_naissance', 'date_de_naissance', 'naissance', 'dob'])),
+          lieuNaissance: lieu ? String(lieu) : null,
+          genre: normGenre(trouve(['genre', 'sexe', 'gender'])),
+          photo: urlPhoto(trouve(['photo_url', 'photo', 'avatar_url', 'avatar', 'image_url'])),
         };
       });
       liste.sort((a, b) => (a.numero_table ?? 'ZZ').localeCompare(b.numero_table ?? 'ZZ') || a.nom.localeCompare(b.nom));
       setCands(liste);
-
       const { data: ep } = await supabase.from('examens_matieres').select('nom').eq('examen_id', examenId);
       const noms: string[] = Array.from(new Set<string>((ep ?? []).map((x: any) => String(x.nom).replace(/\s*(écrit|ecrit|oral|pratique)\s*$/i, '').trim()).filter(Boolean)));
       setSuggestions(noms);
@@ -129,7 +181,6 @@ export default function SallesExamenPage() {
       // On garde le choix de l'école pour cet examen
       const rs = await supabase.from('examens').update({ candidats_par_salle: taille }).eq('id', examenId);
       if (rs.error) throw new Error(rs.error.message);
-
       const nums = genererNumeros(cands.map((c) => ({ ...c })), prefixe, anneeCourte(examen?.annee_scolaire));
       const aff = repartirSalles(cands.map((c) => ({ ...c })), nums, estBac, taille);
       const r0 = await supabase.from('examens_candidats')
@@ -190,10 +241,25 @@ export default function SallesExamenPage() {
 
   return (
     <div className="p-4 max-w-5xl mx-auto">
-      <style>{`@media print { .no-print{display:none!important} .saut{page-break-after:always} @page{size:A4 landscape;margin:10mm} .etq{height:42mm!important;font-size:30pt!important} }
-        .etq{height:70px;border:1.5px dashed #444;display:flex;align-items:center;justify-content:center;font-weight:800;font-family:monospace;font-size:clamp(14px,4.6vw,24px);white-space:nowrap;break-inside:avoid;background:#fff}
-        .etqgrille{display:grid;grid-template-columns:repeat(3,1fr);gap:0}
-        @media print{.etqgrille{grid-template-columns:repeat(4,1fr)}}`}</style>
+      <style>{`@media print { .no-print{display:none!important} .saut{page-break-after:always} @page{size:A4 landscape;margin:10mm} }
+.etqgrille{display:grid;grid-template-columns:1fr;gap:0}
+@media (min-width:640px){.etqgrille{grid-template-columns:repeat(2,1fr)}}
+@media print{.etqgrille{grid-template-columns:repeat(2,1fr)}}
+.etq{border:1.5px dashed #444;background:#fff;color:#111;padding:8px 10px;break-inside:avoid;font-size:13px;line-height:1.4;display:flex;flex-direction:column;gap:6px}
+.etq-top{display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid #ccc;padding-bottom:4px;font-size:11px}
+.etq-type{background:#1e293b;color:#fff;border-radius:4px;padding:1px 6px;font-weight:700;white-space:nowrap}
+.etq-ex{font-weight:600;text-align:right}
+.etq-body{display:flex;gap:10px;align-items:center}
+.etq-photo{width:72px;height:90px;flex:none;border:1px solid #bbb;border-radius:4px;overflow:hidden;background:#eef1f5}
+.etq-photo img,.etq-photo svg{width:100%;height:100%;object-fit:cover;display:block}
+.etq-info{min-width:0}
+.etq-nom{font-weight:800;font-size:15px;text-transform:uppercase;word-break:break-word}
+.etq-nom span{text-transform:none;font-weight:700}
+.etq-table{text-align:center;border-top:1px solid #ccc;padding-top:4px}
+.etq-table small{display:block;font-size:10px;letter-spacing:.08em;color:#555}
+.etq-table strong{font-family:monospace;font-size:clamp(20px,6vw,28px);font-weight:800}
+@media print{.etq{min-height:58mm;font-size:11pt}.etq-photo{width:24mm;height:30mm}.etq-nom{font-size:13pt}.etq-table strong{font-size:26pt}}`}</style>
+
       <div className="no-print">
         <Link href={`/chef/examens/${examenId}`} className="text-sm text-blue-600">← Retour à l&apos;examen</Link>
         <h1 className="text-xl font-bold my-2">N° de table, salles et émargement</h1>
@@ -342,7 +408,32 @@ export default function SallesExamenPage() {
         <div key={s.n} className="saut mb-6">
           <div className="text-xs text-gray-500 mb-1 no-print">Salle {s.n}{s.serie ? ` — Série ${s.serie}` : ''} — découpez le long des pointillés</div>
           <div className="etqgrille">
-            {s.liste.map((c) => <div key={c.id} className="etq">{c.numero_table}</div>)}
+            {s.liste.map((c) => (
+              <div key={c.id} className="etq">
+                <div className="etq-top">
+                  <span className="etq-type">{libelleType(examen?.type)}</span>
+                  <span className="etq-ex">{examen?.nom} {examen?.annee_scolaire ?? ''}</span>
+                </div>
+                <div className="etq-body">
+                  <div className="etq-photo">
+                    {c.photo
+                      // eslint-disable-next-line @next/next/no-img-element
+                      ? <img src={c.photo} alt="" />
+                      : <Silhouette genre={c.genre} />}
+                  </div>
+                  <div className="etq-info">
+                    <div className="etq-nom">{c.nom} <span>{c.prenom}</span></div>
+                    <div>Matricule : <b>{c.matricule ?? '-'}</b></div>
+                    <div>Genre : <b>{c.genre === 'M' ? 'Masculin' : c.genre === 'F' ? 'Féminin' : '-'}</b></div>
+                    <div>Né(e) le <b>{c.dateNaissance ?? '-'}</b> à <b>{c.lieuNaissance ?? '-'}</b></div>
+                  </div>
+                </div>
+                <div className="etq-table">
+                  <small>N° DE TABLE</small>
+                  <strong>{c.numero_table}</strong>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       ))}

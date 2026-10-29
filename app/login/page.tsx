@@ -7,6 +7,7 @@ import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import LoginCarousel from "@/components/login/LoginCarousel";
+
 type Mode = "login" | "forgot";
 
 function MailIcon() {
@@ -108,19 +109,16 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [resetSent, setResetSent] = useState(false);
   const [resetEmailDisplay, setResetEmailDisplay] = useState("");
-
   const supabase = createClient();
   const { t } = useLangue();
 
   async function resolveEmail(value: string): Promise<string | null> {
     const trimmed = value.trim();
     if (trimmed.includes("@")) return trimmed;
-
     const { data, error: resolveError } = await supabase.rpc(
       "resolve_login",
       { p_identifiant: trimmed }
     );
-
     if (resolveError || !data) return null;
     return data as string;
   }
@@ -129,29 +127,23 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-
     try {
       const resolvedEmail = await resolveEmail(email);
-
       if (!resolvedEmail) {
         setError("Identifiants incorrects. Vérifiez votre email/identifiant et mot de passe.");
         return;
       }
-
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: resolvedEmail,
         password,
       });
-
       if (signInError) {
         setError("Identifiants incorrects. Vérifiez votre email et mot de passe.");
         return;
       }
-
       if (typeof window !== "undefined") {
         window.localStorage.setItem("egs_remember_me", rememberMe ? "1" : "0");
       }
-
       window.location.href = "/";
     } catch {
       setError("Une erreur est survenue. Réessayez dans quelques instants.");
@@ -163,21 +155,17 @@ export default function LoginPage() {
   async function handleForgotPassword(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-
     if (!email) {
       setError("Renseignez votre email ou identifiant ci-dessus avant de continuer.");
       return;
     }
-
     setLoading(true);
     try {
       const resolvedEmail = await resolveEmail(email);
-
       if (!resolvedEmail) {
         setError("Aucun compte ne correspond à cet email/identifiant.");
         return;
       }
-
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(
         resolvedEmail,
         {
@@ -187,14 +175,12 @@ export default function LoginPage() {
               : undefined,
         }
       );
-
       if (resetError) {
         setError(
           `Impossible d'envoyer l'email — détail technique : ${resetError.message} (code: ${resetError.status ?? "?"})`
         );
         return;
       }
-
       setResetEmailDisplay(resolvedEmail);
       setResetSent(true);
     } catch (err) {
@@ -228,9 +214,9 @@ export default function LoginPage() {
             &laquo; {t("La gestion scolaire réinventée")} &raquo;
           </div>
         </div>
-</div>   {/* fin du bloc Logo */}
 
-<LoginCarousel />
+        {/* Pages qui défilent */}
+        <LoginCarousel />
 
         <Card>
           {mode === "login" ? (
@@ -238,7 +224,6 @@ export default function LoginPage() {
               <h1 className="font-display text-lg font-semibold text-chalk mb-5 text-center">
                 {t("Connexion à votre espace")}
               </h1>
-
               <form onSubmit={handleSubmit} noValidate className="space-y-4">
                 <Input
                   label={t("Email ou Identifiant")}
@@ -250,7 +235,6 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder={t("vous@etablissement.ci ou ENS-0001")}
                 />
-
                 <Input
                   label={t("Mot de passe")}
                   type={showPassword ? "text" : "password"}
@@ -275,7 +259,6 @@ export default function LoginPage() {
                     </button>
                   }
                 />
-
                 <div className="flex items-center justify-between text-sm">
                   <label className="flex items-center gap-2 text-chalk/70 cursor-pointer select-none">
                     <input
@@ -298,13 +281,11 @@ export default function LoginPage() {
                     {t("Mot de passe oublié ?")}
                   </button>
                 </div>
-
                 {error && (
                   <p role="alert" aria-live="polite" className="text-red-600 text-sm">
                     {t(error)}
                   </p>
                 )}
-
                 <Button type="submit" loading={loading}>
                   {t("Se connecter")}
                 </Button>
@@ -318,7 +299,6 @@ export default function LoginPage() {
               <p className="text-sm text-chalk/60 mb-5 text-center">
                 {t("Saisissez votre email, nous vous enverrons un lien de réinitialisation.")}
               </p>
-
               {resetSent ? (
                 <div className="text-center space-y-4">
                   <p className="text-sm text-chalk bg-chalk/5 rounded-xl p-4">
@@ -347,13 +327,11 @@ export default function LoginPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder={t("vous@etablissement.ci ou ENS-0001")}
                   />
-
                   {error && (
                     <p role="alert" aria-live="polite" className="text-red-600 text-sm">
                       {t(error)}
                     </p>
                   )}
-
                   <Button type="submit" loading={loading}>
                     {t("Envoyer le lien")}
                   </Button>
@@ -401,5 +379,4 @@ export default function LoginPage() {
       </div>
     </div>
   );
-    }
-        
+}

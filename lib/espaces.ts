@@ -187,3 +187,22 @@ export function formuleDef(code: unknown): FormuleDef | undefined {
 }
 
 export const FORMULE_PAR_DEFAUT: FormuleSecondaire = 'college_lycee_tp';
+
+export type FormuleSuperieur = 'grande_ecole' | 'universite_lmd';
+
+export const FORMULES_SUPERIEUR = [
+  {
+    code: 'grande_ecole' as FormuleSuperieur,
+    label: 'Grande école',
+    description: 'BTS, cycle ingénieur, management : chaque filière a ses matières.',
+    niveaux: ['BTS 1', 'BTS 2', 'Ingénieur 1', 'Ingénieur 2', 'Ingénieur 3', 'Ingénieur 4', 'Ingénieur 5'],
+    filieres: ['Comptabilité et gestion', 'Informatique de gestion', 'Commerce international', 'Logistique et transport', 'Génie civil', 'Génie électrique', 'Génie informatique'],
+  },
+  {
+    code: 'universite_lmd' as FormuleSuperieur,
+    label: 'Université (système LMD)',
+    description: 'Licence, Master, Doctorat, par parcours.',
+    niveaux: ['Licence 1', 'Licence 2', 'Licence 3', 'Master 1', 'Master 2', 'Doctorat 1', 'Doctorat 2', 'Doctorat 3'],
+    filieres: ['Droit', 'Sciences économiques', 'Lettres modernes', 'Sciences et technologies', 'Informatique'],
+  },
+];

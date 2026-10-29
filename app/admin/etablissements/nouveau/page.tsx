@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import EspacesCheckboxes, { typeHistorique } from "@/components/espaces-checkboxes";
-import { inferCycle, formuleDef, FORMULE_PAR_DEFAUT, ESPACES, type EspaceCode, type FormuleSecondaire } from "@/lib/espaces";
+import { inferCycle, formuleDef, FORMULE_PAR_DEFAUT, ESPACES, FORMULES_SUPERIEUR, type EspaceCode, type FormuleSecondaire, type FormuleSuperieur } from "@/lib/espaces";
 
 const STATUTS = ["actif", "en_attente", "suspendu", "expire"] as const;
 const SYSTEMES = [{ value: "ivoirien", label: "Ivoirien" }];
@@ -20,6 +20,7 @@ export default function NouvelEtablissement() {
   const [dateDebut, setDateDebut] = useState("");
   const [espaces, setEspaces] = useState<EspaceCode[]>(["secondaire"]);
   const [formule, setFormule] = useState<FormuleSecondaire | null>(FORMULE_PAR_DEFAUT);
+  const [formuleSup, setFormuleSup] = useState<FormuleSuperieur>("grande_ecole");
   const [systeme, setSysteme] = useState("ivoirien");
   const [anneeScolaire, setAnneeScolaire] = useState("2025-2026");
   const [nomChef, setNomChef] = useState("");
@@ -76,8 +77,15 @@ export default function NouvelEtablissement() {
     }
 
     await supabase.from("etablissements").update({ espaces_actifs: espaces }).eq("id", nouvelEtab.id);
+
     const formuleChoisie = espaces.includes("secondaire") ? formule : null;
     await supabase.from("etablissements").update({ formule_secondaire: formuleChoisie }).eq("id", nouvelEtab.id);
+
+    // Formule du supérieur : grande école ou université LMD
+    await supabase
+      .from("etablissements")
+      .update({ formule_superieur: espaces.includes("superieur") ? formuleSup : null })
+      .eq("id", nouvelEtab.id);
 
     const { data: initData, error: initError } = await supabase.rpc(
       "initialiser_etablissement",
@@ -99,7 +107,7 @@ export default function NouvelEtablissement() {
       .eq("etablissement_id", nouvelEtab.id);
 
     if (classesInit && classesInit.length > 0) {
-      const cyclesAutorises = ESPACES.filter(es => espaces.includes(es.code)).flatMap(es => es.cycles);
+      const cyclesAutorises = ESPACES.filter((es) => espaces.includes(es.code)).flatMap((es) => es.cycles);
       const defFormule = espaces.includes("secondaire") ? formuleDef(formule) : undefined;
       const sansGeneral = defFormule ? !defFormule.types.includes("general") : false;
 
@@ -116,22 +124,29 @@ export default function NouvelEtablissement() {
         .map((c: any) => c.id);
 
       if (aRetirer.length) {
-        await supabase.from("classes").delete().in("id", aRetirer);
+        // On retire d'abord les matières liées, sinon la suppression de la classe peut échouer
+        await supabase.from("classes_matieres").delete().in("classe_id", aRetirer);
+        const { error: errSuppression } = await supabase.from("classes").delete().in("id", aRetirer);
+        if (errSuppression) console.error("Suppression des classes :", errSuppression.message);
       }
 
       const classesRestantes = classesInit.length - aRetirer.length;
-      if (classesRestantes === 0 && !espaces.includes("secondaire")) {
-        const niveauxACreer = ESPACES.filter(es => espaces.includes(es.code)).flatMap(es =>
-          es.niveaux.map(n => ({ niveau: n, cycle: es.cycles[0] }))
+
+      // Le supérieur n'a pas de classes par défaut : l'admin crée ses filières.
+      if (classesRestantes === 0 && !espaces.includes("secondaire") && !espaces.includes("superieur")) {
+        const niveauxACreer = ESPACES.filter((es) => espaces.includes(es.code)).flatMap((es) =>
+          es.niveaux.map((n) => ({ niveau: n, cycle: es.cycles[0] }))
         );
         for (const cl of niveauxACreer) {
-          await supabase.from("classes").insert({
+          const { error: errInsertion } = await supabase.from("classes").insert({
             etablissement_id: nouvelEtab.id,
             nom: cl.niveau,
             niveau: cl.niveau,
             cycle: cl.cycle,
+            annee_scolaire: anneeScolaire,
             type_enseignement: "general",
           });
+          if (errInsertion) console.error("Création de classe :", errInsertion.message);
         }
       }
     }
@@ -145,8 +160,8 @@ export default function NouvelEtablissement() {
         prenom: prenomChef.trim(),
       }),
     });
-
     const dataChef = await reponseChef.json();
+
     setChargement(false);
 
     if (!reponseChef.ok) {
@@ -237,6 +252,23 @@ export default function NouvelEtablissement() {
             Coche les cycles que cette école gère. Le promoteur les verra, sans pouvoir les modifier.
           </p>
           <EspacesCheckboxes value={espaces} onChange={setEspaces} formule={formule} onFormule={setFormule} />
+          {espaces.includes("superieur") && (
+            <div className="mt-3">
+              <label className="block text-sm font-medium mb-1">Type d'établissement supérieur</label>
+              <select
+                value={formuleSup}
+                onChange={(e) => setFormuleSup(e.target.value as FormuleSuperieur)}
+                className="w-full border rounded-lg p-2"
+              >
+                {FORMULES_SUPERIEUR.map((f) => (
+                  <option key={f.code} value={f.code}>{f.label}</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                {FORMULES_SUPERIEUR.find((f) => f.code === formuleSup)?.description}
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 gap-4">

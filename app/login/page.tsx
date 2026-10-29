@@ -6,7 +6,7 @@ import { useLangue } from "@/lib/i18n/provider";
 import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
-
+import LoginCarousel from "@/components/login/LoginCarousel";
 type Mode = "login" | "forgot";
 
 function MailIcon() {
@@ -228,6 +228,9 @@ export default function LoginPage() {
             &laquo; {t("La gestion scolaire réinventée")} &raquo;
           </div>
         </div>
+</div>   {/* fin du bloc Logo */}
+
+<LoginCarousel />
 
         <Card>
           {mode === "login" ? (

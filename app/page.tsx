@@ -4,9 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import Landing from "@/components/Landing";
 
 export const metadata: Metadata = {
-  title: "EGS — École Gestion System",
+  title: "EGS — Espace de Gestion Scolaire",
   description:
-    "EGS (École Gestion System) : plateforme de gestion scolaire pour les établissements africains. Académique, finances, RH, communication.",
+    "EGS (Espace de Gestion Scolaire) : plateforme de gestion scolaire pour les établissements africains. Académique, finances, RH, communication.",
 };
 
 const DASHBOARD_BY_ROLE: Record<string, string> = {

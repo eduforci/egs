@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useLangue } from '@/lib/i18n/provider';
 import SelecteurLangue from '@/components/selecteur-langue';
 import Avatar from '@/components/avatar';
+import MenuUtilisateur from '@/components/menu-utilisateur';
 
 type NavItem = { label: string; href: string; icon: string };
 type NavGroup = { titre: string; items: NavItem[] };
@@ -153,10 +154,11 @@ export default function EducateurLayout({ children }: { children: React.ReactNod
             <div className="text-xs text-neutral-400 truncate">{etablissementNom}</div>
           </div>
           <SelecteurLangue />
+          <MenuUtilisateur parametresHref="/educateur/profil" />
         </header>
 
         <main className="flex-1">{children}</main>
       </div>
     </div>
   );
-    }
+}

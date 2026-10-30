@@ -8,6 +8,7 @@ import { useLangue } from '@/lib/i18n/provider';
 import SelecteurLangue from '@/components/selecteur-langue';
 import EspaceSelecteur from '@/components/espace-selecteur';
 import Avatar from '@/components/avatar';
+import MenuUtilisateur from '@/components/menu-utilisateur';
 
 type NavItem = { label: string; href: string; icon: string };
 type NavGroup = { titre: string; items: NavItem[] };
@@ -26,7 +27,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Classes', href: '/chef/classes', icon: '🏫' },
       { label: 'Enseignants', href: '/chef/enseignants', icon: '👨‍🏫' },
       { label: 'Élèves', href: '/chef/eleves', icon: '🎓' },
-{ label: 'Répartir en classes', href: '/chef/eleves/repartition', icon: '🔀' },
+      { label: 'Répartir en classes', href: '/chef/eleves/repartition', icon: '🔀' },
       { label: 'Parents', href: '/chef/parents', icon: '👨‍👩‍👧' },
       { label: 'Personnel', href: '/chef/personnel', icon: '🧑‍💼' },
       { label: 'Gestion RH', href: '/direction/rh', icon: '🗂️' },
@@ -204,6 +205,7 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
           </div>
           <EspaceSelecteur />
           <SelecteurLangue />
+          <MenuUtilisateur parametresHref="/chef/profil" />
         </header>
 
         {/* BANDEAU — visible uniquement si un directeur des études visite une page partagée avec le chef */}
@@ -226,5 +228,3 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
     </div>
   );
 }
-
-        

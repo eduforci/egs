@@ -1,5 +1,13 @@
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
+import Landing from "@/components/Landing";
+
+export const metadata: Metadata = {
+  title: "EGS — École Gestion System",
+  description:
+    "EGS (École Gestion System) : plateforme de gestion scolaire pour les établissements africains. Académique, finances, RH, communication.",
+};
 
 const DASHBOARD_BY_ROLE: Record<string, string> = {
   super_admin: "/admin/dashboard",
@@ -20,7 +28,7 @@ export default async function Home() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/login");
+  if (!user) return <Landing />;
 
   const { data: profile } = await supabase
     .from("profiles")

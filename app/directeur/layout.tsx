@@ -8,6 +8,7 @@ import { useLangue } from '@/lib/i18n/provider';
 import SelecteurLangue from '@/components/selecteur-langue';
 import EspaceSelecteur from '@/components/espace-selecteur';
 import Avatar from '@/components/avatar';
+import MenuUtilisateur from '@/components/menu-utilisateur';
 import { useEspace } from '@/lib/use-espace';
 import type { EspaceCode } from '@/lib/espaces';
 
@@ -268,11 +269,11 @@ export default function DirecteurLayout({ children }: { children: React.ReactNod
           </div>
           <EspaceSelecteur />
           <SelecteurLangue />
+          <MenuUtilisateur parametresHref="/directeur/profil" />
         </header>
 
         <main className="flex-1">{children}</main>
       </div>
     </div>
   );
-      }
-      
+}

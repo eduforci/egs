@@ -120,7 +120,7 @@ export default function Landing() {
       </main>
 
       <footer className="egs-foot">
-        <p><b>EGS · École Gestion System</b></p>
+        <p><b>EGS · Espace de Gestion Scolaire</b></p>
         <p>WhatsApp : <a href={`https://wa.me/${WHATSAPP}`}>{WHATSAPP_AFFICHE}</a> · Téléphone : <a href={`tel:${TELEPHONE.replace(/\s/g, "")}`}>{TELEPHONE}</a></p>
       </footer>
     </div>

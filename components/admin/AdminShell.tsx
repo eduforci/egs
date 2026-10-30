@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 function IconDashboard({ className }: { className?: string }) {
   return (
@@ -112,6 +113,16 @@ function IconChevronDown({ className }: { className?: string }) {
   );
 }
 
+function IconLogout({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <path d="m16 17 5-5-5-5" />
+      <path d="M21 12H9" />
+    </svg>
+  );
+}
+
 type NavItem = {
   label: string;
   href: string;
@@ -192,6 +203,14 @@ export function AdminShell({
   const [notifOpen, setNotifOpen] = useState(false);
   const [messagesOpen, setMessagesOpen] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
+
+  const deconnecter = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.replace("/login");
+    router.refresh();
+  };
 
   const initials = fullName
     .split(" ")
@@ -395,6 +414,27 @@ export function AdminShell({
               )}
             </div>
 
+            {/* PARAMÈTRES */}
+            <Link
+              href="/admin/parametres"
+              className="rounded-lg p-2 text-[#6B6459] hover:bg-[#F1EEE4]"
+              aria-label="Paramètres"
+              title="Paramètres"
+            >
+              <IconSettings className="h-5 w-5" />
+            </Link>
+
+            {/* DÉCONNEXION */}
+            <button
+              onClick={deconnecter}
+              className="flex items-center gap-1.5 rounded-lg p-2 text-sm font-medium text-red-600 hover:bg-red-50"
+              aria-label="Déconnexion"
+              title="Déconnexion"
+            >
+              <IconLogout className="h-5 w-5" />
+              <span className="hidden md:inline">Déconnexion</span>
+            </button>
+
             <div className="flex items-center gap-2.5 border-l border-[#E7E2D6] pl-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#0B3D2E] text-xs font-semibold text-[#EFE6C8]">
                 {initials || "U"}
@@ -479,4 +519,4 @@ function SidebarContent({
       </div>
     </>
   );
-                              }
+}

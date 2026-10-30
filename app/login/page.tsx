@@ -208,7 +208,7 @@ export default function LoginPage() {
             EGS
           </div>
           <div className="text-xs text-chalk/50 uppercase tracking-wide mt-0.5">
-            École Gestion System
+            Espace de Gestion Scolaire 
           </div>
           <div className="text-xs text-chalk/40 italic mt-1">
             &laquo; {t("La gestion scolaire réinventée")} &raquo;

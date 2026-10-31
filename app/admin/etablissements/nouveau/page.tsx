@@ -13,6 +13,7 @@ export default function NouvelEtablissement() {
   const supabase = createClient();
 
   const [nom, setNom] = useState("");
+  const [code, setCode] = useState("");
   const [ville, setVille] = useState("");
   const [adresse, setAdresse] = useState("");
   const [telephone, setTelephone] = useState("");
@@ -43,6 +44,15 @@ export default function NouvelEtablissement() {
       setErreur("Le nom de l'établissement est obligatoire.");
       return;
     }
+    const codeNettoye = code.replace(/\D/g, "");
+    if (!codeNettoye) {
+      setErreur("Le code de l'établissement est obligatoire.");
+      return;
+    }
+    if (!/^\d{4,12}$/.test(codeNettoye)) {
+      setErreur("Le code de l'établissement doit contenir uniquement des chiffres (4 à 12 chiffres).");
+      return;
+    }
     if (espaces.length === 0) {
       setErreur("Coche au moins un espace de travail.");
       return;
@@ -54,10 +64,23 @@ export default function NouvelEtablissement() {
 
     setChargement(true);
 
+    // Le code doit être unique : on vérifie avant de créer
+    const { data: codeExistant } = await supabase
+      .from("etablissements")
+      .select("id")
+      .eq("code", codeNettoye)
+      .maybeSingle();
+    if (codeExistant) {
+      setErreur(`Le code « ${codeNettoye} » est déjà utilisé par un autre établissement.`);
+      setChargement(false);
+      return;
+    }
+
     const { data: nouvelEtab, error } = await supabase
       .from("etablissements")
       .insert({
         nom: nom.trim(),
+        code: codeNettoye,
         ville: ville.trim() || null,
         adresse: adresse.trim() || null,
         telephone: telephone.trim() || null,
@@ -71,7 +94,11 @@ export default function NouvelEtablissement() {
       .single();
 
     if (error || !nouvelEtab) {
-      setErreur(error?.message || "Erreur lors de la création.");
+      setErreur(
+        error?.code === "23505"
+          ? `Le code « ${codeNettoye} » est déjà utilisé par un autre établissement.`
+          : error?.message || "Erreur lors de la création."
+      );
       setChargement(false);
       return;
     }
@@ -244,6 +271,25 @@ export default function NouvelEtablissement() {
             required
             className="w-full border rounded-lg p-2"
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            Code de l'établissement *
+          </label>
+          <input
+            type="text"
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+            inputMode="numeric"
+            placeholder="Ex. : 310842"
+            maxLength={12}
+            required
+            className="w-full border rounded-lg p-2 font-mono"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            Chiffres uniquement, unique pour chaque école.
+          </p>
         </div>
 
         <div>

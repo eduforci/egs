@@ -23,6 +23,7 @@ export default function DepensesRecettesPage() {
   const [categoriesDepenses, setCategoriesDepenses] = useState<Categorie[]>([]);
   const [categoriesRecettes, setCategoriesRecettes] = useState<Categorie[]>([]);
   const [depenses, setDepenses] = useState<Depense[]>([]);
+  const [refus, setRefus] = useState<Record<string, string>>({}); // id dépense -> motif du refus
   const [recettes, setRecettes] = useState<Recette[]>([]);
   const [sessionsOuvertes, setSessionsOuvertes] = useState<CaisseSession[]>([]);
   const [comptesBancaires, setComptesBancaires] = useState<CompteBancaire[]>([]);
@@ -98,6 +99,22 @@ export default function DepensesRecettesPage() {
       return { id: d.id, libelle: d.libelle, fournisseur: d.fournisseur, montant: d.montant, date_depense: d.date_depense, categorie_nom: c?.nom ?? '-', validee: d.validee, justificatif: d.justificatif };
     });
     setDepenses(listeDep);
+
+    // Refus du promoteur. Colonnes ajoutées par supabase/alertes-caisse.sql :
+    // si elles n'existent pas encore, on ignore simplement l'erreur.
+    if (listeDep.length > 0) {
+      const { data: refData, error: refError } = await supabase
+        .from('depenses')
+        .select('id, refusee, refus_motif')
+        .in('id', listeDep.map((d) => d.id));
+      if (!refError && refData) {
+        const carte: Record<string, string> = {};
+        (refData as { id: string; refusee: boolean | null; refus_motif: string | null }[]).forEach((x) => {
+          if (x.refusee) carte[x.id] = x.refus_motif || 'Refusée par le promoteur';
+        });
+        setRefus(carte);
+      }
+    }
 
     const { data: recData } = await supabase
       .from('recettes')
@@ -348,12 +365,17 @@ export default function DepensesRecettesPage() {
                     <td className="px-3 py-2">
                       {d.libelle}
                       <span className="block text-[10px] text-gray-400">{d.categorie_nom}{d.fournisseur ? ` · ${d.fournisseur}` : ''}</span>
+                      {refus[d.id] && (
+                        <span className="block text-[11px] text-red-600">Refusée par le promoteur : {refus[d.id]}</span>
+                      )}
                     </td>
                     <td className="px-3 py-2">{d.montant.toLocaleString('fr-FR')} F</td>
                     <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{d.date_depense}</td>
                     <td className="px-3 py-2">
                       {d.validee ? (
                         <span className="text-green-600 text-xs">Validée</span>
+                      ) : refus[d.id] ? (
+                        <span className="text-red-600 text-xs">Refusée</span>
                       ) : (
                         <button onClick={() => validerDepense(d.id)} className="text-blue-600 text-xs">
                           Valider

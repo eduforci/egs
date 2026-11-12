@@ -28,6 +28,9 @@ const ACTIONS: Record<string, string> = {
   "paiement.enregistre": "Paiement enregistré",
   "paiement.modifie": "Paiement modifié",
   "paiement.supprime": "Paiement supprimé",
+  "caisse.depense_accordee": "Dépense accordée par le promoteur",
+  "caisse.depense_refusee": "Dépense refusée par le promoteur",
+  "caisse.reglages_alertes": "Réglages des alertes de caisse modifiés",
   "abonnement.statut": "Abonnement : statut changé",
   "abonnement.date_fin": "Abonnement : date de fin changée",
 };

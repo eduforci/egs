@@ -25,7 +25,8 @@ const NAV_GROUPS: NavGroup[] = [
       { label: "Résultats d'examens", href: '/parent/examens', icon: '🎓' },
     ],
   },
-  {
+       { label: 'Cantine et transport', href: '/parent/cantine-transport', icon: '🚌' },
+ {
     titre: 'COMMUNICATION',
     items: [{ label: 'Annonces de l\'école', href: '/parent/messagerie', icon: '📢' }],
   },

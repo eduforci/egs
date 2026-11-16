@@ -47,7 +47,23 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    titre: 'POINTAGE',
+    titre: 'CANTINE',
+    items: [
+      { label: 'Inscriptions cantine', href: '/chef/cantine', icon: '🍽️' },
+      { label: 'Menus', href: '/chef/cantine/menus', icon: '🥗' },
+      { label: 'Présences cantine', href: '/chef/cantine/presences', icon: '✔️' },
+    ],
+  },
+  {
+    titre: 'TRANSPORT',
+    items: [
+      { label: 'Circuits', href: '/chef/transport', icon: '🚌' },
+      { label: 'Véhicules', href: '/chef/transport/vehicules', icon: '🚐' },
+      { label: 'Inscriptions transport', href: '/chef/transport/inscriptions', icon: '📝' },
+      { label: 'Embarquement', href: '/chef/transport/embarquement', icon: '🧒' },
+    ],
+  },
+ titre: 'POINTAGE',
     items: [
       { label: 'Badger', href: '/pointage', icon: '👆' },
       { label: 'Configuration', href: '/direction/pointage/configuration', icon: '⚙️' },

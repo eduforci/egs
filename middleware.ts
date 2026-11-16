@@ -40,6 +40,8 @@ const EXCEPTIONS: { prefix: string; rolesSupplementaires: string[] }[] = [
   { prefix: "/chef/personnel", rolesSupplementaires: ["directeur_etudes"] },
   { prefix: "/chef/eleves", rolesSupplementaires: ["directeur_etudes"] },
   { prefix: "/chef/examens", rolesSupplementaires: ["directeur_etudes"] },
+  { prefix: "/chef/cantine", rolesSupplementaires: ["directeur_etudes"] },
+  { prefix: "/chef/transport", rolesSupplementaires: ["directeur_etudes"] },
   { prefix: "/chef/enseignants", rolesSupplementaires: ["directeur_etudes"] },
   { prefix: "/chef/parents", rolesSupplementaires: ["directeur_etudes"] },
   { prefix: "/direction", rolesSupplementaires: ["chef"] },

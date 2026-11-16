@@ -63,6 +63,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Embarquement', href: '/chef/transport/embarquement', icon: '🧒' },
     ],
   },
+{
  titre: 'POINTAGE',
     items: [
       { label: 'Badger', href: '/pointage', icon: '👆' },

@@ -23,10 +23,10 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Absences', href: '/absences', icon: '📋' },
       { label: 'Emploi du temps', href: '/emploi-du-temps', icon: '📅' },
       { label: "Résultats d'examens", href: '/parent/examens', icon: '🎓' },
+      { label: 'Cantine et transport', href: '/parent/cantine-transport', icon: '🚌' },
     ],
   },
-       { label: 'Cantine et transport', href: '/parent/cantine-transport', icon: '🚌' },
- {
+  {
     titre: 'COMMUNICATION',
     items: [{ label: 'Annonces de l\'école', href: '/parent/messagerie', icon: '📢' }],
   },

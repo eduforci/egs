@@ -63,7 +63,6 @@ const NAV_GROUPS: NavGroup[] = [
     titre: 'SUIVI PÉDAGOGIQUE',
     items: [
       { label: 'Validation des notes', href: '/directeur/notes-validation', icon: '✔️' },
-      { label: 'Suivi des moyennes (CIO)', href: '/direction/cio', icon: '🚦' },
       { label: 'Résultats', href: '/directeur/resultats', icon: '🏆' },
       { label: 'Absences', href: '/directeur/absences', icon: '🚫' },
     ],
@@ -71,12 +70,48 @@ const NAV_GROUPS: NavGroup[] = [
   {
     titre: 'ADMINISTRATION OFFICIELLE',
     items: [
-      { label: 'Statistiques DESPS', href: '/directeur-etudes/desps', icon: '📈' },
       { label: 'Code établissement', href: '/directeur-etudes/etablissement', icon: '🏷️' },
     ],
   },
   {
-    titre: 'AGFNE',
+    titre: 'REMONTÉE · MATERNELLE',
+    items: [
+      { label: 'Données des élèves', href: '/direction/remontee/maternelle/eleves', icon: '🧸' },
+      { label: 'Effectifs', href: '/direction/remontee/maternelle/effectifs', icon: '🔢' },
+      { label: 'Export des données', href: '/direction/remontee/maternelle/export', icon: '📤' },
+    ],
+  },
+  {
+    titre: 'REMONTÉE · PRIMAIRE',
+    items: [
+      { label: 'Fichier National des Élèves', href: '/direction/remontee/primaire/fichier-national', icon: '🗃️' },
+      { label: 'Matricules AGCP', href: '/direction/remontee/primaire/matricules', icon: '🆔' },
+      { label: 'Données élèves', href: '/direction/remontee/primaire/eleves', icon: '📚' },
+      { label: 'Moyennes trimestrielles', href: '/direction/remontee/primaire/moyennes-trimestrielles', icon: '📈' },
+      { label: 'Moyennes annuelles', href: '/direction/remontee/primaire/moyennes-annuelles', icon: '📊' },
+      { label: 'Transferts', href: '/direction/remontee/primaire/transferts', icon: '🔁' },
+      { label: 'Recherche matricule', href: '/direction/remontee/primaire/recherche', icon: '🔍' },
+      { label: 'Export AGCP', href: '/direction/remontee/primaire/export', icon: '📤' },
+    ],
+  },
+  {
+    titre: 'REMONTÉE · CEPE',
+    items: [
+      { label: 'Liste des candidats', href: '/direction/remontee/cepe/candidats', icon: '📋' },
+      { label: 'Vérification des matricules', href: '/direction/remontee/cepe/verification', icon: '✅' },
+      { label: 'Données candidats', href: '/direction/remontee/cepe/donnees', icon: '🗂️' },
+      { label: 'Export DECO', href: '/direction/remontee/cepe/export', icon: '📤' },
+    ],
+  },
+  {
+    titre: 'REMONTÉE · SECONDAIRE',
+    items: [
+      { label: 'DESPS', href: '/directeur-etudes/desps', icon: '📈' },
+      { label: 'Moyennes (suivi CIO)', href: '/direction/cio', icon: '🚦' },
+    ],
+  },
+  {
+    titre: 'SECONDAIRE · AGFNE',
     items: [
       { label: 'Élèves sans matricule', href: '/directeur-etudes/agfne/sans-matricule', icon: '❓' },
       { label: 'Comparer (GAP)', href: '/directeur-etudes/agfne/comparer', icon: '🔍' },

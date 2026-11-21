@@ -17,12 +17,20 @@ export const ROUTES_PAR_ESPACE: Record<string, EspaceCode[]> = {
   '/directeur/resultats': CYCLES_SCOLAIRES,
   '/directeur/bulletins': CYCLES_SCOLAIRES,
 
-  // Secondaire uniquement
-  '/chef/eleves/repartition': SECONDAIRE,
+  // Aussi utile en maternelle et en primaire (CP1 A, CP1 B...) : tous les cycles scolaires
+  '/chef/eleves/repartition': CYCLES_SCOLAIRES,
+
+  // Secondaire uniquement : volumes horaires officiels, orientation (CIO), statistiques DESPS et AGFNE.
+  // Le primaire et la maternelle relèvent d'autres structures pour ces suivis officiels.
   '/direction/planning': SECONDAIRE,
   '/direction/cio': SECONDAIRE,
   '/directeur-etudes/desps': SECONDAIRE,
   '/directeur-etudes/agfne': SECONDAIRE,
+
+  // Remontée officielle : une section par cycle
+  '/direction/remontee/maternelle': ['maternelle'],
+  '/direction/remontee/primaire': ['primaire'],
+  '/direction/remontee/cepe': ['primaire'],
 
   // Supérieur uniquement
   '/direction/universite': SUPERIEUR,
@@ -31,14 +39,15 @@ export const ROUTES_PAR_ESPACE: Record<string, EspaceCode[]> = {
 
 // Espaces requis pour une adresse (ou null si la page est commune).
 // Fonctionne aussi pour les sous-pages : /direction/planning/enseignants, etc.
-export function espacesDeRoute(chemin: string): EspaceCode[] | null {
+export function espacesDeRoute(cheminBrut: string): EspaceCode[] | null {
+  const chemin = cheminBrut.split('?')[0].split('#')[0];
   if (ROUTES_PAR_ESPACE[chemin]) return ROUTES_PAR_ESPACE[chemin];
   const cle = Object.keys(ROUTES_PAR_ESPACE).find((k) => chemin.startsWith(k + '/'));
   return cle ? ROUTES_PAR_ESPACE[cle] : null;
 }
 
-// Espaces effectivement pris en compte : si l'école n'a aucun espace enregistré
-// (anciennes écoles), on garde le comportement historique : cycles scolaires.
+// Espaces effectivement pris en compte :
+// si l'école n'a aucun espace enregistré (anciennes écoles), comportement historique : cycles scolaires.
 function espacesEffectifs(espaces: EspaceCode[]): EspaceCode[] {
   return espaces.length > 0 ? espaces : CYCLES_SCOLAIRES;
 }

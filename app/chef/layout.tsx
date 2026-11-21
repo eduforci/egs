@@ -9,10 +9,14 @@ import SelecteurLangue from '@/components/selecteur-langue';
 import EspaceSelecteur from '@/components/espace-selecteur';
 import Avatar from '@/components/avatar';
 import MenuUtilisateur from '@/components/menu-utilisateur';
+import { useEspace } from '@/lib/use-espace';
+import { menuVisible } from '@/lib/menus-espaces';
 
 type NavItem = { label: string; href: string; icon: string };
 type NavGroup = { titre: string; items: NavItem[] };
 
+// La visibilité de chaque menu selon l'espace (primaire, secondaire, supérieur...)
+// est définie dans lib/menus-espaces.ts. Un menu absent de cette liste est commun à tous.
 const NAV_GROUPS: NavGroup[] = [
   {
     titre: 'TABLEAU DE BORD',
@@ -63,8 +67,8 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Embarquement', href: '/chef/transport/embarquement', icon: '🧒' },
     ],
   },
-{
- titre: 'POINTAGE',
+  {
+    titre: 'POINTAGE',
     items: [
       { label: 'Badger', href: '/pointage', icon: '👆' },
       { label: 'Configuration', href: '/direction/pointage/configuration', icon: '⚙️' },
@@ -102,6 +106,12 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
   const [role, setRole] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [etablissementNom, setEtablissementNom] = useState('');
+
+  // Filtrage des menus selon les espaces actifs de l'école (et l'espace choisi dans le sélecteur)
+  const { visibles, pret } = useEspace();
+  const groupesAffiches = NAV_GROUPS
+    .map((g) => ({ ...g, items: g.items.filter((i) => menuVisible(i.href, visibles, pret)) }))
+    .filter((g) => g.items.length > 0);
 
   useEffect(() => {
     const charger = async () => {
@@ -162,7 +172,7 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
         </div>
 
         <nav className="flex-1 overflow-y-auto overscroll-contain py-4 px-2 space-y-5">
-          {NAV_GROUPS.map((groupe) => (
+          {groupesAffiches.map((groupe) => (
             <div key={groupe.titre}>
               <div className="px-3 mb-1 text-[10px] font-semibold text-neutral-500 tracking-wider">
                 {t(groupe.titre)}
@@ -208,7 +218,6 @@ export default function ChefLayout({ children }: { children: React.ReactNode }) 
 
       {/* CONTENU PRINCIPAL */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* CONTENU PRINCIPAL */}
         <header className="bg-white border-b sticky top-0 z-20 px-4 py-3 flex items-center gap-3 print:hidden">
           <button
             onClick={() => setMenuOuvert(true)}

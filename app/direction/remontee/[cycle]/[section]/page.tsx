@@ -1,440 +1,922 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+// Remontée officielle : Maternelle, Primaire, CEPE.
+// Une seule page sert toutes les sections : /direction/remontee/[cycle]/[section]
+// Cette page ne transmet rien aux plateformes officielles (AGCP, DECO) : elle prépare,
+// contrôle et exporte les données pour une transmission manuelle.
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { inferCycle } from '@/lib/espaces';
 
-// Remontée officielle : maternelle, primaire et CEPE.
-// Les menus et l'accès à ces pages sont limités à l'espace concerné (voir lib/menus-espaces.ts).
-// Les fichiers exportés reprennent les données de l'école en colonnes standard :
-// le format exact exigé par les structures officielles (AGCP, DECO...) reste à confirmer.
+// ───────────────────────── Sections ─────────────────────────
 
-type Section = { cle: string; label: string };
-type Def = { label: string; classeCycle: 'maternelle' | 'primaire'; niveau?: RegExp; sections: Section[] };
-
-const CYCLES: Record<string, Def> = {
+const SECTIONS: Record<string, Record<string, { titre: string; aide: string }>> = {
   maternelle: {
-    label: 'Maternelle',
-    classeCycle: 'maternelle',
-    sections: [
-      { cle: 'eleves', label: 'Données des élèves' },
-      { cle: 'effectifs', label: 'Effectifs' },
-      { cle: 'export', label: 'Export des données' },
-    ],
+    eleves: { titre: 'Données des élèves', aide: "Identité des élèves de la maternelle pour l'année active." },
+    effectifs: { titre: 'Effectifs', aide: 'Nombre de garçons et de filles par classe.' },
+    export: { titre: 'Export des données', aide: 'Fichier CSV des élèves de la maternelle.' },
   },
   primaire: {
-    label: 'Primaire',
-    classeCycle: 'primaire',
-    sections: [
-      { cle: 'fichier-national', label: 'Fichier National des Élèves' },
-      { cle: 'matricules', label: 'Matricules AGCP' },
-      { cle: 'eleves', label: 'Données élèves' },
-      { cle: 'moyennes-trimestrielles', label: 'Moyennes trimestrielles' },
-      { cle: 'moyennes-annuelles', label: 'Moyennes annuelles' },
-      { cle: 'transferts', label: 'Transferts' },
-      { cle: 'recherche', label: 'Recherche matricule' },
-      { cle: 'export', label: 'Export AGCP' },
-    ],
+    'fichier-national': { titre: 'Fichier National des Élèves', aide: "Contrôle de l'état du matricule de chaque élève du primaire." },
+    matricules: { titre: 'Matricules AGCP', aide: 'Élèves dont le matricule est manquant, en double ou de format inhabituel.' },
+    eleves: { titre: 'Données élèves', aide: 'Identité des élèves du primaire pour l’année active.' },
+    'moyennes-trimestrielles': { titre: 'Moyennes trimestrielles', aide: 'Moyenne générale de chaque élève pour le trimestre choisi, tirée des bulletins.' },
+    'moyennes-annuelles': { titre: 'Moyennes annuelles', aide: 'Moyenne des trois trimestres.' },
+    transferts: { titre: 'Transferts', aide: 'Demandes de transfert enregistrées pour les élèves du primaire.' },
+    recherche: { titre: 'Recherche matricule', aide: 'Retrouver un élève par matricule ou par nom.' },
+    export: { titre: 'Export AGCP', aide: 'Fichier CSV des élèves du primaire pour une transmission manuelle.' },
   },
   cepe: {
-    label: 'CEPE',
-    classeCycle: 'primaire',
-    niveau: /cm\s*2/i,
-    sections: [
-      { cle: 'candidats', label: 'Liste des candidats' },
-      { cle: 'verification', label: 'Vérification des matricules' },
-      { cle: 'donnees', label: 'Données candidats' },
-      { cle: 'export', label: 'Export DECO' },
-    ],
+    candidats: { titre: 'Liste des candidats', aide: 'Élèves de CM2 de l’année active.' },
+    verification: { titre: 'Vérification des matricules', aide: 'Contrôle des informations nécessaires avant la transmission.' },
+    donnees: { titre: 'Données candidats', aide: 'Informations complètes des candidats.' },
+    export: { titre: 'Export DECO', aide: 'Fichier CSV des candidats au CEPE pour une transmission manuelle.' },
   },
 };
 
-type Eleve = { id: string; matricule: string; nom: string; prenom: string; sexe: string; naissance: string; lieu: string; classeId: string; classe: string; niveau: string };
-type Bulletin = { eleve_id: string; trimestre: number; moyenne_generale: number | null };
-type Cell = string | number | null;
+const NOMS_CYCLES: Record<string, string> = { maternelle: 'Maternelle', primaire: 'Primaire', cepe: 'CEPE' };
 
-const lots = <T,>(l: T[], n: number) => Array.from({ length: Math.ceil(l.length / n) }, (_, i) => l.slice(i * n, i * n + n));
-const moy = (v: number[]) => (v.length ? v.reduce((a, b) => a + b, 0) / v.length : null);
-const fmt = (n: number | null) => (n === null ? '—' : n.toFixed(2).replace('.', ','));
-const cmp = (a: string, b: string) => a.localeCompare(b, 'fr', { numeric: true });
+// ───────────────────────── Types ─────────────────────────
 
-async function lireTout(requete: (de: number, a: number) => any): Promise<any[]> {
-  const out: any[] = [];
-  for (let d = 0; d < 50000; d += 1000) {
-    const { data, error } = await requete(d, d + 999);
-    if (error || !data) break;
-    out.push(...data);
-    if (data.length < 1000) break;
-  }
-  return out;
+type EtatMatricule = 'ok' | 'manquant' | 'format' | 'doublon';
+
+type Eleve = {
+  id: string;
+  matricule: string | null;
+  nom: string;
+  prenom: string;
+  sexe: 'M' | 'F' | null;
+  naissance: string | null;
+  lieu: string | null;
+  nationalite: string | null;
+  statut: string;
+  classeId: string;
+  classe: string;
+  annee: string;
+  etat: EtatMatricule;
+};
+
+type ClasseLite = { id: string; nom: string; niveau: string | null; annee_scolaire: string; cycle: string | null };
+
+type Cellule = string | number;
+
+// ───────────────────────── Utilitaires ─────────────────────────
+
+const sansAccent = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+function normaliserSexe(v: string | null | undefined): 'M' | 'F' | null {
+  if (!v) return null;
+  const c = sansAccent(v.trim()).charAt(0);
+  if (c === 'm' || c === 'h' || c === 'g') return 'M';
+  if (c === 'f') return 'F';
+  return null;
 }
 
-function telecharger(nom: string, entetes: string[], lignes: Cell[][]) {
-  // Les cellules qui commencent par = + - @ sont neutralisées (protection des tableurs)
-  const esc = (v: any) => {
-    let t = String(v ?? '');
-    if (/^[=+\-@]/.test(t) && !/^-?\d+([.,]\d+)?$/.test(t)) t = "'" + t;
-    return `"${t.replace(/"/g, '""')}"`;
-  };
-  const txt = '\uFEFF' + [entetes, ...lignes].map((l) => l.map(esc).join(';')).join('\r\n');
+function dateFr(d: string | null): string {
+  if (!d) return '';
+  const [y, m, j] = d.slice(0, 10).split('-');
+  return j && m && y ? `${j}/${m}/${y}` : d;
+}
+
+function morceaux<T>(a: T[], n: number): T[][] {
+  const r: T[][] = [];
+  for (let i = 0; i < a.length; i += n) r.push(a.slice(i, i + n));
+  return r;
+}
+
+function nombre(n: number | null | undefined): string {
+  return n === null || n === undefined ? '—' : n.toFixed(2).replace('.', ',');
+}
+
+// Matricule ivoirien : 8 chiffres + 1 lettre (ex. 21710080G), ou 1 lettre + 8 chiffres (ex. J25072407).
+const FORMAT_MATRICULE = /^(\d{8}[A-Z]|[A-Z]\d{8}[A-Z]?)$/;
+
+function cycleDeClasse(c: { cycle: string | null; niveau: string | null; nom: string | null }): string {
+  const cy = (c.cycle || '').toLowerCase();
+  if (cy) return cy;
+  const n = sansAccent(c.niveau || c.nom || '');
+  if (/section/.test(n)) return 'maternelle';
+  if (/^(cp|ce|cm)[12]?\b/.test(n)) return 'primaire';
+  return '';
+}
+
+function telechargerCsv(nom: string, entetes: string[], lignes: Cellule[][]) {
+  const esc = (v: Cellule) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const contenu = '\uFEFF' + [entetes, ...lignes].map((l) => l.map(esc).join(';')).join('\r\n');
+  const blob = new Blob([contenu], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([txt], { type: 'text/csv;charset=utf-8' }));
+  a.href = url;
   a.download = nom;
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(a.href);
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function Tableau({ entetes, lignes }: { entetes: string[]; lignes: Cell[][] }) {
+const LIBELLE_ETAT: Record<EtatMatricule, string> = {
+  ok: '✅ Valide',
+  manquant: '❌ Manquant',
+  format: '⚠️ Format à vérifier',
+  doublon: '⚠️ En double',
+};
+
+// ───────────────────────── Petits composants ─────────────────────────
+
+function Tableau({ entetes, lignes, vide }: { entetes: string[]; lignes: Cellule[][]; vide?: string }) {
+  if (lignes.length === 0) {
+    return <p className="text-sm text-neutral-500 py-6 text-center">{vide || 'Aucune donnée à afficher.'}</p>;
+  }
   return (
-    <div className="overflow-x-auto border rounded-xl bg-white">
-      <table className="w-full text-sm">
-        <thead className="bg-neutral-50 text-left text-xs text-neutral-500">
-          <tr>{entetes.map((h) => <th key={h} className="px-3 py-2 font-medium whitespace-nowrap">{h}</th>)}</tr>
+    <div className="overflow-x-auto border rounded-lg bg-white">
+      <table className="min-w-full text-sm">
+        <thead className="bg-neutral-100 text-neutral-600">
+          <tr>
+            {entetes.map((h) => (
+              <th key={h} className="text-left px-3 py-2 font-medium whitespace-nowrap">
+                {h}
+              </th>
+            ))}
+          </tr>
         </thead>
         <tbody>
           {lignes.map((l, i) => (
             <tr key={i} className="border-t">
-              {l.map((c, j) => <td key={j} className="px-3 py-2 whitespace-nowrap">{c === null || c === '' ? '—' : c}</td>)}
+              {l.map((c, j) => (
+                <td key={j} className="px-3 py-2 whitespace-nowrap">
+                  {c}
+                </td>
+              ))}
             </tr>
           ))}
-          {lignes.length === 0 && (
-            <tr><td colSpan={entetes.length} className="px-3 py-6 text-center text-neutral-400">Aucune donnée.</td></tr>
-          )}
         </tbody>
       </table>
     </div>
   );
 }
 
-function Cartes({ items }: { items: [string, number][] }) {
+function Kpi({ label, valeur, alerte }: { label: string; valeur: Cellule; alerte?: boolean }) {
   return (
-    <div className="grid grid-cols-3 gap-3">
-      {items.map(([l, n]) => (
-        <div key={l} className="border rounded-xl p-4 text-center bg-white">
-          <div className="text-2xl font-bold">{n}</div>
-          <div className="text-xs text-neutral-500">{l}</div>
-        </div>
-      ))}
+    <div className={`rounded-lg border bg-white p-3 ${alerte ? 'border-amber-300 bg-amber-50' : ''}`}>
+      <div className="text-xs text-neutral-500">{label}</div>
+      <div className="text-xl font-semibold">{valeur}</div>
     </div>
   );
 }
 
-function BoutonCsv({ fichier, entetes, lignes }: { fichier: string; entetes: string[]; lignes: Cell[][] }) {
+function Bandeau({ children, ton = 'info' }: { children: React.ReactNode; ton?: 'info' | 'alerte' }) {
+  return (
+    <div
+      className={`rounded-lg border px-3 py-2 text-xs ${
+        ton === 'alerte' ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-neutral-200 bg-neutral-100 text-neutral-700'
+      }`}
+    >
+      {children}
+    </div>
+  );
+}
+
+function BoutonCsv({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
   return (
     <button
-      onClick={() => telecharger(fichier, entetes, lignes)}
-      disabled={lignes.length === 0}
-      className="bg-black text-white rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-40"
+      onClick={onClick}
+      disabled={disabled}
+      className="px-4 py-2 rounded-lg bg-neutral-900 text-white text-sm font-medium disabled:opacity-40"
     >
-      Exporter en CSV
+      📤 Télécharger en CSV
     </button>
   );
 }
 
+// ───────────────────────── Page ─────────────────────────
+
 export default function RemonteePage() {
-  const { cycle: cycleCle, section } = useParams<{ cycle: string; section: string }>();
-  const def = CYCLES[cycleCle];
-  const supabase = createClient();
+  const params = useParams();
+  const cycle = String(params?.cycle || '');
+  const section = String(params?.section || '');
+  const config = SECTIONS[cycle]?.[section];
+
+  const supabase = useMemo(() => createClient(), []);
 
   const [chargement, setChargement] = useState(true);
-  const [erreur, setErreur] = useState('');
-  const [ecole, setEcole] = useState('');
-  const [annee, setAnnee] = useState('');
-  const [classes, setClasses] = useState<{ id: string; nom: string; niveau: string }[]>([]);
-  const [eleves, setEleves] = useState<Eleve[]>([]);
-  const [bulletins, setBulletins] = useState<Bulletin[]>([]);
-  const [transferts, setTransferts] = useState<any[]>([]);
-  const [recherche, setRecherche] = useState('');
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [etab, setEtab] = useState<{ nom: string; code: string; dren: string; annee: string } | null>(null);
+  const [tous, setTous] = useState<Eleve[]>([]);
 
-  const besoinBulletins = ['moyennes-trimestrielles', 'moyennes-annuelles', 'export'].includes(section) && cycleCle === 'primaire';
-  const besoinTransferts = section === 'transferts';
+  // Filtres et états propres à certaines sections
+  const [seulementProblemes, setSeulementProblemes] = useState(false);
+  const [filtreEtat, setFiltreEtat] = useState<'tous' | EtatMatricule>('tous');
+  const [recherche, setRecherche] = useState('');
+  const [trimestre, setTrimestre] = useState(1);
+  const [moy, setMoy] = useState<Record<number, Record<string, number | null>>>({});
+  const [calcul, setCalcul] = useState<{ fait: number; total: number } | null>(null);
+  const [transferts, setTransferts] = useState<any[] | null>(null);
+
+  const actifs = useMemo(() => tous.filter((e) => e.statut === 'actif'), [tous]);
+
+  // ── Chargement des élèves du cycle ──
+  const charger = useCallback(async () => {
+    setChargement(true);
+    setErreur(null);
+    try {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u?.user) throw new Error('Session expirée : reconnectez-vous.');
+
+      const { data: profil } = await supabase.from('profiles').select('etablissement_id').eq('id', u.user.id).single();
+      const etabId = profil?.etablissement_id;
+      if (!etabId) throw new Error('Aucun établissement rattaché à ce compte.');
+
+      const { data: e } = await supabase
+        .from('etablissements')
+        .select('nom, code_etablissement, dren, annee_scolaire_active')
+        .eq('id', etabId)
+        .single();
+
+      const { data: cl, error: errCl } = await supabase
+        .from('classes')
+        .select('id, nom, niveau, annee_scolaire, cycle')
+        .eq('etablissement_id', etabId);
+      if (errCl) throw errCl;
+
+      const toutes = (cl || []) as ClasseLite[];
+      const annees = Array.from(new Set(toutes.map((c) => c.annee_scolaire))).sort();
+      const annee = e?.annee_scolaire_active || annees[annees.length - 1] || '';
+
+      const cyc = cycle === 'cepe' ? 'primaire' : cycle;
+      let classes = toutes.filter((c) => c.annee_scolaire === annee && cycleDeClasse(c) === cyc);
+      if (cycle === 'cepe') classes = classes.filter((c) => /^cm\s?2/i.test((c.niveau || c.nom || '').trim()));
+
+      setEtab({ nom: e?.nom || '', code: e?.code_etablissement || '', dren: e?.dren || '', annee });
+
+      const nomClasse = new Map(classes.map((c) => [c.id, c.nom]));
+      const anneeClasse = new Map(classes.map((c) => [c.id, c.annee_scolaire]));
+      const ids = classes.map((c) => c.id);
+
+      // Élèves (par lots de classes, avec pagination)
+      const lignes: any[] = [];
+      for (const lot of morceaux(ids, 40)) {
+        let debut = 0;
+        for (;;) {
+          const { data, error } = await supabase
+            .from('eleves')
+            .select('id, classe_id, matricule, sexe, date_naissance, lieu_naissance, nationalite, statut, nom, prenom')
+            .in('classe_id', lot)
+            .order('id')
+            .range(debut, debut + 999);
+          if (error) throw error;
+          lignes.push(...(data || []));
+          if (!data || data.length < 1000) break;
+          debut += 1000;
+        }
+      }
+
+      // Nom, prénom et sexe : repli sur profiles quand la fiche élève est incomplète
+      // (requêtes séparées : les jointures eleves/profiles échouent silencieusement)
+      const profs = new Map<string, { nom: string; prenom: string; sexe: string | null }>();
+      const incomplets = lignes.filter((r) => !r.nom || !r.prenom || !r.sexe).map((r) => r.id as string);
+      for (const lot of morceaux(incomplets, 100)) {
+        const { data } = await supabase.from('profiles').select('id, nom, prenom, sexe').in('id', lot);
+        (data || []).forEach((p: any) => profs.set(p.id, { nom: p.nom, prenom: p.prenom, sexe: p.sexe }));
+      }
+
+      const brut = lignes.map((r) => {
+        const p = profs.get(r.id);
+        const mat = (r.matricule || '').toString().trim().toUpperCase();
+        return {
+          id: r.id as string,
+          matricule: mat || null,
+          nom: (r.nom || p?.nom || '').toString(),
+          prenom: (r.prenom || p?.prenom || '').toString(),
+          sexe: normaliserSexe(r.sexe || p?.sexe),
+          naissance: (r.date_naissance as string | null) || null,
+          lieu: (r.lieu_naissance as string | null) || null,
+          nationalite: (r.nationalite as string | null) || null,
+          statut: (r.statut as string) || 'actif',
+          classeId: r.classe_id as string,
+          classe: nomClasse.get(r.classe_id) || '',
+          annee: anneeClasse.get(r.classe_id) || annee,
+        };
+      });
+
+      // Doublons de matricule parmi les élèves actifs
+      const compte = new Map<string, number>();
+      brut
+        .filter((b) => b.statut === 'actif' && b.matricule)
+        .forEach((b) => compte.set(b.matricule as string, (compte.get(b.matricule as string) || 0) + 1));
+
+      const liste: Eleve[] = brut.map((b) => {
+        let etat: EtatMatricule = 'ok';
+        if (!b.matricule || /^PROV/i.test(b.matricule)) etat = 'manquant';
+        else if ((compte.get(b.matricule) || 0) > 1) etat = 'doublon';
+        else if (!FORMAT_MATRICULE.test(b.matricule)) etat = 'format';
+        return { ...b, etat };
+      });
+
+      liste.sort((a, b) => a.classe.localeCompare(b.classe, 'fr') || a.nom.localeCompare(b.nom, 'fr'));
+      setTous(liste);
+    } catch (err: any) {
+      setErreur(err?.message || 'Impossible de charger les données.');
+    } finally {
+      setChargement(false);
+    }
+  }, [supabase, cycle]);
 
   useEffect(() => {
-    if (!def) return;
+    if (config) charger();
+    else setChargement(false);
+  }, [config, charger]);
+
+  // ── Transferts (chargés à la demande) ──
+  useEffect(() => {
+    if (cycle !== 'primaire' || section !== 'transferts' || chargement || transferts !== null) return;
     (async () => {
-      setChargement(true);
-      setErreur('');
-      const { data: u } = await supabase.auth.getUser();
-      if (!u?.user) return;
-      const { data: profil } = await supabase.from('profiles').select('etablissement_id').eq('id', u.user.id).single();
-      if (!profil?.etablissement_id) { setErreur('Établissement introuvable pour ce compte.'); setChargement(false); return; }
-      const etabId = profil.etablissement_id;
+      const ids = new Set(tous.map((e) => e.id));
+      const { data } = await supabase
+        .from('demandes_transfert')
+        .select('id, type, eleve_id, etablissement_partenaire, statut, numero_demande, motif, cree_le')
+        .order('cree_le', { ascending: false });
+      setTransferts((data || []).filter((d: any) => ids.has(d.eleve_id)));
+    })();
+  }, [cycle, section, tous, transferts, chargement, supabase]);
 
-      const { data: etab } = await supabase.from('etablissements').select('nom, annee_scolaire_active').eq('id', etabId).single();
-      setEcole(etab?.nom || '');
-      const anneeActive = (etab as any)?.annee_scolaire_active || '';
-      setAnnee(anneeActive);
+  // ── Calcul des moyennes (via generer_bulletin) ──
+  const calculer = useCallback(
+    async (trimestres: number[]) => {
+      const aFaire: { e: Eleve; t: number }[] = [];
+      for (const t of trimestres) for (const e of actifs) if (moy[t]?.[e.id] === undefined) aFaire.push({ e, t });
+      if (aFaire.length === 0) return;
 
-      const { data: toutes } = await supabase.from('classes').select('id, nom, niveau, cycle, annee_scolaire').eq('etablissement_id', etabId);
-      let cl = (toutes || []).filter((c: any) => ((c.cycle || inferCycle(c.niveau || '')) as string) === def.classeCycle);
-      if (def.niveau) cl = cl.filter((c: any) => def.niveau!.test(c.niveau || '') || def.niveau!.test(c.nom || ''));
-      const delAnnee = cl.filter((c: any) => !anneeActive || c.annee_scolaire === anneeActive);
-      if (delAnnee.length > 0) cl = delAnnee;
-      cl.sort((a: any, b: any) => cmp(String(a.nom), String(b.nom)));
-      setClasses(cl.map((c: any) => ({ id: c.id, nom: c.nom, niveau: c.niveau })));
-      const parClasse = new Map(cl.map((c: any) => [c.id, c]));
+      const total = aFaire.length;
+      const resultats: Record<number, Record<string, number | null>> = {};
+      let index = 0;
+      let fait = 0;
+      setCalcul({ fait: 0, total });
 
-      const lignes = await lireTout((d, a) =>
-        supabase.from('eleves').select('id, matricule, sexe, date_naissance, lieu_naissance, classe_id').eq('etablissement_id', etabId).order('id').range(d, a)
-      );
-      const dansCycle = lignes.filter((e: any) => parClasse.has(e.classe_id));
-      const ids = dansCycle.map((e: any) => e.id);
-
-      const noms = new Map<string, { nom: string; prenom: string }>();
-      for (const lot of lots(ids, 150)) {
-        const { data } = await supabase.from('profiles').select('id, nom, prenom').in('id', lot);
-        (data || []).forEach((p: any) => noms.set(p.id, { nom: p.nom || '', prenom: p.prenom || '' }));
-      }
-      setEleves(
-        dansCycle
-          .map((e: any) => {
-            const c: any = parClasse.get(e.classe_id);
-            return {
-              id: e.id, matricule: e.matricule || '', nom: noms.get(e.id)?.nom || '', prenom: noms.get(e.id)?.prenom || '',
-              sexe: e.sexe || '', naissance: e.date_naissance || '', lieu: e.lieu_naissance || '',
-              classeId: e.classe_id, classe: c?.nom || '', niveau: c?.niveau || '',
-            } as Eleve;
-          })
-          .sort((a: Eleve, b: Eleve) => cmp(a.classe, b.classe) || a.nom.localeCompare(b.nom, 'fr'))
-      );
-
-      if (besoinBulletins) {
-        const res: Bulletin[] = [];
-        for (const lot of lots(ids, 150)) {
-          let q = supabase.from('bulletins').select('eleve_id, trimestre, moyenne_generale, annee_scolaire').in('eleve_id', lot);
-          if (anneeActive) q = q.eq('annee_scolaire', anneeActive);
-          const { data } = await q;
-          (data || []).forEach((b: any) => res.push({ eleve_id: b.eleve_id, trimestre: b.trimestre, moyenne_generale: b.moyenne_generale }));
+      const ouvrier = async () => {
+        while (index < aFaire.length) {
+          const { e, t } = aFaire[index++];
+          let valeur: number | null = null;
+          try {
+            const { data } = await supabase.rpc('generer_bulletin', {
+              p_eleve_id: e.id,
+              p_trimestre: t,
+              p_annee_scolaire: e.annee,
+            });
+            const m = (data as any)?.totaux?.moyenne_generale;
+            valeur = m === null || m === undefined ? null : Number(m);
+            if (valeur !== null && Number.isNaN(valeur)) valeur = null;
+          } catch {
+            valeur = null;
+          }
+          if (!resultats[t]) resultats[t] = {};
+          resultats[t][e.id] = valeur;
+          fait++;
+          if (fait % 10 === 0 || fait === total) setCalcul({ fait, total });
         }
-        setBulletins(res);
-      }
+      };
 
-      if (besoinTransferts) {
-        const res: any[] = [];
-        for (const lot of lots(ids, 150)) {
-          const { data } = await supabase.from('demandes_transfert').select('*').eq('etablissement_id', etabId).in('eleve_id', lot);
-          (data || []).forEach((t: any) => res.push(t));
+      await Promise.all(Array.from({ length: 6 }, () => ouvrier()));
+
+      setMoy((prev) => {
+        const suite = { ...prev };
+        for (const t of Object.keys(resultats)) {
+          const n = Number(t);
+          suite[n] = { ...(suite[n] || {}), ...resultats[n] };
         }
-        setTransferts(res);
-      }
-      setChargement(false);
-    })().catch((e) => { setErreur(e?.message || 'Erreur de chargement.'); setChargement(false); });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cycleCle, besoinBulletins, besoinTransferts]);
+        return suite;
+      });
+      setCalcul(null);
+    },
+    [actifs, moy, supabase]
+  );
 
-  const parId = useMemo(() => new Map(eleves.map((e) => [e.id, e])), [eleves]);
+  // ───────────────────────── Garde-fous ─────────────────────────
 
-  const filtres = useMemo(() => {
-    const q = recherche.trim().toLowerCase();
-    if (!q) return eleves;
-    return eleves.filter((e) => `${e.nom} ${e.prenom} ${e.matricule} ${e.classe}`.toLowerCase().includes(q));
-  }, [eleves, recherche]);
-
-  const effectifs = useMemo(() => {
-    const lignes = classes.map((c) => {
-      const l = eleves.filter((e) => e.classeId === c.id);
-      return [c.nom, l.length, l.filter((e) => e.sexe === 'M').length, l.filter((e) => e.sexe === 'F').length] as Cell[];
-    });
-    const somme = (i: number) => lignes.reduce((s, l) => s + (l[i] as number), 0);
-    return { lignes, total: ['Total', somme(1), somme(2), somme(3)] as Cell[] };
-  }, [classes, eleves]);
-
-  // Moyennes issues des bulletins
-  const moyennes = useMemo(() => {
-    const m = new Map<string, Map<number, number>>();
-    bulletins.forEach((b) => {
-      if (b.moyenne_generale === null || b.moyenne_generale === undefined) return;
-      if (!m.has(b.eleve_id)) m.set(b.eleve_id, new Map());
-      m.get(b.eleve_id)!.set(b.trimestre, Number(b.moyenne_generale));
-    });
-    const lignes = eleves.map((e) => {
-      const t = m.get(e.id);
-      const vals = [1, 2, 3].map((n) => (t?.has(n) ? (t.get(n) as number) : null));
-      return { e, vals, annuelle: moy(vals.filter((v): v is number => v !== null)) };
-    });
-    // Rang dans la classe (à égalité, même rang)
-    const rangs = new Map<string, number>();
-    classes.forEach((c) => {
-      const l = lignes.filter((x) => x.e.classeId === c.id && x.annuelle !== null).sort((a, b) => (b.annuelle as number) - (a.annuelle as number));
-      l.forEach((x, i) => rangs.set(x.e.id, i > 0 && x.annuelle === l[i - 1].annuelle ? (rangs.get(l[i - 1].e.id) as number) : i + 1));
-    });
-    return { lignes, rangs };
-  }, [eleves, bulletins, classes]);
-
-  if (!def) return <p className="p-6 text-red-600">Section introuvable.</p>;
-  const sectionDef = def.sections.find((s) => s.cle === section);
-  if (!sectionDef) return <p className="p-6 text-red-600">Section introuvable.</p>;
-
-  const fichier = (x: string) => `${def.label.toLowerCase()}-${x}-${annee || 'annee'}.csv`.replace(/\s+/g, '-');
-
-  const enteteEleves = ['Matricule', 'Nom', 'Prénom', 'Sexe', 'Date de naissance', 'Lieu de naissance', 'Classe'];
-  const ligneEleve = (e: Eleve): Cell[] => [e.matricule, e.nom, e.prenom, e.sexe, e.naissance, e.lieu, e.classe];
-
-  const enteteFne = [...enteteEleves, 'Niveau', 'Matricule'];
-  const ligneFne = (e: Eleve): Cell[] => [...ligneEleve(e), e.niveau, e.matricule.trim() ? 'Renseigné' : 'Manquant'];
-
-  // Matricules : manquants et doublons
-  const comptes = new Map<string, number>();
-  eleves.forEach((e) => e.matricule && comptes.set(e.matricule, (comptes.get(e.matricule) || 0) + 1));
-  const sansMatricule = eleves.filter((e) => !e.matricule.trim());
-  const doublons = eleves.filter((e) => e.matricule && (comptes.get(e.matricule) || 0) > 1);
-  const enteteAnomalies = [...enteteEleves, 'Anomalie'];
-  const anomalies: Cell[][] = [...sansMatricule.map((e) => [...ligneEleve(e), 'Matricule manquant']), ...doublons.map((e) => [...ligneEleve(e), 'Matricule en double'])];
-
-  // Moyennes
-  const enteteTrim = ['Classe', 'Nom', 'Prénom', 'Matricule', 'Trimestre 1', 'Trimestre 2', 'Trimestre 3'];
-  const ligneTrim = (x: (typeof moyennes.lignes)[number]): Cell[] => [x.e.classe, x.e.nom, x.e.prenom, x.e.matricule, ...x.vals.map(fmt)];
-  const enteteAnn = ['Classe', 'Nom', 'Prénom', 'Matricule', 'Moyenne annuelle', 'Rang dans la classe'];
-  const ligneAnn = (x: (typeof moyennes.lignes)[number]): Cell[] => [x.e.classe, x.e.nom, x.e.prenom, x.e.matricule, fmt(x.annuelle), moyennes.rangs.get(x.e.id) ?? null];
-
-  // Transferts
-  const enteteTransferts = ['Matricule', 'Nom', 'Prénom', 'Classe', 'Type', 'Établissement partenaire', 'Motif', 'Statut', 'Date'];
-  const lignesTransferts: Cell[][] = transferts.map((t) => {
-    const e = parId.get(t.eleve_id);
-    return [e?.matricule || '', e?.nom || '', e?.prenom || '', e?.classe || '', t.type === 'sortant' ? 'Sortant' : t.type === 'entrant' ? 'Entrant' : t.type || '', t.etablissement_partenaire || '', t.motif || '', t.statut || '', String(t.cree_le || '').slice(0, 10)];
-  });
-
-  // Recherche de matricule
-  const trouves = recherche.trim() ? filtres : [];
-
-  // CEPE : vérification des dossiers des candidats
-  const enteteVerif = [...enteteEleves, 'Anomalies'];
-  const lignesVerif: Cell[][] = eleves.map((e) => {
-    const p: string[] = [];
-    if (!e.matricule.trim()) p.push('Matricule manquant');
-    else if ((comptes.get(e.matricule) || 0) > 1) p.push('Matricule en double');
-    if (!e.naissance) p.push('Date de naissance manquante');
-    if (!e.lieu.trim()) p.push('Lieu de naissance manquant');
-    if (!e.sexe) p.push('Sexe manquant');
-    return [...ligneEleve(e), p.join(' ; ')];
-  });
-  const avecAnomalie = lignesVerif.filter((l) => l[l.length - 1]);
-
-  const Entete = ({ children }: { children?: React.ReactNode }) => <>{children}</>;
-  const Liste = ({ entetes, lignes, nom, note }: { entetes: string[]; lignes: Cell[][]; nom: string; note?: string }) => (
-    <>
-      <div className="flex flex-wrap items-center gap-3">
-        <BoutonCsv fichier={fichier(nom)} entetes={entetes} lignes={lignes} />
-        <span className="text-xs text-neutral-500">{lignes.length} ligne(s)</span>
+  if (!config) {
+    return (
+      <div className="p-6 max-w-3xl mx-auto">
+        <p className="text-sm text-neutral-600">Cette section n’existe pas.</p>
       </div>
-      <Tableau entetes={entetes} lignes={lignes} />
-      {note && <p className="text-xs text-neutral-500">{note}</p>}
+    );
+  }
+
+  const enTete = (
+    <div className="space-y-1">
+      <div className="text-xs font-semibold tracking-wider text-neutral-400">
+        REMONTÉE OFFICIELLE · {NOMS_CYCLES[cycle]?.toUpperCase()}
+      </div>
+      <h1 className="text-xl font-semibold">{config.titre}</h1>
+      <p className="text-sm text-neutral-500">{config.aide}</p>
+      {etab && (
+        <p className="text-xs text-neutral-400">
+          {etab.nom} · année {etab.annee || '—'}
+          {etab.code ? ` · code ${etab.code}` : ''}
+        </p>
+      )}
+    </div>
+  );
+
+  if (chargement) {
+    return (
+      <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-4">
+        {enTete}
+        <p className="text-sm text-neutral-500">Chargement…</p>
+      </div>
+    );
+  }
+
+  if (erreur) {
+    return (
+      <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-4">
+        {enTete}
+        <Bandeau ton="alerte">{erreur}</Bandeau>
+        <button onClick={charger} className="px-4 py-2 rounded-lg border text-sm">
+          Réessayer
+        </button>
+      </div>
+    );
+  }
+
+  // ───────────────────────── Données dérivées ─────────────────────────
+
+  const nomFichier = (suffixe: string) =>
+    `${cycle}-${suffixe}-${(etab?.annee || 'annee').replace(/[^0-9a-z-]/gi, '')}.csv`;
+
+  const nbProblemes = actifs.filter((e) => e.etat !== 'ok').length;
+  const compteEtat = (x: EtatMatricule) => actifs.filter((e) => e.etat === x).length;
+
+  const ENT_ELEVES = ['N°', 'Matricule', 'Nom', 'Prénoms', 'Sexe', 'Naissance', 'Lieu de naissance', 'Classe'];
+  const ligneEleve = (e: Eleve, i: number): Cellule[] => [
+    i + 1,
+    e.matricule || '—',
+    e.nom,
+    e.prenom,
+    e.sexe || '—',
+    dateFr(e.naissance) || '—',
+    e.lieu || '—',
+    e.classe,
+  ];
+
+  const ENT_CSV = ['Matricule', 'Nom', 'Prénoms', 'Sexe', 'Date de naissance', 'Lieu de naissance', 'Classe'];
+  const ligneCsv = (e: Eleve): Cellule[] => [
+    e.matricule || '',
+    e.nom,
+    e.prenom,
+    e.sexe || '',
+    dateFr(e.naissance),
+    e.lieu || '',
+    e.classe,
+  ];
+
+  // Moyennes : statistiques de classe et rangs
+  const moyenneDe = (t: number, id: string): number | null => moy[t]?.[id] ?? null;
+
+  const resumeClasses = (valeur: (e: Eleve) => number | null) => {
+    const noms = Array.from(new Set(actifs.map((e) => e.classe)));
+    return noms.map((nom) => {
+      const eleves = actifs.filter((e) => e.classe === nom);
+      const vals = eleves.map(valeur).filter((v): v is number => v !== null);
+      const moyClasse = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+      return [
+        nom,
+        eleves.length,
+        vals.length,
+        nombre(moyClasse),
+        nombre(vals.length ? Math.min(...vals) : null),
+        nombre(vals.length ? Math.max(...vals) : null),
+      ] as Cellule[];
+    });
+  };
+  const ENT_RESUME = ['Classe', 'Effectif', 'Avec moyenne', 'Moyenne de classe', 'Plus basse', 'Plus haute'];
+
+  const rangDans = (e: Eleve, valeur: (x: Eleve) => number | null): string => {
+    const v = valeur(e);
+    if (v === null) return '—';
+    const camarades = actifs.filter((x) => x.classe === e.classe);
+    const mieux = camarades.filter((x) => {
+      const w = valeur(x);
+      return w !== null && w > v;
+    }).length;
+    return String(mieux + 1);
+  };
+
+  const trimestresCalcules = (ts: number[]) => ts.every((t) => moy[t] !== undefined);
+
+  // ───────────────────────── Rendu des sections ─────────────────────────
+
+  const cle = `${cycle}/${section}`;
+  let contenu: React.ReactNode = null;
+
+  const listeEleves = (liste: Eleve[], nomCsv: string, avertissement?: React.ReactNode) => (
+    <>
+      {avertissement}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <Kpi label="Élèves" valeur={liste.length} />
+        <Kpi label="Garçons" valeur={liste.filter((e) => e.sexe === 'M').length} />
+        <Kpi label="Filles" valeur={liste.filter((e) => e.sexe === 'F').length} />
+        <Kpi label="Sexe non renseigné" valeur={liste.filter((e) => !e.sexe).length} alerte={liste.some((e) => !e.sexe)} />
+      </div>
+     <Tableau entetes={ENT_ELEVES} lignes={liste.map(ligneEleve)} vide="Aucun élève trouvé pour ce cycle et cette année." />
+      <BoutonCsv onClick={() => telechargerCsv(nomCsv, ENT_CSV, liste.map(ligneCsv))} disabled={liste.length === 0} />
     </>
   );
-  void Entete;
 
-  const exports: { t: string; e: string[]; l: Cell[][]; f: string }[] =
-    cycleCle === 'primaire'
-      ? [
-          { t: 'Fichier national des élèves', e: enteteFne, l: eleves.map(ligneFne), f: 'fichier-national' },
-          { t: 'Anomalies de matricules', e: enteteAnomalies, l: anomalies, f: 'anomalies-matricules' },
-          { t: 'Moyennes trimestrielles', e: enteteTrim, l: moyennes.lignes.map(ligneTrim), f: 'moyennes-trimestrielles' },
-          { t: 'Moyennes annuelles', e: enteteAnn, l: moyennes.lignes.map(ligneAnn), f: 'moyennes-annuelles' },
-        ]
-      : cycleCle === 'cepe'
-      ? [{ t: 'Candidats au CEPE', e: enteteVerif, l: lignesVerif, f: 'candidats' }]
-      : [
-          { t: 'Données des élèves', e: enteteEleves, l: eleves.map(ligneEleve), f: 'eleves' },
-          { t: 'Effectifs', e: ['Classe', 'Effectif', 'Garçons', 'Filles'], l: [...effectifs.lignes, effectifs.total], f: 'effectifs' },
-        ];
+  const avertFormat = (nom: string) => (
+    <Bandeau ton="alerte">
+      Format interne EGS : {nom} ne publie pas de modèle de fichier officiel que nous ayons pu vérifier. Ce fichier sert à
+      préparer la saisie ou le dépôt manuel ; il ne se transmet pas automatiquement.
+    </Bandeau>
+  );
 
-  return (
-    <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-5">
-      <div>
-        <p className="text-xs text-neutral-500">Remontée officielle · {def.label}</p>
-        <h1 className="text-2xl font-bold">{sectionDef.label}</h1>
-        <p className="text-sm text-neutral-500">{ecole}{annee ? ` · ${annee}` : ''}</p>
-      </div>
+  switch (cle) {
+    // ── Maternelle ──
+    case 'maternelle/eleves':
+    case 'primaire/eleves':
+    case 'cepe/donnees': {
+      if (cle === 'cepe/donnees') {
+        const lignes = actifs.map((e, i) => [
+          i + 1,
+          e.matricule || '—',
+          e.nom,
+          e.prenom,
+          e.sexe || '—',
+          dateFr(e.naissance) || '—',
+          e.lieu || '—',
+          e.nationalite || '—',
+          e.classe,
+        ]);
+        contenu = (
+          <>
+            <Tableau
+              entetes={['N°', 'Matricule', 'Nom', 'Prénoms', 'Sexe', 'Naissance', 'Lieu de naissance', 'Nationalité', 'Classe']}
+              lignes={lignes}
+              vide="Aucun élève de CM2 trouvé pour l'année active."
+            />
+          </>
+        );
+      } else {
+        contenu = listeEleves(actifs, nomFichier('eleves'));
+      }
+      break;
+    }
 
-      <nav className="flex gap-2 overflow-x-auto pb-1">
-        {def.sections.map((s) => (
-          <Link
-            key={s.cle}
-            href={`/direction/remontee/${cycleCle}/${s.cle}`}
-            className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs border ${s.cle === section ? 'bg-black text-white border-black' : 'bg-white text-neutral-700'}`}
-          >
-            {s.label}
-          </Link>
-        ))}
-      </nav>
-
-      {erreur && <p className="text-red-600 text-sm">{erreur}</p>}
-      {chargement ? (
-        <p className="text-neutral-500">Chargement...</p>
-      ) : classes.length === 0 ? (
-        <p className="text-neutral-500">{cycleCle === 'cepe' ? 'Aucune classe de CM2 trouvée pour cette école.' : `Aucune classe de ${def.label.toLowerCase()} trouvée pour cette école.`}</p>
-      ) : (
+    case 'maternelle/effectifs': {
+      const noms = Array.from(new Set(actifs.map((e) => e.classe)));
+      const lignes: Cellule[][] = noms.map((nom) => {
+        const l = actifs.filter((e) => e.classe === nom);
+        return [nom, l.filter((e) => e.sexe === 'M').length, l.filter((e) => e.sexe === 'F').length, l.filter((e) => !e.sexe).length, l.length];
+      });
+      const total: Cellule[] = [
+        'TOTAL',
+        actifs.filter((e) => e.sexe === 'M').length,
+        actifs.filter((e) => e.sexe === 'F').length,
+        actifs.filter((e) => !e.sexe).length,
+        actifs.length,
+      ];
+      const ent = ['Classe', 'Garçons', 'Filles', 'Sexe non renseigné', 'Total'];
+      contenu = (
         <>
-          {(section === 'eleves' || section === 'candidats' || section === 'donnees') && (
+          <Tableau entetes={ent} lignes={lignes.length ? [...lignes, total] : []} vide="Aucune classe de maternelle pour l'année active." />
+          <BoutonCsv onClick={() => telechargerCsv(nomFichier('effectifs'), ent, [...lignes, total])} disabled={lignes.length === 0} />
+        </>
+      );
+      break;
+    }
+
+    case 'maternelle/export': {
+      contenu = listeEleves(actifs, nomFichier('export'));
+      break;
+    }
+
+    // ── Primaire ──
+    case 'primaire/fichier-national': {
+      const filtres: { id: 'tous' | EtatMatricule; nom: string }[] = [
+        { id: 'tous', nom: 'Tous' },
+        { id: 'ok', nom: 'Valides' },
+        { id: 'manquant', nom: 'Manquants' },
+        { id: 'doublon', nom: 'En double' },
+        { id: 'format', nom: 'Format à vérifier' },
+      ];
+      const liste = actifs.filter((e) => filtreEtat === 'tous' || e.etat === filtreEtat);
+      const ent = ['N°', 'Matricule', 'Nom', 'Prénoms', 'Classe', 'État du matricule'];
+      contenu = (
+        <>
+          <Bandeau>
+            Contrôle interne : il vérifie la présence, le format et les doublons du matricule dans votre établissement. Il ne
+            remplace pas la consultation du fichier national par le ministère.
+          </Bandeau>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+            <Kpi label="Élèves" valeur={actifs.length} />
+            <Kpi label="Valides" valeur={compteEtat('ok')} />
+            <Kpi label="Manquants" valeur={compteEtat('manquant')} alerte={compteEtat('manquant') > 0} />
+            <Kpi label="En double" valeur={compteEtat('doublon')} alerte={compteEtat('doublon') > 0} />
+            <Kpi label="Format à vérifier" valeur={compteEtat('format')} alerte={compteEtat('format') > 0} />
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {filtres.map((f) => (
+              <button
+                key={f.id}
+                onClick={() => setFiltreEtat(f.id)}
+                className={`px-3 py-1.5 rounded-full text-xs border ${filtreEtat === f.id ? 'bg-neutral-900 text-white' : 'bg-white'}`}
+              >
+                {f.nom}
+              </button>
+            ))}
+          </div>
+          <Tableau
+            entetes={ent}
+            lignes={liste.map((e, i) => [i + 1, e.matricule || '—', e.nom, e.prenom, e.classe, LIBELLE_ETAT[e.etat]])}
+          />
+          <BoutonCsv
+            onClick={() =>
+              telechargerCsv(
+                nomFichier('fichier-national'),
+                ['Matricule', 'Nom', 'Prénoms', 'Classe', 'État du matricule'],
+                liste.map((e) => [e.matricule || '', e.nom, e.prenom, e.classe, LIBELLE_ETAT[e.etat].replace(/^\S+\s/, '')])
+              )
+            }
+            disabled={liste.length === 0}
+          />
+        </>
+      );
+      break;
+    }
+
+    case 'primaire/matricules': {
+      const problemes = actifs.filter((e) => e.etat !== 'ok');
+      contenu = (
+        <>
+          <div className="grid grid-cols-3 gap-2">
+            <Kpi label="Manquants" valeur={compteEtat('manquant')} alerte={compteEtat('manquant') > 0} />
+            <Kpi label="En double" valeur={compteEtat('doublon')} alerte={compteEtat('doublon') > 0} />
+            <Kpi label="Format à vérifier" valeur={compteEtat('format')} alerte={compteEtat('format') > 0} />
+          </div>
+          {problemes.length === 0 && actifs.length > 0 && (
+            <Bandeau>Tous les matricules des élèves actifs sont présents, uniques et de format courant.</Bandeau>
+          )}
+          <Tableau
+            entetes={['Matricule', 'Nom', 'Prénoms', 'Classe', 'Problème']}
+            lignes={problemes.map((e) => [e.matricule || '—', e.nom, e.prenom, e.classe, LIBELLE_ETAT[e.etat]])}
+            vide={actifs.length === 0 ? 'Aucun élève trouvé.' : 'Aucun problème de matricule détecté.'}
+          />
+          <BoutonCsv
+            onClick={() =>
+              telechargerCsv(
+                nomFichier('matricules-a-corriger'),
+                ['Matricule', 'Nom', 'Prénoms', 'Classe', 'Problème'],
+                problemes.map((e) => [e.matricule || '', e.nom, e.prenom, e.classe, LIBELLE_ETAT[e.etat].replace(/^\S+\s/, '')])
+              )
+            }
+            disabled={problemes.length === 0}
+          />
+        </>
+      );
+      break;
+    }
+
+    case 'primaire/moyennes-trimestrielles': {
+      const val = (e: Eleve) => moyenneDe(trimestre, e.id);
+      const calcule = moy[trimestre] !== undefined;
+      const detail = [...actifs]
+        .sort((a, b) => a.classe.localeCompare(b.classe, 'fr') || (val(b) ?? -1) - (val(a) ?? -1) || a.nom.localeCompare(b.nom, 'fr'));
+      const ent = ['Rang', 'Matricule', 'Nom', 'Prénoms', 'Classe', 'Moyenne'];
+      const lignes: Cellule[][] = detail.map((e) => [rangDans(e, val), e.matricule || '—', e.nom, e.prenom, e.classe, nombre(val(e))]);
+      contenu = (
+        <>
+          <div className="flex gap-2 items-center flex-wrap">
+            {[1, 2, 3].map((t) => (
+              <button
+                key={t}
+                onClick={() => setTrimestre(t)}
+                className={`px-3 py-1.5 rounded-full text-xs border ${trimestre === t ? 'bg-neutral-900 text-white' : 'bg-white'}`}
+              >
+                Trimestre {t}
+              </button>
+            ))}
+            <button
+              onClick={() => calculer([trimestre])}
+              disabled={calcul !== null || actifs.length === 0}
+              className="px-3 py-1.5 rounded-lg bg-neutral-900 text-white text-xs disabled:opacity-40"
+            >
+              {calcul ? `Calcul… ${calcul.fait}/${calcul.total}` : calcule ? 'Recalculer' : 'Calculer'}
+            </button>
+          </div>
+          {!calcule ? (
+            <Bandeau>Choisissez un trimestre puis appuyez sur « Calculer » : les moyennes sont lues dans les bulletins.</Bandeau>
+          ) : (
             <>
-              <input value={recherche} onChange={(e) => setRecherche(e.target.value)} placeholder="Rechercher (nom, matricule, classe)" className="border rounded-lg px-3 py-2 text-sm w-full" />
-              <Liste nom={section} entetes={enteteEleves} lignes={filtres.map(ligneEleve)} />
+              <Tableau entetes={ENT_RESUME} lignes={resumeClasses(val)} />
+              <Tableau entetes={ent} lignes={lignes} />
+              <BoutonCsv onClick={() => telechargerCsv(nomFichier(`moyennes-t${trimestre}`), ent, lignes)} disabled={lignes.length === 0} />
             </>
-          )}
-
-          {section === 'fichier-national' && (
-            <>
-              <input value={recherche} onChange={(e) => setRecherche(e.target.value)} placeholder="Rechercher (nom, matricule, classe)" className="border rounded-lg px-3 py-2 text-sm w-full" />
-              <Liste nom="fichier-national" entetes={enteteFne} lignes={filtres.map(ligneFne)} note="Colonnes standard. Le format officiel du fichier national reste à confirmer avant toute transmission." />
-            </>
-          )}
-
-          {section === 'matricules' && (
-            <>
-              <Cartes items={[['Élèves', eleves.length], ['Sans matricule', sansMatricule.length], ['En double', doublons.length]]} />
-              <Liste nom="anomalies-matricules" entetes={enteteAnomalies} lignes={anomalies} />
-            </>
-          )}
-
-          {section === 'effectifs' && (
-            <Liste nom="effectifs" entetes={['Classe', 'Effectif', 'Garçons', 'Filles']} lignes={[...effectifs.lignes, effectifs.total]} note="Le sexe (M ou F) doit être renseigné sur la fiche de chaque élève pour que la répartition soit complète." />
-          )}
-
-          {section === 'moyennes-trimestrielles' && (
-            <Liste nom="moyennes-trimestrielles" entetes={enteteTrim} lignes={moyennes.lignes.map(ligneTrim)} note="Moyennes issues des bulletins de l'année scolaire active." />
-          )}
-
-          {section === 'moyennes-annuelles' && (
-            <Liste nom="moyennes-annuelles" entetes={enteteAnn} lignes={moyennes.lignes.map(ligneAnn)} note="La moyenne annuelle est la moyenne des trimestres disponibles. Aucune décision (admis, redoublant) n'est déduite ici." />
-          )}
-
-          {section === 'transferts' && (
-            <Liste nom="transferts" entetes={enteteTransferts} lignes={lignesTransferts} />
-          )}
-
-          {section === 'recherche' && (
-            <>
-              <input value={recherche} onChange={(e) => setRecherche(e.target.value)} placeholder="Saisir un matricule, un nom ou un prénom" className="border rounded-lg px-3 py-2 text-sm w-full" autoFocus />
-              {recherche.trim() ? <Tableau entetes={enteteFne} lignes={trouves.slice(0, 50).map(ligneFne)} /> : <p className="text-sm text-neutral-500">Recherche dans les élèves de cette école ({eleves.length}).</p>}
-              {trouves.length > 50 && <p className="text-xs text-neutral-500">50 premiers résultats sur {trouves.length}. Précisez votre recherche.</p>}
-            </>
-          )}
-
-          {section === 'verification' && (
-            <>
-              <Cartes items={[['Candidats', eleves.length], ['À corriger', avecAnomalie.length], ['Conformes', eleves.length - avecAnomalie.length]]} />
-              <Liste nom="verification" entetes={enteteVerif} lignes={lignesVerif.sort((a, b) => Number(!!b[b.length - 1]) - Number(!!a[a.length - 1]))} note="Contrôle : matricule manquant ou en double, date et lieu de naissance, sexe." />
-            </>
-          )}
-
-          {section === 'export' && (
-            <div className="space-y-3">
-              <p className="text-sm text-neutral-600">
-                Téléchargez les fichiers pour les transmettre. {cycleCle === 'cepe' && avecAnomalie.length > 0 ? `Attention : ${avecAnomalie.length} candidat(s) ont des anomalies à corriger avant l'envoi. ` : ''}
-                Colonnes standard : le format officiel exigé par la structure destinataire reste à confirmer.
-              </p>
-              {exports.map((x) => (
-                <div key={x.f} className="flex items-center justify-between gap-3 border rounded-xl bg-white p-4">
-                  <div><div className="font-medium">{x.t}</div><div className="text-xs text-neutral-500">{x.l.length} ligne(s)</div></div>
-                  <BoutonCsv fichier={fichier(x.f)} entetes={x.e} lignes={x.l} />
-                </div>
-              ))}
-            </div>
           )}
         </>
-      )}
+      );
+      break;
+    }
+
+    case 'primaire/moyennes-annuelles': {
+      const annuelle = (e: Eleve): number | null => {
+        const v = [1, 2, 3].map((t) => moyenneDe(t, e.id));
+        if (v.some((x) => x === null)) return null;
+        return (v as number[]).reduce((a, b) => a + b, 0) / 3;
+      };
+      const calcule = trimestresCalcules([1, 2, 3]);
+      const detail = [...actifs].sort(
+        (a, b) => a.classe.localeCompare(b.classe, 'fr') || (annuelle(b) ?? -1) - (annuelle(a) ?? -1) || a.nom.localeCompare(b.nom, 'fr')
+      );
+      const ent = ['Rang', 'Matricule', 'Nom', 'Prénoms', 'Classe', 'T1', 'T2', 'T3', 'Moyenne annuelle'];
+      const lignes: Cellule[][] = detail.map((e) => [
+        rangDans(e, annuelle),
+        e.matricule || '—',
+        e.nom,
+        e.prenom,
+        e.classe,
+        nombre(moyenneDe(1, e.id)),
+        nombre(moyenneDe(2, e.id)),
+        nombre(moyenneDe(3, e.id)),
+        nombre(annuelle(e)),
+      ]);
+      contenu = (
+        <>
+          <button
+            onClick={() => calculer([1, 2, 3])}
+            disabled={calcul !== null || actifs.length === 0}
+            className="px-3 py-1.5 rounded-lg bg-neutral-900 text-white text-xs disabled:opacity-40 self-start"
+          >
+            {calcul ? `Calcul… ${calcul.fait}/${calcul.total}` : calcule ? 'Recalculer' : 'Calculer les 3 trimestres'}
+          </button>
+          <Bandeau>
+            Moyenne annuelle = moyenne arithmétique des trois moyennes trimestrielles ; elle reste vide si un trimestre n’a pas
+            de moyenne. Aucune décision (admis, redoublant) n’est déduite.
+          </Bandeau>
+          {calcule && (
+            <>
+              <Tableau entetes={ENT_RESUME} lignes={resumeClasses(annuelle)} />
+              <Tableau entetes={ent} lignes={lignes} />
+              <BoutonCsv onClick={() => telechargerCsv(nomFichier('moyennes-annuelles'), ent, lignes)} disabled={lignes.length === 0} />
+            </>
+          )}
+        </>
+      );
+      break;
+    }
+
+    case 'primaire/transferts': {
+      const parId = new Map(tous.map((e) => [e.id, e]));
+      const lignes: Cellule[][] = (transferts || []).map((d: any) => {
+        const e = parId.get(d.eleve_id);
+        return [
+          d.numero_demande || '—',
+          d.type === 'sortant' ? 'Sortant' : d.type === 'entrant' ? 'Entrant' : d.type || '—',
+          e ? `${e.nom} ${e.prenom}` : '—',
+          e?.matricule || '—',
+          e?.classe || '—',
+          d.etablissement_partenaire || '—',
+          d.statut || '—',
+          d.motif || '—',
+          d.cree_le ? dateFr(String(d.cree_le)) : '—',
+        ];
+      });
+      const ent = ['N° demande', 'Type', 'Élève', 'Matricule', 'Classe', 'Établissement partenaire', 'Statut', 'Motif', 'Date'];
+      contenu = (
+        <>
+          <Bandeau>
+            Liste en lecture seule des demandes de transfert déjà enregistrées. Le transfert officiel se fait en ligne, à partir du
+            matricule de l’élève, sur la plateforme du ministère.
+          </Bandeau>
+          {transferts === null ? (
+            <p className="text-sm text-neutral-500">Chargement…</p>
+          ) : (
+            <>
+              <Tableau entetes={ent} lignes={lignes} vide="Aucune demande de transfert enregistrée pour le primaire." />
+              <BoutonCsv onClick={() => telechargerCsv(nomFichier('transferts'), ent, lignes)} disabled={lignes.length === 0} />
+            </>
+          )}
+        </>
+      );
+      break;
+    }
+
+    case 'primaire/recherche': {
+      const q = sansAccent(recherche.trim());
+      const trouves = q.length < 2 ? [] : tous.filter((e) => sansAccent(`${e.matricule || ''} ${e.nom} ${e.prenom}`).includes(q)).slice(0, 50);
+      contenu = (
+        <>
+          <input
+            value={recherche}
+            onChange={(ev) => setRecherche(ev.target.value)}
+            placeholder="Matricule, nom ou prénom (2 lettres minimum)"
+            className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
+          />
+          <Tableau
+            entetes={['Matricule', 'Nom', 'Prénoms', 'Classe', 'Statut', 'État du matricule']}
+            lignes={trouves.map((e) => [e.matricule || '—', e.nom, e.prenom, e.classe, e.statut, LIBELLE_ETAT[e.etat]])}
+            vide={q.length < 2 ? 'Saisissez au moins deux caractères.' : 'Aucun élève trouvé dans votre établissement.'}
+          />
+          <Bandeau>
+            Cette recherche porte uniquement sur les élèves de votre établissement. Pour un élève absent de votre liste, utilisez la
+            consultation des matricules du site de la DESPS (mena-desps.org).
+          </Bandeau>
+        </>
+      );
+      break;
+    }
+
+    case 'primaire/export': {
+      contenu = listeEleves(actifs, nomFichier('export-agcp'), avertFormat('AGCP'));
+      break;
+    }
+
+    // ── CEPE ──
+    case 'cepe/candidats': {
+      contenu = listeEleves(actifs, nomFichier('candidats'));
+      break;
+    }
+
+    case 'cepe/verification': {
+      const controles = actifs.map((e) => {
+        const manques: string[] = [];
+        if (e.etat === 'manquant') manques.push('matricule manquant');
+        if (e.etat === 'doublon') manques.push('matricule en double');
+        if (e.etat === 'format') manques.push('format du matricule à vérifier');
+        if (!e.sexe) manques.push('sexe');
+        if (!e.naissance) manques.push('date de naissance');
+        if (!e.lieu) manques.push('lieu de naissance');
+        return { e, manques };
+      });
+      const avecProbleme = controles.filter((c) => c.manques.length > 0);
+      const liste = seulementProblemes ? avecProbleme : controles;
+      const ent = ['Matricule', 'Nom', 'Prénoms', 'Classe', 'Contrôle'];
+      const lignes: Cellule[][] = liste.map((c) => [
+        c.e.matricule || '—',
+        c.e.nom,
+        c.e.prenom,
+        c.e.classe,
+        c.manques.length ? `⚠️ ${c.manques.join(', ')}` : '✅ Complet',
+      ]);
+      contenu = (
+        <>
+          <div className="grid grid-cols-3 gap-2">
+            <Kpi label="Candidats" valeur={actifs.length} />
+            <Kpi label="Complets" valeur={controles.length - avecProbleme.length} />
+            <Kpi label="À corriger" valeur={avecProbleme.length} alerte={avecProbleme.length > 0} />
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={seulementProblemes} onChange={(ev) => setSeulementProblemes(ev.target.checked)} />
+            Afficher seulement les candidats à corriger
+          </label>
+          <Tableau entetes={ent} lignes={lignes} vide={actifs.length === 0 ? 'Aucun élève de CM2 trouvé.' : 'Tous les candidats sont complets.'} />
+          <BoutonCsv
+            onClick={() => telechargerCsv(nomFichier('verification'), ent, lignes)}
+            disabled={lignes.length === 0}
+          />
+        </>
+      );
+      break;
+    }
+
+    case 'cepe/export': {
+      const ent = ['Matricule', 'Nom', 'Prénoms', 'Sexe', 'Date de naissance', 'Lieu de naissance', 'Nationalité', 'Classe', 'Établissement', 'Code établissement'];
+      const lignes: Cellule[][] = actifs.map((e) => [
+        e.matricule || '',
+        e.nom,
+        e.prenom,
+        e.sexe || '',
+        dateFr(e.naissance),
+        e.lieu || '',
+        e.nationalite || '',
+        e.classe,
+        etab?.nom || '',
+        etab?.code || '',
+      ]);
+      contenu = (
+        <>
+          {avertFormat('la DECO')}
+          {nbProblemes > 0 && (
+            <Bandeau ton="alerte">
+              {nbProblemes} candidat(s) ont un matricule à corriger. Passez par « Vérification des matricules » avant de transmettre.
+            </Bandeau>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            <Kpi label="Candidats" valeur={actifs.length} />
+            <Kpi label="Matricules à corriger" valeur={nbProblemes} alerte={nbProblemes > 0} />
+          </div>
+          <BoutonCsv onClick={() => telechargerCsv(nomFichier('export-deco'), ent, lignes)} disabled={lignes.length === 0} />
+        </>
+      );
+      break;
+    }
+
+    default:
+      contenu = null;
+  }
+
+  return (
+    <div className="p-4 md:p-6 max-w-6xl mx-auto space-y-4">
+      {enTete}
+      {contenu}
     </div>
   );
 }

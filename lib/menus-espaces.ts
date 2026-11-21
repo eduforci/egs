@@ -15,6 +15,7 @@ export const ROUTES_PAR_ESPACE: Record<string, EspaceCode[]> = {
   '/direction/cloture': CYCLES_SCOLAIRES,
   '/directeur/notes-validation': CYCLES_SCOLAIRES,
   '/directeur/resultats': CYCLES_SCOLAIRES,
+  '/directeur/bulletins': CYCLES_SCOLAIRES,
 
   // Secondaire uniquement
   '/chef/eleves/repartition': SECONDAIRE,
@@ -36,14 +37,25 @@ export function espacesDeRoute(chemin: string): EspaceCode[] | null {
   return cle ? ROUTES_PAR_ESPACE[cle] : null;
 }
 
-// Un menu s'affiche si l'un des espaces visibles de l'utilisateur est autorisé pour ce lien.
+// Espaces effectivement pris en compte : si l'école n'a aucun espace enregistré
+// (anciennes écoles), on garde le comportement historique : cycles scolaires.
+function espacesEffectifs(espaces: EspaceCode[]): EspaceCode[] {
+  return espaces.length > 0 ? espaces : CYCLES_SCOLAIRES;
+}
+
+// Une page est autorisée si l'un des espaces de l'utilisateur est autorisé pour cette adresse.
+// Utilisé par le middleware (accès direct par adresse).
+export function routeAutorisee(chemin: string, espaces: EspaceCode[]): boolean {
+  const requis = espacesDeRoute(chemin);
+  if (!requis) return true;
+  return espacesEffectifs(espaces).some((e) => requis.includes(e));
+}
+
+// Un menu s'affiche si la page est autorisée.
 // - menu commun : toujours affiché
 // - chargement en cours : les menus spécifiques restent cachés (évite qu'ils clignotent)
-// - école sans espaces enregistrés (anciennes écoles) : comportement historique, cycles scolaires
 export function menuVisible(href: string, visibles: EspaceCode[], pret: boolean): boolean {
-  const requis = espacesDeRoute(href);
-  if (!requis) return true;
+  if (!espacesDeRoute(href)) return true;
   if (!pret) return false;
-  const effectifs = visibles.length > 0 ? visibles : CYCLES_SCOLAIRES;
-  return effectifs.some((e) => requis.includes(e));
+  return routeAutorisee(href, visibles);
 }

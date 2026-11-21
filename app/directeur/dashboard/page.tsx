@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { useEspace } from '@/lib/use-espace';
+import { menuVisible } from '@/lib/menus-espaces';
 import AbsencesChart from './absences-chart';
 
 type Stats = {
@@ -26,6 +28,10 @@ export default function DashboardDirecteurEtudes() {
   const [absencesParJour, setAbsencesParJour] = useState<DonneeJour[]>([]);
   const [loading, setLoading] = useState(true);
   const [erreur, setErreur] = useState('');
+
+  // Raccourcis filtrés selon les espaces de l'école (voir lib/menus-espaces.ts)
+  const { visibles, pret } = useEspace();
+  const voir = (href: string) => menuVisible(href, visibles, pret);
 
   useEffect(() => {
     const charger = async () => {
@@ -210,18 +216,22 @@ export default function DashboardDirecteurEtudes() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="border rounded-xl p-4 space-y-3">
           <h2 className="font-semibold">Suivi pédagogique</h2>
-          <Link href="/directeur/notes-validation" className="flex justify-between items-center text-sm py-1.5 border-b">
-            <span>Notes à valider</span>
-            <span className="font-medium bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full text-xs">
-              {stats?.notesAValider}
-            </span>
-          </Link>
-          <Link href="/directeur/bulletins" className="flex justify-between items-center text-sm py-1.5 border-b">
-            <span>Bulletins à préparer</span>
-            <span className="font-medium bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs">
-              {stats?.bulletinsAPreparer}
-            </span>
-          </Link>
+          {voir('/directeur/notes-validation') && (
+            <Link href="/directeur/notes-validation" className="flex justify-between items-center text-sm py-1.5 border-b">
+              <span>Notes à valider</span>
+              <span className="font-medium bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full text-xs">
+                {stats?.notesAValider}
+              </span>
+            </Link>
+          )}
+          {voir('/directeur/bulletins') && (
+            <Link href="/directeur/bulletins" className="flex justify-between items-center text-sm py-1.5 border-b">
+              <span>Bulletins à préparer</span>
+              <span className="font-medium bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs">
+                {stats?.bulletinsAPreparer}
+              </span>
+            </Link>
+          )}
           <Link href="/directeur/absences" className="flex justify-between items-center text-sm py-1.5 border-b">
             <span>Absences</span>
             <span className="font-medium bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-xs">
@@ -236,18 +246,24 @@ export default function DashboardDirecteurEtudes() {
 
         <div className="border rounded-xl p-4 space-y-2">
           <h2 className="font-semibold mb-2">Actions rapides</h2>
-          <Link href="/directeur/notes-validation" className="flex items-center gap-2 text-sm py-2 border-b">
-            📝 <span>Saisie / suivi notes</span>
-          </Link>
-          <Link href="/directeur/resultats" className="flex items-center gap-2 text-sm py-2 border-b">
-            📊 <span>Résultats</span>
-          </Link>
+          {voir('/directeur/notes-validation') && (
+            <Link href="/directeur/notes-validation" className="flex items-center gap-2 text-sm py-2 border-b">
+              📝 <span>Saisie / suivi notes</span>
+            </Link>
+          )}
+          {voir('/directeur/resultats') && (
+            <Link href="/directeur/resultats" className="flex items-center gap-2 text-sm py-2 border-b">
+              📊 <span>Résultats</span>
+            </Link>
+          )}
           <Link href="/direction/emploi-du-temps" className="flex items-center gap-2 text-sm py-2 border-b">
             📅 <span>Emploi du temps</span>
           </Link>
-          <Link href="/directeur/bulletins" className="flex items-center gap-2 text-sm py-2">
-            📄 <span>Bulletins</span>
-          </Link>
+          {voir('/directeur/bulletins') && (
+            <Link href="/directeur/bulletins" className="flex items-center gap-2 text-sm py-2">
+              📄 <span>Bulletins</span>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -259,4 +275,4 @@ export default function DashboardDirecteurEtudes() {
       </div>
     </div>
   );
-        }
+}

@@ -1,5 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { ESPACES_CODES } from "@/lib/espaces";
+import { espacesDeRoute, routeAutorisee } from "@/lib/menus-espaces";
 
 // Fait correspondre chaque préfixe de route à un rôle autorisé
 const ROLE_ROUTES: Record<string, string> = {
@@ -151,6 +153,41 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(
           new URL(`/abonnement-suspendu?motif=${etab.statut}`, request.url)
         );
+      }
+    }
+
+    // Espaces de travail : une page réservée à un espace (ex. secondaire) est refusée aux
+    // écoles qui n'ont pas cet espace, même si l'adresse est tapée à la main.
+    // La liste des pages concernées est dans lib/menus-espaces.ts.
+    // Lectures séparées et sans effet en cas d'erreur (colonnes absentes : rien n'est bloqué).
+    if (profile.role !== "super_admin" && profile.etablissement_id && espacesDeRoute(path)) {
+      const { data: etabEspaces, error: erreurEspaces } = await supabase
+        .from("etablissements")
+        .select("espaces_actifs")
+        .eq("id", profile.etablissement_id)
+        .maybeSingle();
+      const brut = erreurEspaces
+        ? []
+        : (((etabEspaces as any)?.espaces_actifs as string[] | null) ?? []);
+      let disponibles = ESPACES_CODES.filter((c) => brut.includes(c));
+
+      if (profile.role !== "administration") {
+        const { data: droits, error: erreurDroits } = await supabase
+          .from("profiles")
+          .select("espaces_autorises")
+          .eq("id", user.id)
+          .maybeSingle();
+        const autorises = erreurDroits
+          ? null
+          : (((droits as any)?.espaces_autorises as string[] | null) ?? null);
+        if (autorises && autorises.length > 0) {
+          disponibles = disponibles.filter((c) => autorises.includes(c));
+        }
+      }
+
+      if (!routeAutorisee(path, disponibles)) {
+        const dashboard = DASHBOARD_PAR_ROLE[profile.role];
+        return NextResponse.redirect(new URL(dashboard || "/login", request.url));
       }
     }
 

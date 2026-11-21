@@ -19,7 +19,9 @@ export default function NouvelEtablissement() {
   const [telephone, setTelephone] = useState("");
   const [statut, setStatut] = useState<(typeof STATUTS)[number]>("en_attente");
   const [dateDebut, setDateDebut] = useState("");
-  const [espaces, setEspaces] = useState<EspaceCode[]>(["secondaire"]);
+  // Aucun espace coché par défaut : l'administrateur choisit explicitement les cycles de l'école
+  // (évite qu'une école primaire garde « secondaire » par oubli et affiche ses menus).
+  const [espaces, setEspaces] = useState<EspaceCode[]>([]);
   const [formule, setFormule] = useState<FormuleSecondaire | null>(FORMULE_PAR_DEFAUT);
   const [formuleSup, setFormuleSup] = useState<FormuleSuperieur>("grande_ecole");
   const [systeme, setSysteme] = useState("ivoirien");
@@ -103,7 +105,19 @@ export default function NouvelEtablissement() {
       return;
     }
 
-    await supabase.from("etablissements").update({ espaces_actifs: espaces }).eq("id", nouvelEtab.id);
+    // Les espaces conditionnent les menus affichés : si leur enregistrement échoue, on le signale
+    // au lieu de laisser une école sans espaces (qui afficherait les menus par défaut).
+    const { error: erreurEspaces } = await supabase
+      .from("etablissements")
+      .update({ espaces_actifs: espaces })
+      .eq("id", nouvelEtab.id);
+    if (erreurEspaces) {
+      setChargement(false);
+      setErreur(
+        `Établissement créé, mais les espaces de travail n'ont pas pu être enregistrés : ${erreurEspaces.message}. Corrige-les depuis la fiche de l'établissement avant de continuer.`
+      );
+      return;
+    }
 
     const formuleChoisie = espaces.includes("secondaire") ? formule : null;
     await supabase.from("etablissements").update({ formule_secondaire: formuleChoisie }).eq("id", nouvelEtab.id);
@@ -295,7 +309,7 @@ export default function NouvelEtablissement() {
         <div>
           <label className="block text-sm font-medium mb-1">Espaces de travail de l'école *</label>
           <p className="text-xs text-gray-500 mb-2">
-            Coche les cycles que cette école gère. Le promoteur les verra, sans pouvoir les modifier.
+            Coche les cycles que cette école gère. Une école primaire ne verra que les menus du primaire ; un groupe scolaire (plusieurs cycles cochés) verra tous les menus. Le promoteur les verra, sans pouvoir les modifier.
           </p>
           <EspacesCheckboxes value={espaces} onChange={setEspaces} formule={formule} onFormule={setFormule} />
           {espaces.includes("superieur") && (
